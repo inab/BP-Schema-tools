@@ -1,0 +1,9 @@
+\section{Gene Expression}\label{fea:exp}
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=0.5\textwidth]{gene_expression.pdf}
+\caption{Gene Expression Sub-Schema}
+\end{figure*}
+

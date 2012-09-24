@@ -1,0 +1,3 @@
+0 if start position is exactly at chromosome_start
+
+positive integer for +/- number of bases around chromosome_start

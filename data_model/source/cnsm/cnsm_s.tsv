@@ -1,0 +1,10 @@
+##file Copy Number Somatic Mutations - Secondary Analysis File
+## Copy Number Somatic Mutations [cnsm] – Secondary Analysis File [s]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+mutation_id	VARCHAR(128)	true	false			Unique identifier for the mutation	
+gene_affected	VARCHAR(512)	true	false	1,1		Gene(s) containing the mutation/variation. Use Ensembl gene id. Separate multiple genes with vertical bars in the form of 'geneA|geneB|geneC'. If no gene is affected, use -888 (not applicable).	
+transcript_affected	TEXT	false	false	1,2		Transcript(s) containing the mutation/variation. Use Ensembl transcript id. Separate multiple transcripts from the same gene with commas, and separate transcripts from different genes with vertical bars. e.g.: 'transcriptA1,transcriptA2|transcriptB1|transcriptC1,transcriptC2,transcriptC3'. If no transcript is affected, use -888 (not applicable).	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	
+note	TEXT	false	false			Optional field to leave notes	

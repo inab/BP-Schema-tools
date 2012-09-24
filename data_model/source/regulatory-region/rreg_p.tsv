@@ -1,0 +1,17 @@
+##file Regulatory regions - Primary Analysis File
+##featureType rreg
+##fileType p
+## Regulatory regions [rreg] – Primary Analysis File [p]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	TEXT	true	false			Unique identifier for the analysis performed for a particular group of samples	
+analyzed_sample_id	TEXT	true	false			Unique identifier for the analyzed sample	
+regulatory_region_id	VARCHAR(128)	true	false			Unique identifier for the identified regulatory region	
+chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the regulatory region	
+chromosome_start	INTEGER	true	false			Start position of the regulatory region on the chromosome	
+chromosome_end	INTEGER	true	false			End position of the regulatory region on the chromosome	
+chromosome_strand	INTEGER	false	false		{codec.dir}/rreg_p__chromosome_strand.tsv	Chromosome strand	
+normalized_read_count	FLOAT(5,2)	true	false			Normalized count of sequencing reads if analyzed by sequencing platforms	
+raw_read_count	INTEGER	true	false			Raw count of sequencing reads if analyzed by sequencing platforms	
+validation_status	VARCHAR(64)	true	false		{codec.dir}/rreg_p__validation_status.tsv	Indicate if the regulatory region has been validated	
+validation_platform	VARCHAR(512)	false	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in validation	
+note	TEXT	false	false			Optional field to leave notes	

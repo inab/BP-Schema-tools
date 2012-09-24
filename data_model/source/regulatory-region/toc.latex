@@ -1,0 +1,9 @@
+\section{Regulatory Regions}\label{fea:rreg}
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=1.0\textwidth]{regulatory-region.pdf}
+\caption{Regulatory Regions Sub-Schema}
+\end{figure*}
+

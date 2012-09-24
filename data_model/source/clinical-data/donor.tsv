@@ -1,0 +1,13 @@
+##file Donor Data File							
+##featureType cdata
+##fileType donor
+## Donor Data File [donor] (required)							
+## This submission file describes a donor from which one or more specimens were obtained.							
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+donor_id	VARCHAR(64)	true	false			<i>Unique identifier</i> for the donor; assigned by data provider.	
+donor_sex	VARCHAR(128)	true	false		{codec.dir}/dr__donor_sex.tsv	Donor biological sex.	"Other" has been removed from the controlled vocabulary due to identifiability concerns.
+donor_region_of_residence	VARCHAR(64)	true	false			Country, and optionally state or province code, but not city.	<a href="http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2">ISO3166-1-alpha-2</a> or <a href="http://en.wikipedia.org/wiki/ISO_3166-2">ISO3166-2</a> codes, eg: "CA" or "CA-ON"
+donor_vital_status	VARCHAR(128)	true	false		{codec.dir}/dr__donor_vital_status.tsv	Donor's last known vital status	
+donor_age_at_diagnosis	INTEGER	true	false			Age at primary diagnosis	Use "90" for patients >=90
+donor_diagnosis_do	VARCHAR(64)	true	false			Disease Ontology code	<a href="http://diseaseontology.sourceforge.net/">Disease Ontology</a> code
+donor_notes	TEXT	false	false			Free text notes concerning donor	Any additional non-identifying information can be included here.

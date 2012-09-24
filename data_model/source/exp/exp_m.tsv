@@ -1,0 +1,19 @@
+##file Expression - Metadata File
+##featureType exp
+##fileType m
+## Expression [exp] – Metadata File [m]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+assembly_version	VARCHAR(64)	true	false		{codec.dir}/appendix_B10.tsv	Version of reference genome assembly	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	
+platform	VARCHAR(512)	true	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in detecting the expression	
+experimental_protocol	VARCHAR(512)	false	false			Name of experimental protocol and URL to written protocol	
+base_calling_algorithm	VARCHAR(512)	true	false			Name of base calling algorithm and URL to written protocol	
+alignment_algorithm	VARCHAR(512)	true	false			Name of alignment algorithm and URL to written protocol	
+normalization_algorithm	VARCHAR(512)	true	false			Name of normalization algorithm and URL to written protocol	
+other_analysis_algorithm	VARCHAR(512)	false	false			Names of other analysis algorithms. Separate multiple algorithms by commas.	
+seq_coverage	FLOAT(5,2)	false	false			Sequence coverage if analyzed by sequencing platforms	
+raw_data_repository	VARCHAR(128)	false	false		{codec.dir}/appendix_B12.tsv	Public repository where raw data is submitted (#)	
+raw_data_accession	VARCHAR(128)	false	false			Accession and URL for referencing the raw data at the public repository	
+note	TEXT	false	false			Optional field to leave notes	

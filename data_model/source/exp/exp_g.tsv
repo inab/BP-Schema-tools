@@ -1,0 +1,24 @@
+##file Expression - Gene File
+##featureType exp
+##fileType g
+## Expression [exp] – Gene File [g]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+gene_stable_id	VARCHAR(64)	true	false			For annotated gene, use Ensembl gene ID. Otherwise, use assemblyBuild_chr_start_end where assemblyBuild is hg18 or hg19.	
+gene_chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the expressed gene/region interrogated	
+gene_strand	INTEGER	true	false		{codec.dir}/exp_g__gene_strand.tsv	Strand of the chromosome containing the expressed gene/region	
+gene_start	INTEGER	true	false			Start position of the gene on the chromosome	
+gene_end	INTEGER	true	false			End position of the gene on the chromosome	
+normalized_read_count	FLOAT(5,2)	true	false			Normalized count of sequencing reads if analyzed by sequencing platforms	
+raw_read_count	INTEGER	true	false			Raw count of sequencing reads if analyzed by sequencing platforms	
+normalized_expression_level	FLOAT(5,2)	false	false			Normalized value of expression level if analyzed by microarray platforms	
+fold_change	FLOAT(5,2)	false	false			Expressed fold change if differential expression is measured	
+reference_sample	VARCHAR(64)	false	false			ID of the reference analyzed sample if differential expression is measured	
+quality_score	INTEGER	false	false			Quality score for the expression call	
+probability	FLOAT(3,2)	false	false			Probability of the expression call	
+is_annotated	VARCHAR(64)	false	false		{codec.dir}/exp_g__is_annotated.tsv	Indicate if the expressed fragment is annotated in Ensembl	
+validation_status	VARCHAR(64)	true	false		{codec.dir}/exp_g__validation_status.tsv	Indicate if the expressed fragment has been validated	
+validation_platform	VARCHAR(512)	false	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in validation	
+probeset_id	VARCHAR(128)	false	false			ID of the probeset used in microarray	
+note	TEXT	false	false			Optional field to leave notes	

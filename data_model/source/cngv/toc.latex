@@ -1,0 +1,9 @@
+\section{Copy Number Germline Variations}\label{fea:cngv}
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=0.5\textwidth]{cngv.pdf}
+\caption{Copy Number Germline Variations Sub-Schema}
+\end{figure*}
+

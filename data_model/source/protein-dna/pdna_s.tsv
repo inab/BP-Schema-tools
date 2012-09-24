@@ -1,0 +1,12 @@
+##file Protein-DNA interaction - Secondary Analysis File
+##featureType pdna
+##fileType s
+## Protein-DNA [pdna] – Secondary Analysis File [s]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	TEXT	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	TEXT	true	false			Unique identifier for the analyzed sample	
+protein_dna_interaction_id	TEXT	true	false			Unique identifier for the protein-DNA interaction	
+gene_affected	VARCHAR(128)	true	false			Gene on the protein-DNA interaction area. Use Ensembl gene id. If no gene is affected, use -888 (not applicable).	
+transcript_affected	VARCHAR(128)	true	false			Transcript on the protein-DNA interaction area. Use Ensembl transcript id. Separate multiple transcripts with vertical bars in the form of trasncriptA|trasncriptB|trasncriptC. If no trasncript is affected, use -888 (not applicable).	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	
+note	TEXT	false	false			Optional field to leave notes	

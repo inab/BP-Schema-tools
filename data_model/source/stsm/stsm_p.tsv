@@ -1,0 +1,30 @@
+##file Structural Somatic Mutations - Primary Analysis File
+## Structural Somatic Mutations [stsm] – Primary Analysis File [p]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+sv_id	VARCHAR(32)	true	false			Unique identifier for variant	
+placement	INTEGER	true	false			Ordering of breakpoint pairs within a single structural mutation/variation event	
+annotation	VARCHAR(256)	true	false			Annotation describing sequence mutation/variation based on breakpoint pairs	
+interpreted_annotation	VARCHAR(256)	false	false			HGVS nomenclature for description of sequence mutation/variation.	e.g.: chr3:g.1234567-2345678inv
+variant_type	VARCHAR(128)	true	false		{codec.dir}/appendix_B9.tsv	Type of mutation/variation	
+chr_from	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the donor chromosome containing the mutation/variation	
+chr_from_bkpt	INTEGER	true	false			Breakpoint position of the mutation/variation on the donor chromosome	
+chr_from_strand	INTEGER	true	false		{codec.dir}/stsm_p__chr_from_strand.tsv	Donor chromosome strand	
+chr_from_range	INTEGER	false	false			Number of bases around chr_from_bkpt that may contain the real breakpoint	
+chr_from_flanking_seq	VARCHAR(512)	false	false			Flanking sequences that are 200bp upstream and 200bp downstream to the chr_from_bkpt position.	
+chr_to	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the acceptor chromosome containing the mutation/variation	
+chr_to_bkpt	INTEGER	true	false			Breakpoint position of the mutation/variation on the acceptor chromosome	
+chr_to_strand	INTEGER	true	false		{codec.dir}/stsm_p__chr_to_strand.tsv	Acceptor chromosome strand	
+chr_to_range	INTEGER	false	false			Number of bases around chr_to_bkpt that may contain the real breakpoint	
+chr_to_flanking_seq	VARCHAR(512)	false	false			Flanking sequences that are 200bp upstream and 200bp downstream to the chr_to_bkpt position	
+microhomology_sequence	TEXT	false	false			If a microhomology is inserted, provide sequence	
+non_templated_sequence	TEXT	false	false			If non-templated DNA is inserted, provide sequence	
+evidence	VARCHAR(128)	false	false		{codec.dir}/stsm_p__evidence.tsv	Evidence supporting a structural mutation/variation	
+quality_score	INTEGER	false	false			Quality score for the mutation/variation call	
+probability	FLOAT(3,2)	false	false			Probability of the mutation/variation call	
+zygosity	VARCHAR(64)	false	false		{codec.dir}/stsm_p__zygosity.tsv	Zygosity	
+validation_status	VARCHAR(64)	true	false		{codec.dir}/stsm_p__validation_status.tsv	Indicate if the mutation/variation has been validated	
+validation_platform	VARCHAR(512)	false	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in validation	
+db_xref	VARCHAR(256)	false	false			Value code of cross-reference database:ID of the mutation in the cross-reference database. Separate multiple entries by commas.	
+note	TEXT	false	false			Optional field to leave notes	

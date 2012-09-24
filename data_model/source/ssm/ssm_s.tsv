@@ -1,0 +1,14 @@
+##file Simple Somatic Mutations - Secondary Analysis File
+## Simple Somatic Mutations [ssm] – Secondary Analysis File [s]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+mutation_id	VARCHAR(128)	true	false			Unique identifier for the mutation	
+consequence_type	VARCHAR(512)	true	false		{codec.dir}/appendix_B7.tsv	Functional consequence of the SNP.	
+aa_mutation	VARCHAR(512)	false	false			Changes at amino acid level. Indicate the reference aa, position and mutation aa.	e.g.: P234W
+cds_mutation	VARCHAR(512)	false	false			Changes in coding sequence. Indicate position, reference base and mutation base.	e.g.: 12324T>G
+protein_domain_affected	VARCHAR(128)	false	false			Protein domain containing the mutation/variation. Use Pfam accession.	
+gene_affected	VARCHAR(512)	false	false	1,1		Gene(s) containing the mutation/variation.	
+transcript_affected	TEXT	false	false	1,2		Transcript(s) containing the mutation/variation. Use Ensembl transcript id.	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	e.g.: 61
+note	TEXT	false	false			Optional field to leave notes	

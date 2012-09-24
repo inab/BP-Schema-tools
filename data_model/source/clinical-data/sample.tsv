@@ -1,0 +1,12 @@
+##file Analyzed Sample Data File						
+##featureType cdata
+##fileType sample
+## Analyzed Sample Data File [sample] (required)						
+## This submission file describes an analyzed sample on which molecular characterization was performed. It includes both control samples and tumour samples.						
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analyzed_sample_id	VARCHAR(64)	true	false			<i>Unique identifier</i> for the sample assigned by data provider
+specimen_id	VARCHAR(64)	true	false			<i>Unique identifier</i> for the specimen assigned by data provider. The corresponding specimen id <b>must</b> appear in the specimen data submission file
+analyzed_sample_type	VARCHAR(128)	true	false		{codec.dir}/sp__analyzed_sample_type.tsv	Controlled vocabulary description of sample type
+analyzed_sample_type_other	VARCHAR(64)	false	false			Free text description of site of sample if "other" was specified in <i>sample_type</i> field
+analyzed_sample_interval	INTEGER	false	false			Interval from specimen acquisition to sample use in an analytic procedure (e.g. DNA extraction), in days
+analyzed_sample_notes	TEXT	false	false			Freetext notes about sample allowed

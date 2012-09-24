@@ -1,0 +1,3 @@
+0 if end position is exactly at chromosome_end
+
+positive integer for +/- number of bases around chromosome_end

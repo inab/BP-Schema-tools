@@ -1,0 +1,46 @@
+\section{Clinical Data Submission File Specifications}\label{fea:cdata}
+
+\textbf{Overview}
+
+There are three \textbf{required} clinical and tissue annotation submission files, and one \textbf{optional} template files:
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=0.85\textwidth]{clinical-data.pdf}
+\caption{Clinical Data Sub-Schema}
+\end{figure*}
+
+\textbf{Core Clinical Data Files}
+\begin{enumerate}
+	\item \textit{Donor Data File (donor)} \\
+\textbf{Mandatory} information about the donor's age, gender and vital status.
+	\item \textit{Specimen Data File (specimen)} \\
+\textbf{Mandatory} information about a specimen that was obtained from a donor.
+There may be several specimens per donor that were obtained concurrently or at different times.
+	\item \textit{Analyzed Sample Data File (sample)} \\
+\textbf{Mandatory} information about an analyzed sample that was subjected to molecular analysis.
+There may be several analyzed samples per specimen, for example, when a tumour is used to derive
+xenografts and cell lines.
+\end{enumerate}
+
+All data submissions to the DCC \textbf{must include the three core clinical data files.}\\
+
+\textbf{Optional Template Files}
+\begin{enumerate}
+	\item \textit{Donor Family History (family)} \\
+Optional details about family history of the donor
+\end{enumerate}
+
+\textbf{Coding of donor IDs}
+
+The three mandatory data files contain donor, specimen and analyzed sample
+IDs, respectively. These IDs are to be coded specifically for BLUEPRINT purposes
+and only the submitting group will keep the key that will permit to link back the
+data to the individual donors. The key must not be communicated to the data users.
+It should not be derived from other IDs such as biobank or hospital identifiers.
+These IDs are to be coded in such a way that they cannot be tracked back to the
+individual donors, except by the submitting group. IDs are assigned by each submitting
+group, and must be unique within all the data submitted by that group (i.e. no
+duplicate IDs allowed). The DCC will prevent collisions between similar IDs submitted
+by different groups by including the project source column by default in all BioMart queries.

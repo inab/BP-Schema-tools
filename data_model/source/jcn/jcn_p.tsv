@@ -1,0 +1,32 @@
+##file Exon Junction - Primary Analysis File
+##featureType jcn
+##fileType p
+## Exon Junction [jcn] – Primary Analysis File [p]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular group of samples	
+sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+junction_id	VARCHAR(256)	true	false			For known exons, use exonID1_exonID2 where exonID1 and exonID2 are Ensembl IDs of the 5' and 3' exons, respectively. For novel or putative exons,use assemblyBuild_exon1chr_exon1end_exon2chr_exon2start where assemblyBuild is hg18 or hg19; exon1chr and exon2chr are the chromosomes of the 5' and 3' exons, respectively; exon1end is the end position of the 5' exon; exon2start is the start position of the 3' exon.	
+gene_stable_id	VARCHAR(64)	true	false			Stable ID of the gene containing the 5' exon at the junction. For annotated gene, use Ensembl gene ID. For putative and novel gene, use assemblyBuild_chr_start_end where assemblyBuild can be hg18 or hg19.	
+gene_chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the above gene.	
+gene_strand	INTEGER	true	false		{codec.dir}/jcn_p__gene_strand.tsv	Strand of the chromosome	
+gene_start	INTEGER	true	false			Start position of the entire gene on the chromosome as annotated in Ensembl	
+gene_end	INTEGER	true	false			End position of the entire gene on the chromosome as annotated in Ensembl	
+second_gene_stable_id	VARCHAR(64)	false	false			In the case of a fusion gene, provide the Stable ID of the gene containing the 3' exon at the junction. For annotated genes, use Ensembl gene ID. For putative and novel genes, use assemblyBuild_chr_start_end where assemblyBuild can be hg18 or hg19.	
+exon1_chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the 5' exon (#)	
+exon1_number_bases	INTEGER	true	false			Number of bases from 5' exon	
+exon1_end	INTEGER	true	false			End position of the 5' exon on the chromosome	
+exon1_strand	INTEGER	false	false		{codec.dir}/jcn_p__exon1_strand.tsv	Chromosome strand of the 5' exon	
+exon2_chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the 3' exon (#)	
+exon2_number_bases	INTEGER	true	false			Number of bases from 3' exon	
+exon2_start	INTEGER	true	false			Start position of the 3' exon on the chromosome	
+exon2_strand	INTEGER	false	false		{codec.dir}/jcn_p__exon2_strand.tsv	Chromsome strand of the 3' exon	
+is_fusion_gene	VARCHAR(16)	false	false		{codec.dir}/jcn_p__is_fusion_gene.tsv	Indicate if the function is the result of a fusion gene	
+is_novel_splice_form	VARCHAR(16)	false	false		{codec.dir}/jcn_p__is_novel_splice_form.tsv	Indicate if the splice form is novel	
+junction_seq	TEXT	false	false			Provide junction sequence if either is_fusion_gene or is_novel_splice_form is true	
+junction_type	VARCHAR(64)	false	false		{codec.dir}/jcn_p__junction_type.tsv	Type of junction	
+junction_read_count	FLOAT(5,2)	true	false			Count of sequencing reads that span across exons	
+quality_score	INTEGER	false	false			Quality score for the junction call	
+probability	FLOAT(3,2)	false	false			Probability of the junction call	
+validation_status	VARCHAR(64)	true	false		{codec.dir}/jcn_p__validation_status.tsv	Indicate if the junction has been validated	
+validation_platform	VARCHAR(512)	false	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in validation	
+note	TEXT	false	false			Optional field to leave notes	

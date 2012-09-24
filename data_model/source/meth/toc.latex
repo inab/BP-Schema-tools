@@ -1,0 +1,9 @@
+\section{DNA Methylation and Hydroxy-Methylation}\label{fea:meth}
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=1.0\textwidth]{methylation.pdf}
+\caption{DNA Methylation and Hydroxy-Methylation Sub-Schema}
+\end{figure*}
+

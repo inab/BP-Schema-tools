@@ -1,0 +1,15 @@
+##file Structural Somatic Mutations - Secondary Analysis File
+## Structural Somatic Mutations [stsm] – Secondary Analysis File [s]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular group of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+sv_id	TEXT	true	false			Unique identifier for variant	
+placement	INTEGER	true	false			Ordering of breakpoint pairs within a single structural change event	
+bkpt_from_context	VARCHAR(64)	false	false			Contextual description of the first break location (Exonic, Intronic, Intergenic)	
+gene_affected_by_bkpt_from	VARCHAR(512)	false	false	1,1		"Gene(s) affected by the breakpoints. Use Ensembl gene id. Separate multiple genes with vertical bars in the form of geneA|geneB|geneC. If both breakpoints affect genes, then use ""|"" to separate them. If no gene is affected, use -888 (not applicable)."	
+transcript_affected_by_bkpt_from	TEXT	false	false	1,2		Transcript(s) affected by the breakpoints. Use Ensembl transcript id. Separate multiple transcripts from the same gene with commas, and separate transcripts from different genes with vertical bars. e.g.: transcriptA1,transcriptA2|transcriptB1|transcriptC1	
+bkpt_to_context	VARCHAR(64)	false	false			Contextual description of the second break location (Exonic, Intronic, Intergenic)	
+gene_affected_by_bkpt_to	VARCHAR(512)	false	false	1,1		"Gene(s) affected by the breakpoints. Use Ensembl gene id. Separate multiple genes with vertical bars in the form of geneA|geneB|geneC. If both breakpoints affect genes, then use ""|"" to separate them. If no gene is affected, use -888 (not applicable)."	
+transcript_affected_by_bkpt_to	TEXT	false	false	1,2		Transcript(s) affected by the breakpoints. Use Ensembl transcript id. Separate multiple transcripts from the same gene with commas, and separate transcripts from different genes with vertical bars. e.g.: transcriptA1,transcriptA2|transcriptB1|transcriptC1	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	
+note	TEXT	false	false			Optional field to leave notes	

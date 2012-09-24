@@ -1,0 +1,18 @@
+##file Specimen Data File							
+##featureType cdata
+##fileType specimen
+## Specimen Data File [specimen] (required)							
+## This submission file describes a specimen from which one or more samples were derived. Use additional rows for more than one specimen from the same patient. If more than one specimen was extracted during the same procedure, each gets a distinct ID.							
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+donor_id	VARCHAR(64)	true	false			Unique identifier for the donor; assigned by data provider. It must be coded, and correspond to a donor ID listed in the donor data file.	
+specimen_id	VARCHAR(64)	true	false			Unique identifier for the specimen assigned by data provider.	
+specimen_type	VARCHAR(128)	true	false		{codec.dir}/specimen__specimen_type.tsv	Controlled vocabulary description of specimen type.	
+specimen_type_other	VARCHAR(64)	true	false			Free text description of site of specimen if "normal control (other)" or "disease (other)" was specified in specimen_type field.	
+specimen_processing	VARCHAR(128)	true	false		{codec.dir}/specimen__specimen_processing.tsv	Description of technique used to process specimen	
+specimen_processing_other	VARCHAR(64)	true	false			If "other" specified for specimen_processing, may indicate technique here.	
+specimen_storage	VARCHAR(128)	true	false		{codec.dir}/specimen__specimen_storage.tsv	Description of how specimen was stored. For specimens that were extracted freshly or immediately cultured, answer (1) "NA".	
+specimen_storage_other	VARCHAR(64)	true	false			If "other" specified for specimen_storage, may indicate technique here.	
+specimen_biobank	VARCHAR(64)	true	false			If the specimen was obtained from a biobank, provide the biobank name here	
+specimen_biobank_id	VARCHAR(64)	true	false			If the specimen was obtained from a biobank, provide the biobank accession number here.	
+specimen_available	VARCHAR(128)	true	false		{codec.dir}/specimen__specimen_available.tsv	Whether additional tissue is available for followup studies.	
+specimen_notes	TEXT	false	false			Free text notes allowed	Any additional non-identifying information can be included here.

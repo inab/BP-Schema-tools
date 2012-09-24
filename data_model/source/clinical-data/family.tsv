@@ -1,0 +1,13 @@
+##file Donor Family History							
+##featureType cdata
+##fileType family
+## Donor Family History [family] (optional)							
+## This file describes the family history of the donor.							
+# name	datatype	required?	primary key?	deconvolution level	mapping file	documentation	values
+donor_id	TEXT	true	false			Unique identifier for the donor; assigned by data provider. It must be coded, and correspond to a donor ID listed in the donor data file.	
+relationship_type	VARCHAR(128)	true	false		{codec.dir}/dr_family_history__relationship_type.tsv	Relationship to the donor	
+relationship_type_other	TEXT	true	false			If "other" answered in previous column, specify the relationship type here	
+relationship_sex	VARCHAR(128)	true	false		{codec.dir}/dr_family_history__relationship_sex.tsv	Biological sex of related individual	
+relationship_age	INTEGER	true	false			Age of relative at primary diagnosis (years)	Use 90 for ages >= 90 years.
+relationship_diagnosis_do	TEXT	true	false			Disease Ontology code for the relative's diagnosis status	
+relationship_diagnosis	TEXT	true	false			Diagnosis (disease or healthy status)	e.g. "breast cancer"

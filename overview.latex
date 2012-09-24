@@ -1,0 +1,203 @@
+\chapter{Data Submission}
+\section{Overview of Data Submission Process}
+
+There are four major steps in the data submission process:
+\begin{enumerate}
+\item Submit raw sequence data to the European Genome-phenome Archive%
+\item Prepare the BLUEPRINT submission files according to DCC data format specifications%
+\item Verify conformity of the submission files%
+\item Submit files to the DCC Secure FTP server%
+\end{enumerate}
+
+\noindent\colorbox{Gold}{
+	\parbox{\dimexpr\linewidth-2\fboxsep}{
+All submitted data must be based on \textbf{Human reference genome assembly GRCh37} and \textbf{Ensembl gene set version \EnsemblVer{}}
+	}
+}
+
+\noindent\colorbox{LightSkyBlue}{
+	\parbox{\dimexpr\linewidth-2\fboxsep}{
+When submitting experimental data, please make sure you've already deposited your raw data to the appropriate public data
+repositories (eg: sequencing reads to EBI EGA) and then populate in your submission files the data elements
+\textbf{raw\_data\_repository} and \textbf{raw\_data\_accession} with the correct repository and accession number respectively.
+	}
+}
+
+\section{Preparing Clinical Data and Analyzed Contents for their submission}
+
+Submitted clinical or experimental data files must be from any one of these categories:
+\begin{itemize}%
+	\setlength{\itemsep}{0pt}%
+	\setlength{\parskip}{0pt}%
+	\item \hyperref[fea:cdata]{Clinical data}%
+	\item \hyperref[fea:cngv]{Copy Number Variations}%
+	\item \hyperref[fea:exp]{Gene Expression}%
+	\item \hyperref[fea:jcn]{Exon Junctions}%
+	\item \hyperref[fea:meth]{DNA Methylation and Hydroxy-Methylation}%
+	\item \hyperref[fea:pdna]{Protein-DNA interactions}%
+	\item \hyperref[fea:rreg]{Regulatory regions}%
+\end{itemize}
+
+BLUEPRINT DCC is hosting both clinical data and analyzed contents. Contents must be sent following
+the textual tabular formats defined below. Files with those contents must also follow the BLUEPRINT
+DCC file naming convention.
+
+Each submitter must have a unique signing key, provided by DACO and DCC. Each file in a submitted archive
+must be accompanied by its SHA1 \textbf{uncompressed} content digest file, digitally signed
+with the submitter's signing key.
+
+\begin{Verbatim}[label=\textrm{Signed digest generation and verification using OpenSSL},frame=single,samepage=true,rulecolor=\color{DarkOrange},commandchars=+\{\}]
++textit{# Signed digest of uncompressed contents, will be meth-p--068-20120920--mycode.txt.sha1}
+openssl dgst -sha1 -sign subKey.pem -out meth-p--068-20120920--mycode.txt.sha1 \
+	meth-p--068-20120920--mycode.txt
+
++textit{# Signed digest of already compressed contents}
+bunzip2 -c meth-p--068-20120920--mycode.txt.bz2 | openssl dgst -sha1 -sign subKey.pem \
+	-out meth-p--068-20120920--mycode.txt.sha1
+
++textit{# Verification of uncompressed contents using}
++textit{# signed digest meth-p--068-20120920--mycode.txt.sha1}
+openssl dgst -sha1 -verify subKey.pem.pub -signature meth-p--068-20120920--mycode.txt.sha1 \
+	meth-p--068-20120920--mycode.txt
+
++textit{# Verification of compressed contents}
+bunzip2 -c meth-p--068-20120920--mycode.txt.bz2 | openssl dgst -sha1 -verify subKey.pem.pub \
+	-signature meth-p--068-20120920--mycode.txt.sha1
+\end{Verbatim}
+
+The procedure to submit analyzed contents to BLUEPRINT DCC also involves first having the raw data
+used for the analysis in the \href{http://www.ebi.ac.uk/ega/}{European Genome-phenome Archive (EGA)}, as
+all the metadata entries from the analyzed contents to be stored in BLUEPRINT DCC \textbf{must point} to
+the original raw data.
+
+\subsection{File Naming Conventions}
+Submitted files, containing either clinical data or analyzed experiment contents, must follow next
+file naming convention
+
+\begin{Verbatim}[frame=single,samepage=true,rulecolor=\color{DarkOrange}]
+featureType-fileType--institutionCode-dateFileCreated--freeField.txt
+\end{Verbatim}
+
+\begin{Verbatim}[frame=single,samepage=true,rulecolor=\color{DarkOrange}]
+featureType-fileType--institutionCode-dateFileCreated--freeField.txt.sha1
+\end{Verbatim}
+
+The file name components are mapped in the next way:
+
+\begin{center}
+\begin{tabular}{!{\color{DarkOrange}\vrule}l!{\color{DarkOrange}\vrule}p{0.5\textwidth}!{\color{DarkOrange}\vrule}l!{\color{DarkOrange}\vrule}}
+	\multicolumn{1}{c}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Components}}} & \multicolumn{1}{c}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description}}} & \multicolumn{1}{c}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Key}}} \\
+	\multirow{7}{*}{\textit{featureType}} & \hyperref[fea:cdata]{Clinical data} & cdata \\
+	& \hyperref[fea:cngv]{Copy Number Variations} & cngv \\
+	& \hyperref[fea:exp]{Gene Expression} & exp \\
+	& \hyperref[fea:jcn]{Exon Junctions} & jcn \\
+	& \hyperref[fea:meth]{DNA Methylation and Hydroxy-Methylation} & meth \\
+	& \hyperref[fea:pdna]{Protein-DNA interactions} & pdna \\
+	& \hyperref[fea:rreg]{Regulatory regions} & rreg \\ \arrayrulecolor{DarkOrange}\hline
+	\textit{institutionCode} & Institution submitting data & CV Table ?? \\ \arrayrulecolor{DarkOrange}\hline
+	\multirow{8}{*}{\textit{fileType}} & Metadata file & m \\
+	& Primary data file & p \\
+	& Secondary data file & s \\
+	& Gene expression file & g \\
+	& Donor file & donor \\
+	& Specimen file & specimen \\
+	& Sample file & sample \\
+	& Donor's Family file & family \\ \arrayrulecolor{DarkOrange}\hline
+	\textit{dateFileCreated} & The date on which the file is created & \textit{YYYYMMDD} (\href{http://en.wikipedia.org/wiki/ISO_8601#Calendar_dates}{ISO-8601}) \\ \arrayrulecolor{DarkOrange}\hline
+	\textit{freeField} & An alphanumeric field (max length of 16 characters) where submitters can put internal codes, file sequence numbers, etc... & \textit{e.g.: mysample, 0B1845J} \\ \arrayrulecolor{DarkOrange}\hline
+\end{tabular}
+\end{center}
+
+Different file types of the same feature type are interrelated, because the data they are storing is intertwined. Specific relations are defined on the documentation of each feature type and their file types. For instance, information stored in a primary data file is related and depends on the data from its corresponding metadata file, and the same happens to secondary data files and primary data files. Metadata file contents are related to clinical data sample files.
+
+\subsection{Tabular File Structure}
+The submitted analyzed contents are kept in tab-delimited text files. General comments may be added to the
+beginning of the file with a hash ('\#') prefixed at beginning of each comment line.
+The first non-comment line is the header containing the names of the columns. Each column
+corresponds to a data element defined in DCC Submission Tabular Formats specification (\hyperref[ch:tabFormat]{Chapter \ref*{ch:tabFormat}}).
+
+There is a subset of comment lines used to attach data labels to the text files. These data labels follow the form
+`\texttt{\#\#labelName value [value ...]}'. Currently acknowledged data labels are:
+
+\begin{itemize}
+	\item \texttt{\textbf{format}}: This label is \textbf{required}, and its value defines the BLUEPRINT data formatting schema used on the file.%
+	\item \texttt{\textbf{depends}}: Although this label is not always required, it is important to validate the data coherence of the whole data set, because it ensures related data is not corrupted. The values of this label are the file on the same submission this file is related to (for instance, the name of a metadata file), and the SHA1 digest value (in its hexadecimal representation) of that file's contents.%
+\end{itemize}
+
+There are several ways to generate the SHA1 digest of a file, like libraries in most of the programming languages and command-line tools:
+
+\begin{Verbatim}[label=\textrm{SHA1 digest generation},frame=single,samepage=true,rulecolor=\color{DarkOrange},commandchars=\\\{\}]
+\textit{# Getting the SHA1 digest value of uncompressed contents using OpenSSL}
+openssl dgst -sha1 meth-p--068-20120920--mycode.txt
+
+SHA1(meth-p--068-20120920--mycode.txt)= \textbf{81ae49a7014d2d0260625d3535fa6e2a4a0bc06f}
+
+\textit{# Getting the SHA1 digest value of uncompressed contents using sha1sum}
+sha1sum meth-p--068-20120920--mycode.txt
+
+\textbf{81ae49a7014d2d0260625d3535fa6e2a4a0bc06f}  meth-p--068-20120920--mycode.txt
+\end{Verbatim}
+
+An example file is shown below (note that parts of the lines are omitted for readability):
+
+\begin{Verbatim}[label=\setlength{\fboxsep}{2pt}\colorbox{DarkOrange}{\color{white}meth-p-{}-068-20120920-{}-mycode.txt},frame=single,samepage=true,rulecolor=\color{DarkOrange},showtabs=true,obeytabs=true,commandchars=\\\{\}]
+\textit{# This is an example of a primary analysis file for simple somatic mutations.}
+\textit{# File name: meth-p--068-20120920--mycode.txt}
+\textit{#}
+\textit{# And it has its labels}
+\textbf{##format \schemaVer{}}
+\textbf{##depends meth-m--068-20120920--mycode.txt 03366af5145107cc818f4827e86b61dcf998ff29}
+analysis_id	analyzed_sample_id	methylated_fragment_id	chromosome	...	note
+an:068:000124	sample:068:000035	meth:068:1234ff33	1	... 	-999
+an:068:000124	sample:068:000035	meth:068:00019878	1	...	-999
+an:068:000124	sample:068:000092	meth:068:a712838	21	...	-999
+an:068:000124	sample:068:000092	meth:068:abebdZZZZZ	4	...	-999
+\end{Verbatim}
+
+All the declared columns for each file type must be set. Data columns are labeled as either
+required (R) or optional (O). Data providers (i.e. submitters) must put all the efforts in
+order to provide values for the required data columns. There are some exceptions for this rule,
+where required fields are unknown on the first submission, but these exceptions are properly
+documented.
+
+There are several possible reasons why a column value (either required or optional) has not
+been provided. Next reserved codes must be used to describe the reason:
+
+\begin{center}
+\begin{tabular}{!{\color{DarkOrange}\vrule}r!{\color{DarkOrange}\vrule}l!{\color{DarkOrange}\vrule}}
+	\multicolumn{1}{c}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Code}}} & \multicolumn{1}{c}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Meaning}}} \\
+	-999 & Data not supplied at this time \\
+	-888 & Not applicable \\
+	-777 & Data verified to be unknown \\ \arrayrulecolor{DarkOrange}\hline
+\end{tabular}
+\end{center}
+
+Some data columns described in this submission manual contain values used as identifiers
+on BLUEPRINT DCC (e.g. analysis\_id, regulatory\_region\_id, ...). As such, these identifiers
+should uniquely identify the entity they are referring (an analysis, a regulatory region, ...),
+and the identifier's value should be globally unique within a center's data submission. Also,
+these identifiers should be consistent along the different data submissions and releases. If
+you have to generate your own identifiers, there are some general recommendations, like using
+the same prefix for the identifiers of the same kind.
+
+When you are submitting string values for columns which can contain URLs or multiple values
+delimited by commas, each separate value string, before being joined, should be \href{http://en.wikipedia.org/wiki/Percent-encoding}{URI encoded}.
+
+\section{File Submission Procedure}
+Files with the contents to be submitted, along with their corresponding signed disgest,
+must be sent in a single \href{http://en.wikipedia.org/wiki/Tar_%28file_format%29}{tar}
+archive. Either the tar archive or its embedded contents should be submitted compressed,
+using \href{http://en.wikipedia.org/wiki/Gzip}{gzip}, \href{http://en.wikipedia.org/wiki/Bzip2}{bzip2}
+or \href{http://en.wikipedia.org/wiki/Xz}{xz} formats.
+
+The following steps are involved in submitting your project's data files to DCC:
+\begin{enumerate}
+	\item Contact xxx and notify the DCC of your intent to submit data.
+	\item The DCC will provide an SFTP or Aspera account for uploading your data to the DCC's secure server xxx.
+	\item Prepare an archive containing the set of data files (along with their signed digests) comprising your submission.
+	\item Generate a signed digest of the archive your are going to upload, which is also going to be uploaded.
+	\item Login into your SFTP or Aspera account and upload both the data archive and its signed digest.
+	\item Notify the DCC of your successful upload, so they can start the internal validation and processing.
+\end{enumerate}
+
+{\color{red}\textit{To be finished/defined}}

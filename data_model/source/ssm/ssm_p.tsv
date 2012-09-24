@@ -1,0 +1,26 @@
+##file Simple Somatic Mutations - Primary Analysis File
+## Simple Somatic Mutations [ssm] – Primary Analysis File [p]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+mutation_id	VARCHAR(128)	true	false			Unique identifier for the mutation	
+mutation_type	VARCHAR(128)	true	false		{codec.dir}/ssm_p__mutation_type.tsv	Type of mutation	
+chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome containing the mutation/variation	
+chromosome_start	INTEGER	true	false			Start position of the mutation/variation on the chromosome	
+chromosome_end	INTEGER	true	false			End position of the mutation/variation on the chromosome	
+chromosome_strand	INTEGER	true	false		{codec.dir}/ssm_p__chromosome_strand.tsv	Chromosome strand	
+refsnp_allele	VARCHAR(512)	true	false			RefSNP alleles from dbSNP (use a dash for each missing base)	e.g.: A/T, ---/AAA
+refsnp_strand	INTEGER	false	false		{codec.dir}/ssm_p__refsnp_strand.tsv	Strand of RefSNP allele	
+reference_genome_allele	VARCHAR(512)	true	false			Allele in the reference genome (use a dash for each missing base)	
+control_genotype	VARCHAR(512)	true	false			Genotype of the control sample (use a dash for each missing base)	
+tumour_genotype	VARCHAR(512)	true	false			Genotype of the tumour sample (use a dash for each missing base)	
+mutation	VARCHAR(1024)	true	false			Mutation, e.g. C > G	
+expressed_allele	VARCHAR(512)	false	false			The expressed allele(s) as revealed by RNA-seq, etc.	
+quality_score	INTEGER	false	false			Average quality score for the mutation/variation call	
+probability	FLOAT(3,2)	false	false			Probability of the mutation/variation call	
+read_count	FLOAT(5,2)	false	false			Average number of times the bases are covered by raw reads	
+is_annotated	VARCHAR(64)	false	false		{codec.dir}/ssm_p__is_annotated.tsv	Indicate if the mutation/variation is annotated in dbSNP	
+validation_status	VARCHAR(64)	true	false		{codec.dir}/ssm_p__validation_status.tsv	Indicate if the mutation/variation has been validated	
+validation_platform	VARCHAR(512)	false	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in validation	
+xref_ensembl_var_id	VARCHAR(128)	false	false			Cross-reference: Ensembl Variation ID from Ensembl Variation database.	e.g.: rs12345; ENSSNP53189
+note	TEXT	false	false			Optional field to leave notes	

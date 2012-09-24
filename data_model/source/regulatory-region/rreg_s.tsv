@@ -1,0 +1,11 @@
+##file Regulatory regions - Secondary Analysis File
+##featureType rreg
+##fileType s
+## Regulatory regions [rreg] – Secondary Analysis File [s]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	TEXT	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	TEXT	true	false			Unique identifier for the analyzed sample	
+regulatory_region_id	TEXT	true	false			Unique identifier for the identified regulatory region	
+gene_affected	VARCHAR(128)	true	false			Gene(s) related to the regulatory region. Use Ensembl gene id. Separate multiple genes with vertical bars in the form of geneA|geneB|geneC. If no gene is affected, use -888 (not applicable).	
+gene_build_version	INTEGER	true	false			Version of Ensembl gene build used for annotation	
+note	TEXT	false	false			Optional field to leave notes	

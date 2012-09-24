@@ -1,0 +1,18 @@
+##file Regulatory regions - Metadata File
+##featureType rreg
+##fileType m
+## Regulatory regions [rreg] – Metadata File [m]
+# name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
+analysis_id	VARCHAR(64)	true	false			Unique identifier for the analysis performed for a particular set of samples	
+analyzed_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed sample	
+matched_sample_id	VARCHAR(64)	true	false			Unique identifier for the analyzed control sample	
+assembly_version	VARCHAR(64)	true	false		{codec.dir}/appendix_B10.tsv	Version of reference genome assembly	
+platform	VARCHAR(512)	true	false		{codec.dir}/appendix_B5.tsv	Platform or technology used in detecting the regulatory region	
+experimental_protocol	VARCHAR(512)	false	false			Name of experimental protocol and URL to written protocol	
+base_calling_algorithm	VARCHAR(512)	true	false			Name of base calling algorithm and URL to written protocol	
+alignment_algorithm	VARCHAR(512)	true	false			Name of alignment algorithm and URL to written protocol	
+variation_calling_algorithm	VARCHAR(512)	true	false			Name of variation calling algorithm and URL to written protocol	
+other_analysis_algorithm	VARCHAR(512)	false	false			Names of other analysis algorithms. Separate multiple algorithms by commas.	
+raw_data_repository	VARCHAR(128)	false	false		{codec.dir}/appendix_B12.tsv	Public repository where raw data is submitted	
+raw_data_accession	VARCHAR(128)	false	false			Accession and URL for referencing the raw data at the public repository	
+note	TEXT	false	false			Optional field to leave notes	

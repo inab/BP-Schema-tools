@@ -1,0 +1,19 @@
+\section{Exon Junction}\label{fea:jcn}
+
+The following diagram, based on the one from ICGC DCC manual, illustrates how junction\_id should be generated, how junction\_read\_count, exon1\_number\_bases and exon2\_number\_bases are calculated:
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=0.75\textwidth]{exon_junction_count_ICGC.pdf}
+\caption{Junction Read Count explanation}
+\end{figure*}
+
+
+\begin{figure*}[!h]
+\centering
+
+\includegraphics[width=0.5\textwidth]{exon_junction.pdf}
+\caption{Exon Junction Sub-Schema}
+\end{figure*}
+
