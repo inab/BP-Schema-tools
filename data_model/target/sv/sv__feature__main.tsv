@@ -1,0 +1,21 @@
+# name	required?	datatype	primary key?	index?
+interpreted_annotation	false	VARCHAR(256)	false	false
+sv_id	false	VARCHAR(32)	false	false
+variant_type	false	VARCHAR(128)	false	false
+db_xref	false	VARCHAR(256)	false	false
+sv_id_key	true	BIGINT	false	true
+feature_id_key	true	BIGINT	true	true
+placement	true	INTEGER	false	true
+annotation	true	VARCHAR(256)	false	true
+chr_from	true	VARCHAR(64)	false	true
+chr_from_bkpt	true	INTEGER	false	true
+chr_from_strand	true	INTEGER	false	false
+chr_from_range	false	INTEGER	false	false
+chr_from_flanking_seq	false	VARCHAR(512)	false	false
+bkpt_from_context	false	VARCHAR(64)	false	false
+chr_to	true	VARCHAR(64)	false	true
+chr_to_bkpt	true	INTEGER	false	true
+chr_to_strand	true	INTEGER	false	false
+chr_to_range	false	INTEGER	false	false
+chr_to_flanking_seq	false	VARCHAR(512)	false	false
+bkpt_to_context	false	VARCHAR(64)	false	false

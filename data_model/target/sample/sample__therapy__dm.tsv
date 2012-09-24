@@ -1,0 +1,7 @@
+# name	required?	datatype	primary key?	index?
+donor_id_key	true	BIGINT	false	true
+therapy_start_interval	true	INTEGER	false	false
+therapy_duration	true	INTEGER	false	false
+therapy_type	true	TEXT	false	false
+therapy_response	true	VARCHAR(128)	false	false
+therapy_notes	true	TEXT	false	false

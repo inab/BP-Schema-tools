@@ -1,0 +1,24 @@
+# name	required?	datatype	primary key?	index?
+feature_id_key	true	BIGINT	false	true
+normalized_read_count	true	FLOAT(5,2)	false	true
+raw_read_count	true	INTEGER	false	true
+normalized_expression_level	false	FLOAT(5,2)	false	true
+fold_change	false	FLOAT(3,2)	false	true
+reference_sample	false	VARCHAR(64)	false	false
+quality_score	false	INTEGER	false	true
+probability	false	FLOAT(3,2)	false	true
+is_annotated	false	VARCHAR(64)	false	true
+platform	true	VARCHAR(512)	false	true
+assembly_version	true	VARCHAR(64)	false	false
+validation_status	true	VARCHAR(64)	false	true
+validation_platform	false	VARCHAR(512)	false	true
+experimental_protocol	false	VARCHAR(512)	false	false
+base_calling_algorithm	true	VARCHAR(512)	false	false
+alignment_algorithm	true	VARCHAR(512)	false	false
+normalization_algorithm	true	VARCHAR(512)	false	false
+other_analysis_algorithm	false	VARCHAR(512)	false	false
+seq_coverage	false	FLOAT(5,2)	false	false
+raw_data_repository	false	VARCHAR(128)	false	false
+raw_data_accession	false	VARCHAR(128)	false	false
+sample_id	true	VARCHAR(64)	false	true
+analysis_id	true	VARCHAR(64)	false	true

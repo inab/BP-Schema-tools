@@ -1,0 +1,22 @@
+# name	required?	datatype	primary key?	index?
+methylation_id_key	true	BIGINT	false	true
+methylated_fragment_id	true	VARCHAR(128)	false	true
+beta_value	true	FLOAT(5,2)	false	true
+platform	true	VARCHAR(512)	false	true
+assembly_version	true	VARCHAR(64)	false	false
+quality_score	false	INTEGER	false	true
+probability	false	FLOAT(3,2)	false	true
+validation_status	true	VARCHAR(64)	false	true
+validation_platform	false	VARCHAR(512)	false	true
+gene_affected	true	VARCHAR(128)	false	true
+experimental_protocol	false	VARCHAR(512)	false	false
+base_calling_algorithm	true	VARCHAR(512)	false	false
+alignment_algorithm	true	VARCHAR(512)	false	false
+variation_calling_algorithm	true	VARCHAR(512)	false	false
+other_analysis_algorithm	false	VARCHAR(512)	false	false
+raw_data_repository	false	VARCHAR(128)	false	false
+raw_data_accession	false	VARCHAR(128)	false	false
+analyzed_sample_id	true	VARCHAR(64)	false	true
+matched_sample_id	true	VARCHAR(64)	false	true
+analysis_id	true	VARCHAR(64)	false	true
+gene_symbol	false	VARCHAR(64)	false	false

@@ -1,0 +1,6 @@
+# name	required?	datatype	primary key?	index?
+methylation_id_key	true	BIGINT	true	true
+chromosome	true	VARCHAR(64)	false	true
+chromosome_start	true	INTEGER	false	true
+chromosome_end	true	INTEGER	false	true
+chromosome_strand	false	INTEGER	false	true

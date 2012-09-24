@@ -1,0 +1,23 @@
+# name	required?	datatype	primary key?	index?
+sv_id_key	true	BIGINT	false	true
+assembly_version	true	VARCHAR(64)	false	false
+platform	true	VARCHAR(512)	false	true
+experimental_protocol	false	VARCHAR(512)	false	false
+base_calling_algorithm	true	VARCHAR(512)	false	false
+alignment_algorithm	true	VARCHAR(512)	false	false
+variation_calling_algorithm	true	VARCHAR(512)	false	false
+other_analysis_algorithm	false	VARCHAR(512)	false	false
+raw_data_repository	false	VARCHAR(128)	false	false
+raw_data_accession	false	VARCHAR(128)	false	false
+analyzed_sample_id	true	VARCHAR(64)	false	true
+matched_sample_id	true	VARCHAR(64)	false	true
+microhomology_sequence	false	TEXT	false	false
+non_templated_sequence	false	TEXT	false	false
+evidence	false	VARCHAR(128)	false	true
+quality_score	false	INTEGER	false	true
+probability	false	FLOAT(3,2)	false	true
+zygosity	false	VARCHAR(64)	false	true
+validation_status	true	VARCHAR(64)	false	true
+validation_platform	false	VARCHAR(512)	false	true
+seq_coverage	false	FLOAT(5,2)	false	false
+analysis_id	true	VARCHAR(64)	false	true
