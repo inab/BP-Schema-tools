@@ -6,7 +6,7 @@
 analysis_id	TEXT	true	false			Unique identifier for the analysis performed for a particular group of samples	
 analyzed_sample_id	TEXT	true	false			Unique identifier for the analyzed sample	
 protein_dna_interaction_id	VARCHAR(128)	true	false			Unique identifier for the protein-DNA interaction	
-protein_stable_id	VARCHAR(128)	true	false			Ensembl protein stable id of the interacting protein
+protein_stable_id	VARCHAR(128)	true	false			Stable id of the interacting protein, antibody or protein complex
 chromosome	VARCHAR(64)	true	false		{codec.dir}/appendix_B6.tsv	Name of the chromosome where the protein-DNA interaction happened	
 chromosome_start	INTEGER	true	false			Start position where the interaction happened on the chromosome	
 chromosome_end	INTEGER	true	false			End position the interaction happened on the chromosome	

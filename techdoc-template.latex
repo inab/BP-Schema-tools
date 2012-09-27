@@ -41,7 +41,7 @@
 \newcommand{\cvKey}{Key}
 \newcommand{\cvDesc}{Description}
 \newcommand{\EnsemblVer}{68}
-\newcommand{\schemaVer}{0.1.5}
+\newcommand{\schemaVer}{0.1.5.1}
 
 \begin{document}
 
