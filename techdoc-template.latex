@@ -38,10 +38,10 @@
 	urlcolor=olive
 }
 
-\newcommand{\cvKey}{Key}
-\newcommand{\cvDesc}{Description}
-\newcommand{\EnsemblVer}{68}
-\newcommand{\schemaVer}{0.1.5.1}
+%\newcommand{\cvKey}{Key}
+%\newcommand{\cvDesc}{Description}
+%\newcommand{\EnsemblVer}{68}
+%\newcommand{\schemaVer}{0.1.5.1}
 
 \begin{document}
 
@@ -55,8 +55,8 @@ Draft v\schemaVer{}}
 \texttt{}
 
 
-\subimport*{./}{overview.latex}
+\subimport*{\latexoverviewdir}{\latexoverviewname}
 
-\subimport*{./}{output.latex}
+\subimport*{\latexbodydir}{\latexbodyname}
 
 \end{document}
