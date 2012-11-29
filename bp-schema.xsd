@@ -52,116 +52,146 @@
         </xs:annotation>
         
         <xs:complexType>
-            <xs:choice minOccurs="0" maxOccurs="1">
-                <xs:element name="cv" type="bp:cvType">
+            <xs:sequence>
+                <xs:element name="description" type="xs:string">
                     <xs:annotation>
-                        <xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                        <xs:documentation>The detailed description of the column</xs:documentation>
                     </xs:annotation>
                 </xs:element>
-                <xs:element name="pattern" type="bp:patternType">
+                <xs:element name="annotation" minOccurs="0" maxOccurs="unbounded">
                     <xs:annotation>
-                        <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
+                        <xs:documentation>Additional annotations, either supplementary documentation or other future kinds</xs:documentation>
                     </xs:annotation>
+                    <xs:complexType>
+                        <xs:simpleContent>
+                            <xs:extension base="xs:string">
+                                <xs:attribute name="key" type="xs:string" use="required">
+                                    <xs:annotation>
+                                        <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                            </xs:extension>
+                        </xs:simpleContent>
+                    </xs:complexType>
                 </xs:element>
-            </xs:choice>
+                <xs:element name="column-type">
+                    <xs:annotation>
+                        <xs:documentation>The type and restrictions of the column</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:choice minOccurs="0" maxOccurs="1">
+                            <xs:element name="cv" type="bp:cvType">
+                                <xs:annotation>
+                                    <xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                                </xs:annotation>
+                            </xs:element>
+                            <xs:element name="pattern" type="bp:patternType">
+                                <xs:annotation>
+                                    <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
+                                </xs:annotation>
+                            </xs:element>
+                        </xs:choice>
+                        <xs:attribute name="item-type" use="required">
+                            <xs:annotation>
+                                <xs:documentation>The basic type of the values for this column, either in single or in multi-dimensional array mode</xs:documentation>
+                            </xs:annotation>
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:enumeration value="string">
+                                        <xs:annotation>
+                                            <xs:documentation>String data</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="integer">
+                                        <xs:annotation>
+                                            <xs:documentation>Integer numbers</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="decimal">
+                                        <xs:annotation>
+                                            <xs:documentation>Floating point (pseudo-real) numbers</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="boolean">
+                                        <xs:annotation>
+                                            <xs:documentation>A boolean value (either true or false)</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="timestamp">
+                                        <xs:annotation>
+                                            <xs:documentation>Timestamp</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="complex">
+                                        <xs:annotation>
+                                            <xs:documentation>A complex type, like a hash or a structure</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                        <xs:attribute name="pattern" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="complex-template" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>When this column holds a complex type, the template of the pieces, separated by the separators.
+                                    For instance, if the complex separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="complex-seps" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>This attribute must be set when the column is a complex type, it is a string whose characters are separators for the faceted values in the complex type.</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="cv" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>The symbolic name of the controlled vocabulary used to validate the values for this column</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="column-kind" use="required">
+                            <xs:annotation>
+                                <xs:documentation>The kind of column: idref, required or optional</xs:documentation>
+                            </xs:annotation>
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:enumeration value="idref">
+                                        <xs:annotation>
+                                            <xs:documentation>An identifier or a reference to an identifier</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="required">
+                                        <xs:annotation>
+                                            <xs:documentation>A column with required values</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="optional">
+                                        <xs:annotation>
+                                            <xs:documentation>A column with optional values</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                        <xs:attribute name="array-seps" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>If this attribute is set, it is a string whose characters are separators for the input values.
+                                    So, the column values are treated as a multidimensional array</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="default" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>If this attribute is set, it is a value recognized as "default" for this column, so it must bypass all the checks</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
             <xs:attribute name="name" use="required" type="xs:string">
                 <xs:annotation>
                     <xs:documentation>The name of this column data</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="item-type" use="required">
-                <xs:annotation>
-                    <xs:documentation>The basic type of the values for this column, either in single or in multi-dimensional array mode</xs:documentation>
-                </xs:annotation>
-                <xs:simpleType>
-                    <xs:restriction base="xs:string">
-                        <xs:enumeration value="string">
-                            <xs:annotation>
-                                <xs:documentation>String data</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="integer">
-                            <xs:annotation>
-                                <xs:documentation>Integer numbers</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="decimal">
-                            <xs:annotation>
-                                <xs:documentation>Floating point (pseudo-real) numbers</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="boolean">
-                            <xs:annotation>
-                                <xs:documentation>A boolean value (either true or false)</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="timestamp">
-                            <xs:annotation>
-                                <xs:documentation>Timestamp</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="complex">
-                            <xs:annotation>
-                                <xs:documentation>A complex type, like a hash or a structure</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                    </xs:restriction>
-                </xs:simpleType>
-            </xs:attribute>
-            <xs:attribute name="pattern" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="complex-template" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>When this column holds a complex type, the template of the pieces, separated by the separators.
-                    For instance, if the complex separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="complex-seps" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>This attribute must be set when the column is a complex type, it is a string whose characters are separators for the faceted values in the complex type.</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="cv" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>The symbolic name of the controlled vocabulary used to validate the values for this column</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="column-kind" use="required">
-                <xs:annotation>
-                    <xs:documentation>The kind of column: idref, required or optional</xs:documentation>
-                </xs:annotation>
-                <xs:simpleType>
-                    <xs:restriction base="xs:string">
-                        <xs:enumeration value="idref">
-                            <xs:annotation>
-                                <xs:documentation>An identifier or a reference to an identifier</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="required">
-                            <xs:annotation>
-                                <xs:documentation>A column with required values</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                        <xs:enumeration value="optional">
-                            <xs:annotation>
-                                <xs:documentation>A column with optional values</xs:documentation>
-                            </xs:annotation>
-                        </xs:enumeration>
-                    </xs:restriction>
-                </xs:simpleType>
-            </xs:attribute>
-            <xs:attribute name="array-seps" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>If this attribute is set, it is a string whose characters are separators for the input values.
-So, the column values are treated as a multidimensional array</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="default" type="xs:string" use="optional">
-                <xs:annotation>
-                    <xs:documentation>If this attribute is set, it is a value recognized as "default" for this column, so it must bypass all the checks</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
             
@@ -192,23 +222,19 @@ So, the column values are treated as a multidimensional array</xs:documentation>
                         If it doesn't appear, then it is an abstract concept type</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="collection" type="xs:string" use="optional">
+            <xs:attribute name="destination" type="xs:string" use="optional">
                 <xs:annotation>
                     <xs:documentation>The collection or name who is going to hold the values following this concept set schema.
                         If it doesn't appear, it is a subtype but it is not an abstract concept type, then it is the parent one</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="is-virtual" type="xs:boolean" use="required">
+            <xs:attribute name="is-virtual" type="xs:boolean" default="false">
                 <xs:annotation>
                     <xs:documentation>If this is false, the destination is a real collection.
                         If this is true, the destination is a key inside a parent "document"</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
         </xs:complexType>
-        <xs:keyref refer="bp:collection-key" name="collection-key-ref">
-            <xs:selector xpath="bp:collection"/>
-            <xs:field xpath="@name"/>
-        </xs:keyref>
     </xs:element>
     
     <xs:element name="concept">
@@ -243,11 +269,6 @@ So, the column values are treated as a multidimensional array</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
         </xs:complexType>
-        <xs:keyref refer="bp:concept-type-key" name="concept-type-key-ref">
-            <xs:selector xpath="bp:concept-set"/>
-            <xs:field xpath="@type"/>
-        </xs:keyref>
-        
     </xs:element>
     
     <!-- And at last, the main element!!!!! -->
@@ -386,9 +407,14 @@ So, the column values are treated as a multidimensional array</xs:documentation>
                                             
                                         </xs:element>
                                     </xs:sequence>
-                                    <xs:attribute name="name">
+                                    <xs:attribute name="name" type="xs:string" use="required">
                                         <xs:annotation>
-                                            <xs:documentation>The collection short name</xs:documentation>
+                                            <xs:documentation>The collection symbolic short name</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:attribute>
+                                    <xs:attribute name="path" type="xs:string" use="required">
+                                        <xs:annotation>
+                                            <xs:documentation>The collection full path</xs:documentation>
                                         </xs:annotation>
                                     </xs:attribute>
                                 </xs:complexType>
@@ -413,7 +439,7 @@ So, the column values are treated as a multidimensional array</xs:documentation>
                         </xs:sequence>
                     </xs:complexType>
                     <xs:key name="concept-type-key">
-                        <xs:selector xpath="bp:concept-type"/>
+                        <xs:selector xpath=".//bp:concept-type"/>
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
@@ -465,11 +491,6 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                             </xs:annotation>
                         </xs:attribute>
                     </xs:complexType>
-                    <xs:keyref refer="bp:filename-format-key" name="concept-domain-filename-format-fk">
-                        <xs:selector xpath="."></xs:selector>
-                        <xs:field xpath="@filename-format"></xs:field>
-                    </xs:keyref>
-                    
                 </xs:element>
             </xs:sequence>
         </xs:complexType>
@@ -477,9 +498,24 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:annotation>
                 <xs:documentation>There cannot be two formats with the same name</xs:documentation>
             </xs:annotation>
-            <xs:selector xpath="filename-format"/>
-            <xs:field xpath="name"/>
+            <xs:selector xpath="bp:filename-format"/>
+            <xs:field xpath="@name"/>
         </xs:key>
-        
+        <xs:keyref refer="bp:cv-name-key" name="column-cv-keyref">
+            <xs:selector xpath=".//bp:column-type"></xs:selector>
+            <xs:field xpath="@cv"></xs:field>
+        </xs:keyref>
+        <xs:keyref refer="bp:collection-key" name="collection-key-ref">
+            <xs:selector xpath=".//bp:concept-type"/>
+            <xs:field xpath="@destination"/>
+        </xs:keyref>
+        <xs:keyref refer="bp:filename-format-key" name="concept-domain-filename-format-fk">
+            <xs:selector xpath="bp:concept-domain"></xs:selector>
+            <xs:field xpath="@filename-format"></xs:field>
+        </xs:keyref>
+        <xs:keyref refer="bp:concept-type-key" name="concept-type-key-ref">
+            <xs:selector xpath=".//bp:concept"/>
+            <xs:field xpath="@basetype"/>
+        </xs:keyref>
     </xs:element>
 </xs:schema>
