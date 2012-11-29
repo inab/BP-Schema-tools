@@ -1,5 +1,5 @@
-##file Simple Germline Variations - Metadata File
-##featureType cngm
+##file Copy Number Germline Variations - Metadata File
+##featureType cngv
 ##fileType m
 ## Copy Number Germline Variations [cngv] – Metadata File [m]
 # name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
