@@ -4,6 +4,28 @@
         <xs:documentation>BLUEPRINT DCC Schema, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
+    <xs:element name="description">
+        <xs:annotation>
+            <xs:documentation>The detailed description of this item</xs:documentation>
+        </xs:annotation>
+    </xs:element>
+    
+    <xs:element name="annotation">
+        <xs:annotation>
+            <xs:documentation>Additional annotations, either supplementary documentation or other future kinds</xs:documentation>
+        </xs:annotation>
+        <xs:complexType mixed="true">
+            <xs:sequence>
+                <xs:any processContents="lax" namespace="##other" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="key" type="xs:string" use="required">
+                <xs:annotation>
+                    <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+    
     <!-- First, the reusable complex types -->
     <xs:complexType name="cvType">
         <xs:annotation>
@@ -53,27 +75,12 @@
         
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="description" type="xs:string">
+                <xs:element ref="bp:description" minOccurs="0" maxOccurs="1">
                     <xs:annotation>
-                        <xs:documentation>The detailed description of the column</xs:documentation>
+                        <xs:documentation>The detailed description of this column</xs:documentation>
                     </xs:annotation>
                 </xs:element>
-                <xs:element name="annotation" minOccurs="0" maxOccurs="unbounded">
-                    <xs:annotation>
-                        <xs:documentation>Additional annotations, either supplementary documentation or other future kinds</xs:documentation>
-                    </xs:annotation>
-                    <xs:complexType>
-                        <xs:simpleContent>
-                            <xs:extension base="xs:string">
-                                <xs:attribute name="key" type="xs:string" use="required">
-                                    <xs:annotation>
-                                        <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
-                                    </xs:annotation>
-                                </xs:attribute>
-                            </xs:extension>
-                        </xs:simpleContent>
-                    </xs:complexType>
-                </xs:element>
+                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element name="column-type">
                     <xs:annotation>
                         <xs:documentation>The type and restrictions of the column</xs:documentation>
@@ -240,6 +247,12 @@
     <xs:element name="concept">
         <xs:complexType>
             <xs:sequence>
+                <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>The detailed description of this concept</xs:documentation>
+                    </xs:annotation>
+                </xs:element>
+                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element ref="bp:column" minOccurs="0" maxOccurs="unbounded"/>
                 <xs:element name="subconcepts" minOccurs="0" maxOccurs="1">
                     <xs:annotation>
@@ -250,6 +263,18 @@
                         <xs:sequence>
                             <xs:element ref="bp:concept" minOccurs="1" maxOccurs="unbounded"></xs:element>
                         </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="related-to" minOccurs="0" maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>When we need to indicate relations 1:N to other concepts (being this concept the one in the N part), we use this element</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:attribute name="concept" type="xs:string" use="required">
+                            <xs:annotation>
+                                <xs:documentation>The concept this one is related to</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
@@ -491,6 +516,15 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                             </xs:annotation>
                         </xs:attribute>
                     </xs:complexType>
+                    <xs:key name="concept-domain_concept-key">
+                        <xs:selector xpath=".//bp:concept" />
+                        <xs:field xpath="@name" />
+                    </xs:key>
+                    <xs:keyref refer="bp:concept-domain_concept-key" name="concept-domain-relatedto-keyref">
+                        <xs:selector xpath=".//bp:related-to" />
+                        <xs:field xpath="@concept" />
+                    </xs:keyref>
+                    
                 </xs:element>
             </xs:sequence>
         </xs:complexType>
