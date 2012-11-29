@@ -1,7 +1,7 @@
-##file Simple Germline Variations - Primary Analysis File
+##file Copy Number Germline Variations - Primary Analysis File
 ##featureType cngv
 ##fileType p
-## Simple Germline Variations [cngv] – Primary Analysis File [p]
+## Copy Number Germline Variations [cngv] – Primary Analysis File [p]
 # name	datatype	required?	primary key?	deconvolution level	mapping file	description	values
 analysis_id	TEXT	true	false			Unique identifier for the analysis performed for a particular set of samples	
 control_sample_id	TEXT	true	false			Unique identifier for the analyzed control sample	
