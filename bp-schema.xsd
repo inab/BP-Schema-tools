@@ -229,10 +229,22 @@
                         If it doesn't appear, then it is an abstract concept type</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="destination" type="xs:string" use="optional">
+            <xs:attribute name="collection" type="xs:string" use="optional">
                 <xs:annotation>
-                    <xs:documentation>The collection or name who is going to hold the values following this concept set schema.
-                        If it doesn't appear, it is a subtype but it is not an abstract concept type, then it is the parent one</xs:documentation>
+                    <xs:documentation>The collection which is going to hold the documents corresponding to concepts whose concept-type is this.
+                        A main concept from a concept domain must have this attribute.
+                        The concept-types using this attribute cannot use the "key" attribute.
+                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be subconcepts.
+                        Those subconcepts inherit the "collection" or "key" attribute from the nearest ancestor with it</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="key" type="xs:string" use="optional">
+                <xs:annotation>
+                    <xs:documentation>The hash key which is going to hold the values following this concept set schema.
+                        The concepts using a concept-type with a "key" attribute must be a subconcept, because they are stored with this key on documents following the parent concept, and so cannot be a main concept from a concept domain.
+                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be subconcepts.
+                        Those subconcepts inherit the "collection" or "key" attribute from the nearest ancestor with it.
+                        So, the concept-types using this attribute cannot use the "collection" attribute</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
             <xs:attribute name="is-virtual" type="xs:boolean" default="false">
@@ -541,7 +553,7 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
         </xs:keyref>
         <xs:keyref refer="bp:collection-key" name="collection-key-ref">
             <xs:selector xpath=".//bp:concept-type"/>
-            <xs:field xpath="@destination"/>
+            <xs:field xpath="@collection"/>
         </xs:keyref>
         <xs:keyref refer="bp:filename-format-key" name="concept-domain-filename-format-fk">
             <xs:selector xpath="bp:concept-domain"></xs:selector>
