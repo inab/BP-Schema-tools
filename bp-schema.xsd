@@ -315,6 +315,7 @@
         </xs:annotation>
         <xs:complexType>
             <xs:sequence>
+                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element name="cv-declarations">
                     <xs:annotation>
                         <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
@@ -539,6 +540,21 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                     
                 </xs:element>
             </xs:sequence>
+            <xs:attribute name="project" use="required" type="xs:string">
+                <xs:annotation>
+                    <xs:documentation>The name of the project designed</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="schemaVer" use="required">
+                <xs:annotation>
+                    <xs:documentation>The version number of the DCC schema model</xs:documentation>
+                </xs:annotation>
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:pattern value="(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+" />
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
         </xs:complexType>
         <xs:key name="filename-format-key">
             <xs:annotation>
