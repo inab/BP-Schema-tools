@@ -346,6 +346,11 @@
                                 </xs:unique>
                             </xs:element>
                         </xs:sequence>
+                        <xs:attribute name="dir" use="optional" type="xs:string">
+                            <xs:annotation>
+                                <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
                     </xs:complexType>
                     <xs:key name="cv-name-key">
                         <xs:selector xpath="bp:cv"/>
