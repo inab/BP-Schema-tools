@@ -90,7 +90,7 @@ sub digestModel($) {
 			
 			# Collection name, collection path, index declarations
 			my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
-			$collections{$collection[0]} = \@collection;
+			$collections{$collection[0]} = bless(\@collection,'DCC::Collection');
 			
 			# And the index declarations for this collection
 			foreach my $ind ($coll->childNodes()) {
@@ -125,6 +125,13 @@ sub digestModel($) {
 		}
 		
 		$self->{_cvDir} = $cvdir;
+		
+		my $destCVCol = $cvDecl->getAttribute('collection');
+		if(exists($collections{$destCVCol})) {
+			$self->{_cvColl} = $collections{$destCVCol};
+		} else {
+			Carp::croak("Destination collection $destCVCol for CV has not been declared");
+		}
 		foreach my $cv ($cvDecl->childNodes()) {
 			next  unless($cv->nodeType == XML::LibXML::XML_ELEMENT_NODE && $cv->localname eq 'cv');
 			
