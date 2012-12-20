@@ -6,7 +6,7 @@ use File::Basename;
 use File::Spec;
 use XML::LibXML;
 
-package DCCModel;
+package DCC::Model;
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
