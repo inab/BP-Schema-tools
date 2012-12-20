@@ -81,6 +81,35 @@ sub digestModel($) {
 		$annotations{$annotation->getAttribute('key')} = $annotation->textContent();
 	}
 	
+	# Now, the collection domain
+	my %collections = ();
+	$self->{COLLECTIONS}=\%collections;
+	foreach my $colDom ($modelRoot->getChildrenByTagNameNS(dccNamespace,'collection-domain')) {
+		foreach my $coll ($colDom->childNodes()) {
+			next  unless($coll->nodeType == XML::LibXML::XML_ELEMENT_NODE && $coll->localname eq 'collection');
+			
+			# Collection name, collection path, index declarations
+			my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
+			$collections{$collection[0]} = \@collection;
+			
+			# And the index declarations for this collection
+			foreach my $ind ($coll->childNodes()) {
+				next  unless($ind->nodeType == XML::LibXML::XML_ELEMENT_NODE && $ind->localname eq 'index');
+				
+				# Is index unique?, attributes (attribute name, ascending/descending)
+				my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
+				push(@{$collection[2]},\@index);
+				
+				foreach my $attr ($ind->childNodes()) {
+					next  unless($attr->nodeType == XML::LibXML::XML_ELEMENT_NODE && $attr->localname eq 'attr');
+					
+					push(@{$index[1]},[$attr->getAttribute('name'),($attr->hasAttribute('ord') && $attr->getAttribute('ord') eq '-1')?-1:1]);
+				}
+			}
+		}
+		last;
+	}
+	
 	# Next stop, controlled vocabulary
 	my %cv = ();
 	$self->{CV} = \%cv;
@@ -115,12 +144,6 @@ sub digestModel($) {
 	foreach my $patternDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'pattern-declarations')) {
 		$self->load_patterns($patternDecl);
 		
-		last;
-	}
-	
-	# Now, the collection domain
-	foreach my $colDom ($modelRoot->getChildrenByTagNameNS(dccdccNamespace,'collection-domain') {
-		# TODO
 		last;
 	}
 }

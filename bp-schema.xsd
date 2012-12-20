@@ -247,7 +247,7 @@
                         So, the concept-types using this attribute cannot use the "collection" attribute</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="is-virtual" type="xs:boolean" default="false">
+            <xs:attribute name="is-virtual" type="xs:boolean" use="prohibited">
                 <xs:annotation>
                     <xs:documentation>If this is false, the destination is a real collection.
                         If this is true, the destination is a key inside a parent "document"</xs:documentation>
@@ -316,77 +316,6 @@
         <xs:complexType>
             <xs:sequence>
                 <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
-                <xs:element name="cv-declarations">
-                    <xs:annotation>
-                        <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
-                    </xs:annotation>
-                    <xs:complexType>
-                        <xs:sequence>
-                            <xs:element name="cv" minOccurs="0" maxOccurs="unbounded">
-                                <xs:annotation>
-                                    <xs:documentation>A named controlled vocabulary either inline or stored</xs:documentation>
-                                </xs:annotation>
-                                <xs:complexType>
-                                    <xs:complexContent>
-                                        <xs:extension base="bp:cvType">
-                                            <xs:attribute name="name" use="required" type="xs:string">
-                                                <xs:annotation>
-                                                    <xs:documentation>The symbolic name of the CV, used inside this schema</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:attribute>
-                                        </xs:extension>
-                                    </xs:complexContent>
-                                </xs:complexType>
-                                <xs:unique name="cv-enum-unique">
-                                    <xs:annotation>
-                                        <xs:documentation>The enumerated values should not be repeated</xs:documentation>
-                                    </xs:annotation>
-                                    <xs:selector xpath="e"/>
-                                    <xs:field xpath="@v"/>
-                                </xs:unique>
-                            </xs:element>
-                        </xs:sequence>
-                        <xs:attribute name="dir" use="optional" type="xs:string">
-                            <xs:annotation>
-                                <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
-                    </xs:complexType>
-                    <xs:key name="cv-name-key">
-                        <xs:selector xpath="bp:cv"/>
-                        <xs:field xpath="@name"/>
-                    </xs:key>
-                </xs:element>
-                <xs:element name="pattern-declarations">
-                    <xs:annotation>
-                        <xs:documentation>Patterns used either in the schema or on the tabular data modelled by the schema</xs:documentation>
-                    </xs:annotation>
-                    <xs:complexType>
-                        <xs:sequence>
-                            <xs:element name="pattern" minOccurs="0" maxOccurs="unbounded">
-                                <xs:annotation>
-                                    <xs:documentation>A named regular expression used to validate tokens of data</xs:documentation>
-                                </xs:annotation>
-                                <xs:complexType>
-                                    <xs:complexContent>
-                                        <xs:extension base="bp:patternType">
-                                            <xs:attribute name="name" type="xs:string" use="required">
-                                                <xs:annotation>
-                                                    <xs:documentation>The symbolic name of the pattern, used in many places</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:attribute>
-                                        </xs:extension>
-                                    </xs:complexContent>
-                                </xs:complexType>
-                            </xs:element>
-                        </xs:sequence>
-                    </xs:complexType>
-                    <xs:key name="pattern-name-key">
-                        <xs:selector xpath="bp:pattern"/>
-                        <xs:field xpath="@name"/>
-                    </xs:key>
-                    
-                </xs:element>
                 <xs:element name="collection-domain">
                     <xs:annotation>
                         <xs:documentation>The domain of collections to be used by BLUEPRINT inside the NoSQL database</xs:documentation>
@@ -412,7 +341,7 @@
                                                                     <xs:documentation>An attribute whose values are used to build the key</xs:documentation>
                                                                 </xs:annotation>
                                                             </xs:attribute>
-                                                            <xs:attribute name="ord" use="required">
+                                                            <xs:attribute name="ord" use="optional" default="1">
                                                                 <xs:annotation>
                                                                     <xs:documentation>The ordering, either ascending or descending</xs:documentation>
                                                                 </xs:annotation>
@@ -472,6 +401,81 @@
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
+                <xs:element name="cv-declarations">
+                    <xs:annotation>
+                        <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="cv" minOccurs="0" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation>A named controlled vocabulary either inline or stored</xs:documentation>
+                                </xs:annotation>
+                                <xs:complexType>
+                                    <xs:complexContent>
+                                        <xs:extension base="bp:cvType">
+                                            <xs:attribute name="name" use="required" type="xs:string">
+                                                <xs:annotation>
+                                                    <xs:documentation>The symbolic name of the CV, used inside this schema</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:attribute>
+                                        </xs:extension>
+                                    </xs:complexContent>
+                                </xs:complexType>
+                                <xs:unique name="cv-enum-unique">
+                                    <xs:annotation>
+                                        <xs:documentation>The enumerated values should not be repeated</xs:documentation>
+                                    </xs:annotation>
+                                    <xs:selector xpath="e"/>
+                                    <xs:field xpath="@v"/>
+                                </xs:unique>
+                            </xs:element>
+                        </xs:sequence>
+                        <xs:attribute name="dir" use="optional" type="xs:string">
+                            <xs:annotation>
+                                <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="collection" type="xs:string" use="required">
+                            <xs:annotation>
+                                <xs:documentation>The collection which is going to hold the CVs.</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                    </xs:complexType>
+                    <xs:key name="cv-name-key">
+                        <xs:selector xpath="bp:cv"/>
+                        <xs:field xpath="@name"/>
+                    </xs:key>
+                </xs:element>
+                <xs:element name="pattern-declarations">
+                    <xs:annotation>
+                        <xs:documentation>Patterns used either in the schema or on the tabular data modelled by the schema</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="pattern" minOccurs="0" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation>A named regular expression used to validate tokens of data</xs:documentation>
+                                </xs:annotation>
+                                <xs:complexType>
+                                    <xs:complexContent>
+                                        <xs:extension base="bp:patternType">
+                                            <xs:attribute name="name" type="xs:string" use="required">
+                                                <xs:annotation>
+                                                    <xs:documentation>The symbolic name of the pattern, used in many places</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:attribute>
+                                        </xs:extension>
+                                    </xs:complexContent>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                    <xs:key name="pattern-name-key">
+                        <xs:selector xpath="bp:pattern"/>
+                        <xs:field xpath="@name"/>
+                    </xs:key>
+                </xs:element>
                 <xs:element name="concept-types">
                     <xs:annotation>
                         <xs:documentation>The different types of concepts (to be revised/expanded)</xs:documentation>
@@ -493,7 +497,8 @@
                             context constant. $domain is the concept domain name, and $concept is the concept name.
                             When something starts with @ (at), it is the name of a previously declared controlled vocabulary.
                             When something starts with \ (backslash), it is the name of a previously declared pattern to validate against.
-                            For instance: $domain-$concept--@B1-\ISODATE--\string.txt
+                            When something starts with % (percentage), it is the name of a type, used for item-type attribute in column type definition.
+                            For instance: $domain-$concept--@B1-\ISODATE--%string.txt
                         </xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
