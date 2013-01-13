@@ -72,22 +72,26 @@
                     <xs:documentation>A tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
                 </xs:annotation>
             </xs:element>
-            <xs:element name="e" minOccurs="1" maxOccurs="unbounded">
-                <xs:annotation>
-                    <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
-                </xs:annotation>
-                <xs:complexType>
-                    <xs:simpleContent>
-                        <xs:extension base="xs:string">
-                            <xs:attribute name="v" type="xs:string" use="required">
-                                <xs:annotation>
-                                    <xs:documentation>The enumerated value which is used</xs:documentation>
-                                </xs:annotation>
-                            </xs:attribute>
-                        </xs:extension>
-                    </xs:simpleContent>
-                </xs:complexType>
-            </xs:element>
+            <xs:sequence>
+                <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
+                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+                <xs:element name="e" minOccurs="1" maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:simpleContent>
+                            <xs:extension base="xs:string">
+                                <xs:attribute name="v" type="xs:string" use="required">
+                                    <xs:annotation>
+                                        <xs:documentation>The enumerated value which is used</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                            </xs:extension>
+                        </xs:simpleContent>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
         </xs:choice>
     </xs:complexType>
     
