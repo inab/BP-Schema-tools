@@ -4,6 +4,12 @@
         <xs:documentation>BLUEPRINT DCC Schema, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
+    <xs:simpleType name="sepsType">
+        <xs:restriction base="xs:string">
+            <xs:minLength value="1" />
+        </xs:restriction>
+    </xs:simpleType>
+    
     <xs:simpleType name="symbolType">
         <xs:restriction base="xs:string">
             <xs:pattern value="[a-zA-Z][a-zA-Z0-9]*" />
@@ -11,10 +17,27 @@
     </xs:simpleType>
     
     <xs:simpleType name="fileNameType">
+        <xs:annotation>
+            <xs:documentation>The filename pattern, which validates the right patterns</xs:documentation>
+        </xs:annotation>
         <xs:restriction base="xs:string">
+            <xs:minLength value="1" />
             <xs:pattern value="[^\\$%@]*(([\\%@]|${1,2})([a-zA-Z][a-zA-Z0-9]*)[^\\$%@]*)*" />
         </xs:restriction>
     </xs:simpleType>
+    
+    <!--
+        TODO: complex types are going to be refactored in the near future
+    <xs:simpleType name="complexTypePatternType">
+        <xs:annotation>
+            <xs:documentation>The complex type pattern pattern, which validates the right patterns</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:minLength value="1" />
+            <xs:pattern value="[^\\$%@]*(([\\%@]|${1,2})([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)[^\\$%@]*)*" />
+        </xs:restriction>
+    </xs:simpleType>
+    -->
     
     <xs:element name="description">
         <xs:annotation>
@@ -154,13 +177,19 @@
                                 <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="complex-template" type="xs:string" use="optional">
+                        <xs:attribute name="complex-template" use="optional">
                             <xs:annotation>
                                 <xs:documentation>When this column holds a complex type, the template of the pieces, separated by the separators.
                                     For instance, if the complex separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
                             </xs:annotation>
+                            <!-- Hack to be removed when complex-template is redesigned -->
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:minLength value="3" />
+                                </xs:restriction>
+                            </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="complex-seps" type="xs:string" use="optional">
+                        <xs:attribute name="complex-seps" type="bp:sepsType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>This attribute must be set when the column is a complex type, it is a string whose characters are separators for the faceted values in the complex type.</xs:documentation>
                             </xs:annotation>
@@ -194,17 +223,12 @@
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="array-seps" use="optional">
+                        <xs:attribute name="array-seps" type="bp:sepsType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>If this attribute is set, it is a string whose characters are separators for the input values.
                                     So, values for this column are treated as a multidimensional array, with the same number of dimensions as
                                     the number of separators (i.e. the length of this attribute)</xs:documentation>
                             </xs:annotation>
-                            <xs:simpleType>
-                                <xs:restriction base="xs:string">
-                                    <xs:minLength value="1" />
-                                </xs:restriction>
-                            </xs:simpleType>
                         </xs:attribute>
                         <xs:attribute name="default" type="xs:string" use="optional">
                             <xs:annotation>
