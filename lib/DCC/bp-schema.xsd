@@ -4,6 +4,18 @@
         <xs:documentation>BLUEPRINT DCC Schema, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
+    <xs:simpleType name="symbolType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z][a-zA-Z0-9]*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="fileNameType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[^\\$%@]*(([\\%@]|${1,2})([a-zA-Z][a-zA-Z0-9]*)[^\\$%@]*)*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
     <xs:element name="description">
         <xs:annotation>
             <xs:documentation>The detailed description of this item</xs:documentation>
@@ -18,7 +30,7 @@
             <xs:sequence>
                 <xs:any processContents="lax" namespace="##other" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
-            <xs:attribute name="key" type="xs:string" use="required">
+            <xs:attribute name="key" type="bp:symbolType" use="required">
                 <xs:annotation>
                     <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
                 </xs:annotation>
@@ -182,11 +194,17 @@
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="array-seps" type="xs:string" use="optional">
+                        <xs:attribute name="array-seps" use="optional">
                             <xs:annotation>
                                 <xs:documentation>If this attribute is set, it is a string whose characters are separators for the input values.
-                                    So, the column values are treated as a multidimensional array</xs:documentation>
+                                    So, values for this column are treated as a multidimensional array, with the same number of dimensions as
+                                    the number of separators (i.e. the length of this attribute)</xs:documentation>
                             </xs:annotation>
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:minLength value="1" />
+                                </xs:restriction>
+                            </xs:simpleType>
                         </xs:attribute>
                         <xs:attribute name="default" type="xs:string" use="optional">
                             <xs:annotation>
@@ -414,7 +432,7 @@
                                 <xs:complexType>
                                     <xs:complexContent>
                                         <xs:extension base="bp:cvType">
-                                            <xs:attribute name="name" use="required" type="xs:string">
+                                            <xs:attribute name="name" use="required" type="bp:symbolType">
                                                 <xs:annotation>
                                                     <xs:documentation>The symbolic name of the CV, used inside this schema</xs:documentation>
                                                 </xs:annotation>
@@ -460,7 +478,7 @@
                                 <xs:complexType>
                                     <xs:complexContent>
                                         <xs:extension base="bp:patternType">
-                                            <xs:attribute name="name" type="xs:string" use="required">
+                                            <xs:attribute name="name" type="bp:symbolType" use="required">
                                                 <xs:annotation>
                                                     <xs:documentation>The symbolic name of the pattern, used in many places</xs:documentation>
                                                 </xs:annotation>
@@ -493,17 +511,18 @@
                 <xs:element name="filename-format" minOccurs="1" maxOccurs="unbounded">
                     <xs:annotation>
                         <xs:documentation>The format of the filenames for files containing knwoledge from a concept domain.
-                            Inside these filenames, when something starts with $ (dollar), it is the name of a
-                            context constant. $domain is the concept domain name, and $concept is the concept name.
+                            Inside these filenames, when something starts with $ (dollar), it is the name of an
+                            annotation or a context constant (like $$domain or $$concept). $$domain is the concept domain name,
+                            and $$concept is the concept name.
                             When something starts with @ (at), it is the name of a previously declared controlled vocabulary.
                             When something starts with \ (backslash), it is the name of a previously declared pattern to validate against.
                             When something starts with % (percentage), it is the name of a type, used for item-type attribute in column type definition.
-                            For instance: $domain-$concept--@B1-\ISODATE--%string.txt
+                            For instance: $$domain-$$concept--@B1-\ISODATE--%string.txt
                         </xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
                         <xs:simpleContent>
-                            <xs:extension base="xs:string">
+                            <xs:extension base="bp:fileNameType">
                                 <xs:attribute name="name" use="required" type="xs:string">
                                     <xs:annotation>
                                         <xs:documentation>The name of this filename format</xs:documentation>
