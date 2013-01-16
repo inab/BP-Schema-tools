@@ -224,7 +224,7 @@ sub digestModel($) {
 			my @conceptTypes = $self->parseConceptType($ctype);
 			
 			# Now, let's store the concrete (non-anonymous, abstract) concept types
-			map { $conceptTypes{$_->[0]} = $_  if(defined($_->[0])); } @conceptTypes;
+			map { $conceptTypes{$_->name} = $_  if(defined($_->name)); } @conceptTypes;
 		}
 		
 		last;
@@ -238,6 +238,15 @@ sub digestModel($) {
 		my $filenameFormat = $self->parseFilenameFormat($filenameFormatDecl);
 		
 		$filenameFormats{$filenameFormat->name} = $filenameFormat;
+	}
+	
+	# Oh, no! The concept domains!
+	my @conceptDomains = ();
+	$self->{CDOMAINS} = \@conceptDomains;
+	foreach my $conceptDomainDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'concept-domain')) {
+		my $conceptDomain = $self->parseConceptDomain($conceptDomainDecl);
+		
+		push(@conceptDomains,$conceptDomain);
 	}
 }
 
@@ -431,13 +440,19 @@ sub parseConceptType($;$) {
 			}
 			
 			$ctype[1] = 1;
-			$ctype[2] = $ctypeElem->getAttribute('collection');
+			my $collName = $ctypeElem->getAttribute('collection');
+			# Let's store the DCC::Model::Collection
+			if(exists($self->{COLLECTIONS}{$collName})) {
+				$ctype[2] = $self->{COLLECTIONS}{$collName};
+			} else {
+				Carp::croak("Collection '$collName', used by concept type '$ctype[0]', does not exist");
+			}
 		} elsif($ctypeElem->hasAttribute('key')) {
 			$ctype[2] = $ctypeElem->getAttribute('key');
-		} elsif(defined($ctypeParent) && defined($ctypeParent->[2])) {
+		} elsif(defined($ctypeParent) && defined($ctypeParent->path)) {
 			# Let's fetch the inheritance
-			$ctype[1] = $ctypeParent->[1];
-			$ctype[2] = $ctypeParent->[2];
+			$ctype[1] = $ctypeParent->isCollection;
+			$ctype[2] = $ctypeParent->path;
 		} else {
 			Carp::croak("A concept type must have a storage state of physical or virtual collection");
 		}
@@ -448,7 +463,7 @@ sub parseConceptType($;$) {
 	my @retval = ($me);
 	
 	# Let's parse the columns
-	$ctype[4] = $self->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->[4]:undef);
+	$ctype[4] = $self->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columns:undef);
 	
 	# Now, let's find subtypes
 	foreach my $subtypes ($ctypeElem->getChildrenByTagNameNS(dccNamespace,'subtypes')) {
@@ -610,8 +625,8 @@ sub parseFilenameFormat($) {
 	# from the file pattern
 	my @parts = ();
 	
-	# Name, regular expression, parts
-	my @filenamePattern = ($name,undef,\@parts);
+	# Name, regular expression, parts, registered concept domains
+	my @filenamePattern = ($name,undef,\@parts,{});
 	
 	# And now, the format string
 	my $formatString = $filenameFormatDecl->textContent();
@@ -706,23 +721,152 @@ sub parseFilenameFormat($) {
 	return bless(\@filenamePattern,'DCC::Model::FilenamePattern');
 }
 
+# parseConceptDomain parameters:
+#	conceptDomainDecl: a XML::LibXML::Element 'dcc:concept-domain' element
+# it returns a DCC::Model::ConceptDomain instance, with all the concept domain
+# structures and data
+sub parseConceptDomain($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $conceptDomainDecl = shift;
+	
+	# concept domain name
+	# full name of the concept domain
+	# Filename Pattern for the filenames
+	# An array with the concepts under this concept domain umbrella
+	my @concepts = ();
+	my %conceptHash = ();
+	my @conceptDomain = (
+		$conceptDomainDecl->getAttribute('domain'),
+		$conceptDomainDecl->getAttribute('fullname'),
+		undef,
+		\@concepts,
+		\%conceptHash
+	);
+	
+	# Does the filename-pattern exist?
+	my $filenameFormatName = $conceptDomainDecl->getAttribute('filename-format');
+	unless(exists($self->{FPATTERN}{$filenameFormatName})) {
+		Carp::croak("Concept domain $conceptDomain[0] uses the unknown filename format $filenameFormatName");
+	}
+	
+	$conceptDomain[2] = $self->{FPATTERN}{$filenameFormatName};
+	
+	# And now, next method handles parsing of embedded concepts
+	push(@concepts,$self->parseConceptContainer($conceptDomainDecl));
+	# The concept hash will help on concept identification
+	map { $conceptHash{$_->name} = $_; } @concepts;
+	
+	# Last, chicken and egg problem
+	my $retConceptDomain = bless(\@conceptDomain,'DCC::Model::ConceptDomain');
+	
+	$retConceptDomain->filenameFormat->registerConceptDomain($retConceptDomain);
+	
+	return $retConceptDomain;
+}
+
+# parseConceptContainer paramereters:
+#	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
+#		or 'dcc:subconcepts' instance
+#	parentConcept: An optional, parent DCC::Model::Concept instance of
+#		all the concepts to be parsed from the container
+# it returns an array of DCC::Model::Concept instances, which are all the
+# concepts and subconcepts inside the input concept container
+sub parseConceptContainer($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $conceptContainerDecl = shift;
+	my $parentConcept = shift;	# This is optional (remember!)
+	
+	my @concepts = ();
+	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(dccNamespace,'concept')) {
+		push(@concepts,$self->parseConcept($conceptDecl,$parentConcept));
+	}
+	
+	return @concepts;
+}
+
+# parseConcept paramereters:
+#	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
+#	parentConcept: An optional, parent DCC::Model::Concept instance of
+#		the concept to be parsed from conceptDecl
+# it returns an array of DCC::Model::Concept instances
+sub parseConcept($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $conceptDecl = shift;
+	my $parentConcept = shift;	# This is optional (remember!)
+	
+	# TODO
+	my @concept = (
+	);
+}
+
+1;
+
 # And now, the helpers for the different pseudo-packages
 
 package DCC::Model::Collection;
 
+# Collection name
+sub name {
+	return $_[0]->[0];
+}
+
+# collection path
+sub path {
+	return $_[0]->[1];
+}
+
+# index declarations
+sub indexes {
+	return $_[0]->[2];
+}
+
+#my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
+
+1;
+
 
 package DCC::Model::Index;
+
+# Is index unique?
+sub isUnique {
+	return $_[0]->[0];
+}
+
+# attributes (attribute name, ascending/descending)
+sub indexAttributes {
+	return $_[0]->[1];
+}
+
+1;
 
 
 package DCC::Model::DescriptionSet;
 
+# No method yet (it is a pure array)
+
+1;
+
 
 package DCC::Model::AnnotationSet;
 
+# No method yet (it is a pure hash)
+
+1;
+
 
 package DCC::Model::CV;
+
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
-my @structCV=(undef,undef,{},[],{});
+# my @structCV=(undef,undef,{},[],{});
 
 # The name of this CV (optional)
 sub name {
@@ -762,16 +906,59 @@ sub isValid($) {
 	return exists($self->CV->{$cvkey});
 }
 
+1;
+
 
 package DCC::Model::ConceptType;
 
+# concept-type name (could be anonymous), so it would return undef
+sub name {
+	return $_[0]->[0];
+}
+
+# collection/key based (true,undef)
+sub isCollection {
+	return $_[0]->[1];
+}
+
+# collection, a DCC::Model::Collection object
+# An abstract concept type will return undef here
+sub collection {
+	return $_[0]->[2];
+}
+
+# The key name when this concept is stored as a value of an array inside a bigger concept
+# An abstract concept type will return undef here
+sub key {
+	return $_[0]->[2];
+}
+
+# parent
+# It returns either undef (when it has no parent),
+# or a DCC::Model::ConceptType instance
+sub parent {
+	return $_[0]->[3];
+}
+
+# columnSet
+# It returns a DCC::Model::ColumnSet instance, with all the column declarations
+sub columns {
+	return $_[0]->[4];
+}
+
+1;
+
 
 package DCC::Model::ColumnSet;
+
+1;
 
 
 package DCC::Model::ComplexType;
 # TODO: Complex type refactor in the near future, so work for filename patterns
 # can be reused
+
+1;
 
 
 package DCC::Model::ColumnType;
@@ -802,6 +989,8 @@ sub arraySeps {
 	return $_[0]->[4];
 }
 
+1;
+
 
 package DCC::Model::Column;
 
@@ -825,24 +1014,36 @@ sub columnType {
 	return $_[0]->[3];
 }
 
+1;
+
 
 package DCC::Model::FilenamePattern;
 
 # Name, regular expression, parts
 
+# The symbolic name of this filename pattern
 sub name {
 	return $_[0]->[0];
 }
 
+# A Pattern object, representing the filename format
 sub pattern {
 	return $_[0]->[1];
 }
 
+# An array of post matching validations to be applied
+# (mainly DCC::Model::CV validation and context constant catching)
 sub postValidationParts {
 	return $_[0]->[2];
 }
 
+# It returns a hash of DCC::Model::ConceptDomain instances
+sub registeredConceptDomains {
+	return $_[0]->[3];
+}
+
 # This method tries to match an input string against the filename-format pattern
+#	filename: a string with a relative filename to match
 # If it works, it returns a reference to a hash with the matched values correlated to
 # the context constants
 sub match($) {
@@ -858,7 +1059,8 @@ sub match($) {
 	my $p_parts = $self->postValidationParts;
 	
 	if(scalar(@values) ne scalar(@{$p_parts})) {
-		Carp::croak("Matching filename $filename against pattern ".$self->pattern." did not work!");
+		#Carp::croak("Matching filename $filename against pattern ".$self->pattern." did not work!");
+		return undef;
 	}
 	
 	my %rethash = ();
@@ -870,6 +1072,9 @@ sub match($) {
 		# Is it a CV?
 		if(ref($part) eq 'DCC::Model::CV') {
 			Carp::croak('Validation against CV did not match')  unless($part->isValid($values[$ipart]));
+			
+			# Let's save the matched CV value
+			$rethash{$part->name} = $values[$ipart]  if(defined($part->name));
 		# Context constant
 		} elsif(ref($part) eq '') {
 			$rethash{$part} = $values[$ipart];
@@ -877,6 +1082,79 @@ sub match($) {
 	}
 	
 	return \%rethash;
+}
+
+# This method matches the concept related to this
+sub matchConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $filename = shift;
+	
+	my $retConcept = undef;
+	
+	my $extractedValues = $self->match($filename);
+	
+	if(defined($extractedValues) && exists($extractedValues->{'$domain'}) && exists($extractedValues->{'$concept'})) {
+		my $domainName = $extractedValues->{'$domain'};
+		my $conceptName = $extractedValues->{'$concept'};
+		if(exists($self->registeredConceptDomains->{$domainName})) {
+			my $conceptDomain = $self->registeredConceptDomains->{$domainName};
+			if(exists($conceptDomain->conceptHash->{$conceptName})) {
+				$retConcept = $conceptDomain->conceptHash->{$conceptName};
+			}
+		}
+	}
+	
+	return $retConcept;
+}
+
+# This method is called when new concept domains are being read,
+# and they use this filename-format, so they can be found later
+#	conceptDomain:	a DCC::Model::ConceptDomain instance, which uses this filename-pattern
+# The method returns nothing
+sub registerConceptDomain($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $conceptDomain = shift;
+	
+	# The concept domain is registered, then
+	$self->registeredConceptDomains->{$conceptDomain->name} = $conceptDomain;
+}
+
+1;
+
+
+package DCC::Model::ConceptDomain;
+# concept domain name
+sub name {
+	return $_[0]->[0];
+}
+
+# full name of the concept domain
+sub fullname {
+	return $_[0]->[1];
+}
+
+# Filename Pattern for the filenames
+# A DCC::Model::FilenamePattern instance
+sub filenamePattern {
+	return $_[0]->[2];
+}
+
+# A hash with the concepts under this concept domain umbrella
+# A hash of DCC::Model::Concept instances
+sub concepts {
+	return $_[0]->[3];
+}
+
+# A hash with the concepts under this concept domain umbrella
+# A hash of DCC::Model::Concept instances
+sub conceptHash {
+	return $_[0]->[4];
 }
 
 1;
