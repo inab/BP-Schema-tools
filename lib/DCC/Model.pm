@@ -7,6 +7,17 @@ use File::Basename;
 use File::Spec;
 use XML::LibXML;
 
+# Early subpackage constant declarations
+package DCC::Model::ColumnType;
+
+use constant {
+	IDREF	=>	0,
+	REQUIRED	=>	1,
+	OPTIONAL	=>	-1,
+};
+
+
+# Main package
 package DCC::Model;
 #use version 0.77;
 #our $VERSION = qv('0.2.0');
@@ -23,6 +34,8 @@ package DCC::Model;
 # DCC::Model::ColumnType
 # DCC::Model::Column
 # DCC::Model::FilenamePattern
+# DCC::Model::ConceptDomain
+# DCC::Model::Concept
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
@@ -367,7 +380,7 @@ sub __parse_pattern($;$) {
 		};
 
 		if($@) {
-			Carp::croak("ERROR: Invalid pattern '$localname' => $pat. Reason: $@\n");
+			Carp::croak("ERROR: Invalid pattern '$localname' => $pat. Reason: $@");
 		}
 	}
 	
@@ -397,7 +410,7 @@ sub load_patterns($) {
 		if($localname eq 'pattern') {
 			my($name)=$pattern->getAttribute('name');
 			
-			Carp::croak("ERROR: duplicate pattern declaration: $name\n")  if(exists($PATTERN{$name}));
+			Carp::croak("ERROR: duplicate pattern declaration: $name")  if(exists($PATTERN{$name}));
 			
 			$PATTERN{$name} = __parse_pattern($pattern,$name);
 		#} else {
@@ -463,7 +476,7 @@ sub parseConceptType($;$) {
 	my @retval = ($me);
 	
 	# Let's parse the columns
-	$ctype[4] = $self->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columns:undef);
+	$ctype[4] = $self->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columnSet:undef);
 	
 	# Now, let's find subtypes
 	foreach my $subtypes ($ctypeElem->getChildrenByTagNameNS(dccNamespace,'subtypes')) {
@@ -493,13 +506,18 @@ sub parseColumnSet($$) {
 	my $parentColumnSet = shift;
 	
 	my @columnNames = ();
+	my @idColumnNames = ();
 	my %columnDecl = ();
 	# Inheriting column information from parent columnSet
 	if(defined($parentColumnSet)) {
-		@columnNames = @{$parentColumnSet->[0]};
-		%columnDecl = %{$parentColumnSet->[1]};
+		@idColumnNames = @{$parentColumnSet->idColumnNames};
+		@columnNames = @{$parentColumnSet->columnNames};
+		%columnDecl = %{$parentColumnSet->columnSet};
 	}
-	my @columnSet = (\@columnNames,\%columnDecl);
+	# Array with the idref column names
+	# Array with column names (all)
+	# Hash of DCC::Model::Column instances
+	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
 	
 	foreach my $colDecl ($container->childNodes()) {
 		next  unless($colDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $colDecl->localname() eq 'column');
@@ -507,8 +525,17 @@ sub parseColumnSet($$) {
 		my $column = $self->parseColumn($colDecl);
 		
 		# We want to keep the original column order as far as possible
-		push(@columnNames,$column->[0])  unless(exists($columnDecl{$column->[0]}));
-		$columnDecl{$column->[0]}=$column;
+		if(exists($columnDecl{$column->name})) {
+			if($columnDecl{$column->name}->columnType->use eq DCC::Model::ColumnType::IDREF) {
+				Carp::croak('It is not allowed to redefine column '.$column->name.'. It is an idref one!');
+			}
+		} else {
+			push(@columnNames,$column->name);
+			# Is it a id column?
+			push(@idColumnNames,$column->name)  if($column->columnType->use eq DCC::Model::ColumnType::IDREF);
+		}
+		
+		$columnDecl{$column->name}=$column;
 	}
 	
 	return bless(\@columnSet,'DCC::Model::ColumnSet');
@@ -531,7 +558,7 @@ sub parseColumn($) {
 	# content restrictions
 	# default value
 	# array separators
-	my @columnType = ();
+	my @columnType = (undef,undef,undef,undef,undef);
 	# Column name, description, annotations, column type
 	my @column = (
 		$colDecl->getAttribute('name'),
@@ -552,7 +579,7 @@ sub parseColumn($) {
 		# Column use
 		my $columnKind = $colType->getAttribute('column-kind');
 		# Idref equals 0; required, 1; optional, -1
-		$columnType[1] = ($columnKind eq 'idref')?0:(($columnKind eq 'required')?1:-1);
+		$columnType[1] = ($columnKind eq 'idref')?DCC::Model::ColumnType::IDREF :(($columnKind eq 'required')?DCC::Model::ColumnType::REQUIRED : DCC::Model::ColumnType::OPTIONAL);
 		
 		# Content restrictions (children have precedence over attributes)
 		# First, is it a complex type?
@@ -794,7 +821,8 @@ sub parseConceptContainer($;$) {
 #	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
 #	parentConcept: An optional, parent DCC::Model::Concept instance of
 #		the concept to be parsed from conceptDecl
-# it returns an array of DCC::Model::Concept instances
+# it returns an array of DCC::Model::Concept instances, the first one
+# corresponds to this concept, and the other ones are the subconcepts
 sub parseConcept($;$) {
 	my $self = shift;
 	
@@ -802,10 +830,57 @@ sub parseConcept($;$) {
 	
 	my $conceptDecl = shift;
 	my $parentConcept = shift;	# This is optional (remember!)
+
+	my $conceptName = $conceptDecl->getAttribute('name');
+	my $conceptFullname = $conceptDecl->getAttribute('fullname');
+	my $basetypeName = $conceptDecl->getAttribute('basetype');
+	Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(exists($self->{CTYPES}{$basetypeName}));
+	my $basetype = $self->{CTYPES}{$basetypeName};
 	
-	# TODO
-	my @concept = (
+	# This array will contain the names of the related concepts
+	my @related = ();
+	
+	# We have to inherit the related concepts
+	push(@related,@{$parentConcept->relatedConceptNames})  if(defined($parentConcept));
+	
+	# Preparing the columns
+	my $columnSet = $self->parseColumnSet($conceptDecl,$basetype->columnSet);
+	# and adding the ones from the parent concept
+	# (and later from the related stuff)
+	$columnSet->addColumns($parentConcept->columnSet->idColumns)  if(defined($parentConcept) && $parentConcept->baseConceptType->isCollection);
+	
+	# name
+	# fullname
+	# basetype
+	# Description Set
+	# Annotation Set
+	# ColumnSet
+	# related conceptNames
+	my @thisConcept = (
+		$conceptName,
+		$conceptFullname,
+		$basetype,
+		$self->parseDescriptions($conceptDecl),
+		$self->parseAnnotations($conceptDecl),
+		$columnSet,
+		\@related,
 	);
+	
+	# Saving the related concepts (the ones explicitly declared with this concept)
+	foreach my $relatedDecl ($self->getChildrenByTagNameNS(dccNamespace,'related-to')) {
+		push(@related,$relatedDecl->getAttribute('concept'));
+	}
+	
+	# And last, the subconcepts
+	my $concept =  bless(\@thisConcept,'DCC::Model::Concept');
+	
+	my @concepts = ($concept);
+	
+	foreach my $conceptContainerDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'subconcepts')) {
+		push(@concepts,$self->parseConceptContainer($conceptContainerDecl,$concept));
+	}
+	
+	return @concepts;
 }
 
 1;
@@ -942,7 +1017,7 @@ sub parent {
 
 # columnSet
 # It returns a DCC::Model::ColumnSet instance, with all the column declarations
-sub columns {
+sub columnSet {
 	return $_[0]->[4];
 }
 
@@ -950,6 +1025,83 @@ sub columns {
 
 
 package DCC::Model::ColumnSet;
+
+# Reference to an array with the idref column names
+sub idColumnNames {
+	return $_[0]->[0];
+}
+
+# Array with column names (all)
+sub columnNames {
+	return $_[0]->[1];
+}
+
+# Hash of DCC::Model::Column instances
+sub columns {
+	return $_[0]->[2];
+}
+
+# It returns a DCC::Model::ColumnSet instance, with the column declarations
+# corresponding to columns with idref restriction
+sub idColumns() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my @columnNames = @{$self->idColumnNames};
+	my $p_columns = $self->columns;
+	my %columns = map { $_ => $p_columns->{$_} } @columnNames;
+	
+	my @columnSet = (
+		\@columnNames,
+		\@columnNames,
+		\%columns
+	);
+	
+	return bless(\@columnSet,'DCC::Model::ColumnSet');
+}
+
+# addColumns parameters:
+#	inputColumnSet: A DCC::Model::ColumnSet instance which contains
+#		the columns to be added to this column set. Those
+#		columns with the same name are overwritten.
+# the method stores the columns in the input columnSet in the current
+# one. New columns can override old ones, unless some of the old ones
+# is typed as idref. In that case, an exception is fired.
+sub addColumns($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $inputColumnSet = shift;
+	my $inputColumnsHash = $inputColumnSet->columns;
+	
+	# First, let's see whether there is some of our idkeys in the
+	# input, so we can stop early
+	foreach my $columnName (@{$self->idColumnNames}) {
+		if(exists($inputColumnsHash->{$columnName})) {
+			Carp::croak("Trying to add already declared idcolumn $columnName");
+		}
+	}
+	
+	# And now, let's add them!
+	my $p_columnsHash = $self->columns;
+	my $p_columnNames = $self->columnNames;
+	my $p_idColumnNames = $self->idColumnNames;
+	
+	# We want to keep the original column order as far as possible
+	foreach my $inputColumnName (@{$inputColumnSet->columnNames}) {
+		# Registering the column names (if there is no column with that name!)
+		my $inputColumn = $inputColumnsHash->{$inputColumnName};
+		unless(exists($p_columnsHash->{$inputColumnName})) {
+			push(@{$p_columnNames},$inputColumnName);
+			# Is it a id column?
+			push(@{$p_idColumnNames},$inputColumnName)  if($inputColumn->columnType->use eq DCC::Model::ColumnType::IDREF);
+		}
+		
+		$p_columnsHash->{$inputColumnName} = $inputColumn;
+	}
+}
 
 1;
 
@@ -1155,6 +1307,46 @@ sub concepts {
 # A hash of DCC::Model::Concept instances
 sub conceptHash {
 	return $_[0]->[4];
+}
+
+1;
+
+
+package DCC::Model::Concept;
+
+# name
+sub name {
+	return $_[0]->[0];
+}
+
+# fullname
+sub fullname {
+	return $_[0]->[1];
+}
+
+# The DCC::Model::ConceptType instance basetype
+sub baseConceptType {
+	return $_[0]->[2];
+}
+
+# A DCC::Model::DescriptionSet instance, with all the descriptions
+sub description {
+	return $_[0]->[3];
+}
+
+# A DCC::Model::AnnotationSet instance, with all the annotations
+sub annotations {
+	return $_[0]->[4];
+}
+
+# A DCC::Model::ColumnSet instance with all the columns (including the inherited ones) of this concept
+sub columnSet {
+	return $_[0]->[5];
+}
+
+# related conceptNames, an array of concept names from the same concept domain
+sub relatedConceptNames {
+	return $_[0]->[6];
 }
 
 1;
