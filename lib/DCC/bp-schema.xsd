@@ -328,6 +328,12 @@
                         <xs:documentation>When we need to indicate relations 1:N to other concepts (being this concept the one in the N part), we use this element</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
+                        <xs:attribute name="domain" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>The domain where the concept is defined. By default, it is the same domain
+                                    as the one where the concept containing this related-to element is defined.</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
                         <xs:attribute name="concept" type="xs:string" use="required">
                             <xs:annotation>
                                 <xs:documentation>The concept this one is related to</xs:documentation>
@@ -586,6 +592,7 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                             </xs:annotation>
                         </xs:attribute>
                     </xs:complexType>
+                    <!--
                     <xs:key name="concept-domain_concept-key">
                         <xs:selector xpath=".//bp:concept" />
                         <xs:field xpath="@name" />
@@ -594,7 +601,7 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                         <xs:selector xpath=".//bp:related-to" />
                         <xs:field xpath="@concept" />
                     </xs:keyref>
-                    
+                    -->
                 </xs:element>
             </xs:sequence>
             <xs:attribute name="project" use="required" type="xs:string">
@@ -620,6 +627,16 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath="bp:filename-format"/>
             <xs:field xpath="@name"/>
         </xs:key>
+        <xs:key name="concept-key">
+            <xs:annotation>
+                <xs:documentation>The concept key, used to validate the related-to elements</xs:documentation>
+            </xs:annotation>
+            <xs:selector xpath="bp:concept-domain"></xs:selector>
+            <xs:field xpath="@domain" />
+            <xs:field xpath=".//bp:concept/@name"></xs:field>
+        </xs:key>
+        
+        
         <xs:keyref refer="bp:cv-name-key" name="column-cv-keyref">
             <xs:selector xpath=".//bp:column-type"></xs:selector>
             <xs:field xpath="@cv"></xs:field>
@@ -636,5 +653,11 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath=".//bp:concept"/>
             <xs:field xpath="@basetype"/>
         </xs:keyref>
+        <xs:keyref refer="bp:concept-key" name="related-to-fk">
+            <xs:selector xpath=".//bp:concept/bp:related-to"></xs:selector>
+            <xs:field xpath="@domain" />
+            <xs:field xpath="@concept" />
+        </xs:keyref>
+        
     </xs:element>
 </xs:schema>
