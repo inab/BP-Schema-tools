@@ -251,6 +251,57 @@
         </xs:complexType>
     </xs:element>
     
+    <xs:element name="index">
+        <xs:annotation>
+            <xs:documentation>An index defined on the collection or the concept type</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="attr" minOccurs="1" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:attribute name="name" type="xs:string" use="required">
+                            <xs:annotation>
+                                <xs:documentation>An attribute whose values are used to build the key</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="ord" use="optional" default="1">
+                            <xs:annotation>
+                                <xs:documentation>The ordering, either ascending or descending</xs:documentation>
+                            </xs:annotation>
+                            <xs:simpleType>
+                                <xs:restriction base="xs:integer">
+                                    <xs:enumeration value="-1">
+                                        <xs:annotation>
+                                            <xs:documentation>Descending ordering</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                    <xs:enumeration value="1">
+                                        <xs:annotation>
+                                            <xs:documentation>Ascending ordering</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+            <xs:attribute name="unique" use="required" type="xs:boolean">
+                <xs:annotation>
+                    <xs:documentation>Should this index ensure the uniqueness property among its keys?</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+        </xs:complexType>
+        <xs:unique name="indexKey">
+            <xs:annotation>
+                <xs:documentation>A key cannot have the same attribute twice</xs:documentation>
+            </xs:annotation>
+            <xs:selector xpath="bp:attr"/>
+            <xs:field xpath="@name"/>
+        </xs:unique>
+        
+    </xs:element>
+    
     <xs:element name="concept-type">
         <xs:annotation>
             <xs:documentation>Each concept type is associated to a collection, and as such, the concepts could have common attributes</xs:documentation>
@@ -258,6 +309,7 @@
         <xs:complexType>
             <xs:sequence>
                 <xs:element ref="bp:column" minOccurs="0" maxOccurs="unbounded" />
+                <xs:element ref="bp:index" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element name="subtypes" minOccurs="0" maxOccurs="1">
                     <xs:annotation>
                         <xs:documentation>This element contains the declarations of concept type subtypes</xs:documentation>
@@ -385,56 +437,7 @@
                                 </xs:annotation>
                                 <xs:complexType>
                                     <xs:sequence>
-                                        <xs:element name="index" minOccurs="0" maxOccurs="unbounded">
-                                            <xs:annotation>
-                                                <xs:documentation>An index defined on the collection</xs:documentation>
-                                            </xs:annotation>
-                                            <xs:complexType>
-                                                <xs:sequence>
-                                                    <xs:element name="attr" minOccurs="1" maxOccurs="unbounded">
-                                                        <xs:complexType>
-                                                            <xs:attribute name="name" type="xs:string" use="required">
-                                                                <xs:annotation>
-                                                                    <xs:documentation>An attribute whose values are used to build the key</xs:documentation>
-                                                                </xs:annotation>
-                                                            </xs:attribute>
-                                                            <xs:attribute name="ord" use="optional" default="1">
-                                                                <xs:annotation>
-                                                                    <xs:documentation>The ordering, either ascending or descending</xs:documentation>
-                                                                </xs:annotation>
-                                                                <xs:simpleType>
-                                                                    <xs:restriction base="xs:integer">
-                                                                        <xs:enumeration value="-1">
-                                                                            <xs:annotation>
-                                                                                <xs:documentation>Descending ordering</xs:documentation>
-                                                                            </xs:annotation>
-                                                                        </xs:enumeration>
-                                                                        <xs:enumeration value="1">
-                                                                            <xs:annotation>
-                                                                                <xs:documentation>Ascending ordering</xs:documentation>
-                                                                            </xs:annotation>
-                                                                        </xs:enumeration>
-                                                                    </xs:restriction>
-                                                                </xs:simpleType>
-                                                            </xs:attribute>
-                                                        </xs:complexType>
-                                                    </xs:element>
-                                                </xs:sequence>
-                                                <xs:attribute name="unique" use="required" type="xs:boolean">
-                                                    <xs:annotation>
-                                                        <xs:documentation>Should this index ensure the uniqueness property among its keys?</xs:documentation>
-                                                    </xs:annotation>
-                                                </xs:attribute>
-                                            </xs:complexType>
-                                            <xs:unique name="indexKey">
-                                                <xs:annotation>
-                                                    <xs:documentation>A key cannot have the same attribute twice</xs:documentation>
-                                                </xs:annotation>
-                                                <xs:selector xpath="bp:attr"/>
-                                                <xs:field xpath="@name"/>
-                                            </xs:unique>
-                                            
-                                        </xs:element>
+                                        <xs:element ref="bp:index" minOccurs="0" maxOccurs="unbounded"/>
                                     </xs:sequence>
                                     <xs:attribute name="name" type="xs:string" use="required">
                                         <xs:annotation>
