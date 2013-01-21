@@ -339,6 +339,11 @@
                                 <xs:documentation>The concept this one is related to</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
+                        <xs:attribute name="prefix" type="xs:string" use="optional">
+                            <xs:annotation>
+                                <xs:documentation>The optional prefix to prepend to the column names when the idref columns are transferred</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
@@ -618,6 +623,11 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                         <xs:pattern value="(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+" />
                     </xs:restriction>
                 </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="docsDir" type="xs:string" use="required">
+                <xs:annotation>
+                    <xs:documentation>The directory which holds the additional documentation for this model, used to generated the PDF</xs:documentation>
+                </xs:annotation>
             </xs:attribute>
         </xs:complexType>
         <xs:key name="filename-format-key">
