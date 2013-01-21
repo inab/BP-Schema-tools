@@ -89,7 +89,7 @@ sub new($) {
 	# Let's start processing the input model
 	my $modelPath = shift;
 	my $modelAbsPath = File::Spec->rel2abs($modelPath);
-	my $modelDir = dirname($modelAbsPath);
+	my $modelDir = File::Basename::dirname($modelAbsPath);
 	
 	$self->{_modelDir}=$modelDir;
 	
@@ -97,7 +97,7 @@ sub new($) {
 	my $model = undef;
 	
 	eval {
-		XML::LibXML->load_xml(location=>$modelPath);
+		$model = XML::LibXML->load_xml(location=>$modelPath);
 	};
 	
 	# Was there some model parsing error?
@@ -106,7 +106,7 @@ sub new($) {
 	}
 	
 	# Schema preparation
-	my $schemaDir = dirname(__FILE__);
+	my $schemaDir = File::Basename::dirname(__FILE__);
 	$self->{_schemaDir}=$schemaDir;
 	
 	my $schemaPath = File::Spec->catfile($schemaDir,DCCSchemaFilename);
