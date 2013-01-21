@@ -151,6 +151,12 @@ sub digestModel($) {
 	$self->{project} = $model->getAttribute('project');
 	$self->{schemaVer} = $model->getAttribute('schemaVer');
 	
+	# The documentation directory, which complements this model
+	my $docsDir = $model->getAttribute('docsDir');
+	# We need to translate relative paths to absolute ones
+	$docsDir = File::Spec->rel2abs($docsDir,$self->{_modelDir})  unless(File::Spec->file_name_is_absolute($docsDir));
+	$self->{_docsDir} = $docsDir;
+	
 	# Now, let's store the annotations
 	$self->{ANNOTATIONS} = $self->parseAnnotations($modelRoot);
 	
@@ -162,23 +168,11 @@ sub digestModel($) {
 			next  unless($coll->nodeType == XML::LibXML::XML_ELEMENT_NODE && $coll->localname eq 'collection');
 			
 			# Collection name, collection path, index declarations
-			my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
+			my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),undef);
 			$collections{$collection[0]} = bless(\@collection,'DCC::Model::Collection');
 			
 			# And the index declarations for this collection
-			foreach my $ind ($coll->childNodes()) {
-				next  unless($ind->nodeType == XML::LibXML::XML_ELEMENT_NODE && $ind->localname eq 'index');
-				
-				# Is index unique?, attributes (attribute name, ascending/descending)
-				my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
-				push(@{$collection[2]},bless(\@index,'DCC::Model::Index'));
-				
-				foreach my $attr ($ind->childNodes()) {
-					next  unless($attr->nodeType == XML::LibXML::XML_ELEMENT_NODE && $attr->localname eq 'attr');
-					
-					push(@{$index[1]},[$attr->getAttribute('name'),($attr->hasAttribute('ord') && $attr->getAttribute('ord') eq '-1')?-1:1]);
-				}
-			}
+			$collection[2] = $self->parseIndexes($coll);
 		}
 		last;
 	}
@@ -255,12 +249,73 @@ sub digestModel($) {
 	
 	# Oh, no! The concept domains!
 	my @conceptDomains = ();
+	my %conceptDomainHash = ();
 	$self->{CDOMAINS} = \@conceptDomains;
+	$self->{CDOMAINHASH} = \%conceptDomainHash;
 	foreach my $conceptDomainDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'concept-domain')) {
 		my $conceptDomain = $self->parseConceptDomain($conceptDomainDecl);
 		
 		push(@conceptDomains,$conceptDomain);
+		$conceptDomainHash{$conceptDomain->name} = $conceptDomain;
 	}
+	
+	# But the work it is not finished, because
+	# we have to propagate the foreign keys
+	foreach my $conceptDomain (@conceptDomains) {
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			foreach my $relatedConceptNames (@{$concept->relatedConceptNames}) {
+				my($domainName, $conceptName, $prefix) = @{$relatedConceptNames};
+				
+				my $relatedDomain = $conceptDomain;
+				if(defined($domainName)) {
+					unless(exists($conceptDomainHash{$domainName})) {
+						Carp::croak("Concept domain $domainName referred from concept ".$conceptDomain->name.'.'.$concept->name." does not exist");
+					}
+					
+					$relatedDomain = $conceptDomainHash{$domainName};
+				}
+				
+				my $relatedConcept = undef;
+				if(exists($relatedDomain->conceptHash->{$conceptName})) {
+					$relatedConcept = $relatedDomain->conceptHash->{$conceptName};
+				} else {
+					Carp::croak("Concept $domainName.$conceptName referred from concept ".$conceptDomain->name.'.'.$concept->name." does not exist");
+				}
+				
+				# And now, let's propagate!
+				$concept->addColumns($relatedConcept->refColumns($prefix));
+			}
+		}
+	}
+	
+	# That's all folks, friends!
+}
+
+# parseIndexes parameters:
+#	container: a XML::LibXML::Element container of 'dcc:index' elements
+# returns an array reference, containing DCC::Model::Index instances
+sub parseIndexes($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $container = shift;
+	
+	# And the index declarations for this collection
+	my @indexes = ();
+	foreach my $ind ($container->getChildrenByTagNameNS(dccNamespace,'index')) {
+		# Is index unique?, attributes (attribute name, ascending/descending)
+		my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
+		push(@indexes,bless(\@index,'DCC::Model::Index'));
+		
+		foreach my $attr ($ind->childNodes()) {
+			next  unless($attr->nodeType == XML::LibXML::XML_ELEMENT_NODE && $attr->localname eq 'attr');
+			
+			push(@{$index[1]},[$attr->getAttribute('name'),($attr->hasAttribute('ord') && $attr->getAttribute('ord') eq '-1')?-1:1]);
+		}
+	}
+	
+	return \@indexes;
 }
 
 # parseDescriptions parameters:
@@ -440,7 +495,8 @@ sub parseConceptType($;$) {
 	# collection/key name (value,undef)
 	# parent
 	# columnSet
-	my @ctype = (undef,undef,undef,$ctypeParent,undef);
+	# indexes
+	my @ctype = (undef,undef,undef,$ctypeParent,undef,undef);
 	
 	# If it has name, then it has to have either a collection name or a key name
 	# either inline or inherited from the ancestors
@@ -477,6 +533,11 @@ sub parseConceptType($;$) {
 	
 	# Let's parse the columns
 	$ctype[4] = $self->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columnSet:undef);
+	
+	# And the index declarations
+	$ctype[5] = [@{$self->parseIndexes($ctypeElem)}];
+	# inheriting the ones from the parent concept types
+	push(@{$ctype[5]},@{$ctypeParent->indexes})  if(defined($ctypeParent));
 	
 	# Now, let's find subtypes
 	foreach my $subtypes ($ctypeElem->getChildrenByTagNameNS(dccNamespace,'subtypes')) {
@@ -559,12 +620,15 @@ sub parseColumn($) {
 	# default value
 	# array separators
 	my @columnType = (undef,undef,undef,undef,undef);
-	# Column name, description, annotations, column type
+	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
 	my @column = (
 		$colDecl->getAttribute('name'),
 		$self->parseDescriptions($colDecl),
 		$self->parseAnnotations($colDecl),
-		bless(\@columnType,'DCC::Model::ColumnType')
+		bless(\@columnType,'DCC::Model::ColumnType'),
+		undef,
+		undef,
+		undef
 	);
 	
 	# Let's parse the column type!
@@ -781,14 +845,15 @@ sub parseConceptDomain($) {
 	
 	$conceptDomain[2] = $self->{FPATTERN}{$filenameFormatName};
 	
+	# Last, chicken and egg problem, part 1
+	my $retConceptDomain = bless(\@conceptDomain,'DCC::Model::ConceptDomain');
+
 	# And now, next method handles parsing of embedded concepts
-	push(@concepts,$self->parseConceptContainer($conceptDomainDecl));
+	push(@concepts,$self->parseConceptContainer($conceptDomainDecl,$retConceptDomain));
 	# The concept hash will help on concept identification
 	map { $conceptHash{$_->name} = $_; } @concepts;
 	
-	# Last, chicken and egg problem
-	my $retConceptDomain = bless(\@conceptDomain,'DCC::Model::ConceptDomain');
-	
+	# Last, chicken and egg problem, part 2
 	$retConceptDomain->filenameFormat->registerConceptDomain($retConceptDomain);
 	
 	return $retConceptDomain;
@@ -797,21 +862,24 @@ sub parseConceptDomain($) {
 # parseConceptContainer paramereters:
 #	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
 #		or 'dcc:subconcepts' instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#		has been defined.
 #	parentConcept: An optional, parent DCC::Model::Concept instance of
 #		all the concepts to be parsed from the container
 # it returns an array of DCC::Model::Concept instances, which are all the
 # concepts and subconcepts inside the input concept container
-sub parseConceptContainer($;$) {
+sub parseConceptContainer($$;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $conceptContainerDecl = shift;
+	my $conceptDomain = shift;
 	my $parentConcept = shift;	# This is optional (remember!)
 	
 	my @concepts = ();
 	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(dccNamespace,'concept')) {
-		push(@concepts,$self->parseConcept($conceptDecl,$parentConcept));
+		push(@concepts,$self->parseConcept($conceptDecl,$conceptDomain,$parentConcept));
 	}
 	
 	return @concepts;
@@ -819,16 +887,19 @@ sub parseConceptContainer($;$) {
 
 # parseConcept paramereters:
 #	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#		has been defined.
 #	parentConcept: An optional, parent DCC::Model::Concept instance of
 #		the concept to be parsed from conceptDecl
 # it returns an array of DCC::Model::Concept instances, the first one
 # corresponds to this concept, and the other ones are the subconcepts
-sub parseConcept($;$) {
+sub parseConcept($$;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $conceptDecl = shift;
+	my $conceptDomain = shift;
 	my $parentConcept = shift;	# This is optional (remember!)
 
 	my $conceptName = $conceptDecl->getAttribute('name');
@@ -840,18 +911,21 @@ sub parseConcept($;$) {
 	# This array will contain the names of the related concepts
 	my @related = ();
 	
-	# We have to inherit the related concepts
-	push(@related,@{$parentConcept->relatedConceptNames})  if(defined($parentConcept));
+	# We don't have to inherit the related concepts, because subconcepts
+	# are not subclasses!!!!!
+	#########push(@related,@{$parentConcept->relatedConceptNames})  if(defined($parentConcept));
 	
 	# Preparing the columns
 	my $columnSet = $self->parseColumnSet($conceptDecl,$basetype->columnSet);
 	# and adding the ones from the parent concept
 	# (and later from the related stuff)
-	$columnSet->addColumns($parentConcept->columnSet->idColumns)  if(defined($parentConcept) && $parentConcept->baseConceptType->isCollection);
+	
+	$columnSet->addColumns($parentConcept->columnSet->idColumns(! $parentConcept->baseConceptType->isCollection),1)  if(defined($parentConcept));
 	
 	# name
 	# fullname
 	# basetype
+	# concept domain
 	# Description Set
 	# Annotation Set
 	# ColumnSet
@@ -860,15 +934,20 @@ sub parseConcept($;$) {
 		$conceptName,
 		$conceptFullname,
 		$basetype,
+		$conceptDomain,
 		$self->parseDescriptions($conceptDecl),
 		$self->parseAnnotations($conceptDecl),
 		$columnSet,
 		\@related,
 	);
 	
-	# Saving the related concepts (the ones explicitly declared with this concept)
+	# Saving the related concepts (the ones explicitly declared within this concept)
 	foreach my $relatedDecl ($self->getChildrenByTagNameNS(dccNamespace,'related-to')) {
-		push(@related,$relatedDecl->getAttribute('concept'));
+		push(@related,[
+			($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
+			$relatedDecl->getAttribute('concept') ,
+			($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
+		]);
 	}
 	
 	# And last, the subconcepts
@@ -877,7 +956,7 @@ sub parseConcept($;$) {
 	my @concepts = ($concept);
 	
 	foreach my $conceptContainerDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'subconcepts')) {
-		push(@concepts,$self->parseConceptContainer($conceptContainerDecl,$concept));
+		push(@concepts,$self->parseConceptContainer($conceptContainerDecl,$conceptDomain,$concept));
 	}
 	
 	return @concepts;
@@ -1021,6 +1100,11 @@ sub columnSet {
 	return $_[0]->[4];
 }
 
+# It returns a reference to an array full of DCC::Model::Index instances
+sub indexes {
+	return $_[0]->[5];
+}
+
 1;
 
 
@@ -1041,16 +1125,20 @@ sub columns {
 	return $_[0]->[2];
 }
 
+# idColumns parameters:
+#	doMask: Are the columns masked for storage?
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
-sub idColumns() {
+sub idColumns(;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $doMask = shift;
+	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
-	my %columns = map { $_ => $p_columns->{$_} } @columnNames;
+	my %columns = map { $_ => $p_columns->{$_}->clone($doMask) } @columnNames;
 	
 	my @columnSet = (
 		\@columnNames,
@@ -1058,22 +1146,53 @@ sub idColumns() {
 		\%columns
 	);
 	
-	return bless(\@columnSet,'DCC::Model::ColumnSet');
+	return bless(\@columnSet,ref($self));
+}
+
+# refColumns parameters:
+#	relatedConcept: A DCC::Model::Concept instance, which this columnSet belongs
+#		The kind of relation could be inheritance, or 1:N
+#	prefix: The optional prefix to be set to the name when the columns are cloned
+# It returns a DCC::Model::ColumnSet instance, with the column declarations
+# corresponding to columns with idref restriction
+sub refColumns(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $relatedConcept = shift;
+	my $prefix = shift;
+	
+	my @columnNames = @{$self->idColumnNames};
+	my $p_columns = $self->columns;
+	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($relatedConcept,$prefix) } @columnNames;
+	
+	my @columnSet = (
+		\@columnNames,
+		\@columnNames,
+		\%columns
+	);
+	
+	return bless(\@columnSet,ref($self));
 }
 
 # addColumns parameters:
 #	inputColumnSet: A DCC::Model::ColumnSet instance which contains
 #		the columns to be added to this column set. Those
 #		columns with the same name are overwritten.
+#	isPKFriendly: if true, when the columns are idref, their role are
+#		kept if there are already idref columns
 # the method stores the columns in the input columnSet in the current
 # one. New columns can override old ones, unless some of the old ones
 # is typed as idref. In that case, an exception is fired.
-sub addColumns($) {
+sub addColumns($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $inputColumnSet = shift;
+	my $isPKFriendly = shift;
+	
 	my $inputColumnsHash = $inputColumnSet->columns;
 	
 	# First, let's see whether there is some of our idkeys in the
@@ -1083,6 +1202,7 @@ sub addColumns($) {
 			Carp::croak("Trying to add already declared idcolumn $columnName");
 		}
 	}
+	my $doAddIDREF = scalar(@{$self->idColumnNames}) > 0 && $isPKFriendly;
 	
 	# And now, let's add them!
 	my $p_columnsHash = $self->columns;
@@ -1095,8 +1215,10 @@ sub addColumns($) {
 		my $inputColumn = $inputColumnsHash->{$inputColumnName};
 		unless(exists($p_columnsHash->{$inputColumnName})) {
 			push(@{$p_columnNames},$inputColumnName);
-			# Is it a id column?
-			push(@{$p_idColumnNames},$inputColumnName)  if($inputColumn->columnType->use eq DCC::Model::ColumnType::IDREF);
+			# Is it a id column which should be added?
+			if($doAddIDREF && $inputColumn->columnType->use eq DCC::Model::ColumnType::IDREF) {
+				push(@{$p_idColumnNames},$inputColumnName);
+			}
 		}
 		
 		$p_columnsHash->{$inputColumnName} = $inputColumn;
@@ -1146,24 +1268,101 @@ sub arraySeps {
 
 package DCC::Model::Column;
 
+use constant {
+	NAME => 0,
+	DESCRIPTION => 1,
+	ANNOTATIONS => 2,
+	COLUMNTYPE => 3,
+	ISMASKED => 4,
+	RELCONCEPT => 5,
+	RELCOLUMN => 6
+};
+
 # The column name
 sub name {
-	return $_[0]->[0];
+	return $_[0]->[NAME];
 }
 
 # The description, a DCC::Model::DescriptionSet instance
 sub description {
-	return $_[0]->[1];
+	return $_[0]->[DESCRIPTION];
 }
 
 # Annotations, a DCC::Model::AnnotationSet instance
 sub annotations {
-	return $_[0]->[2];
+	return $_[0]->[ANNOTATIONS];
 }
 
 # It returns a DCC::Model::ColumnType instance
 sub columnType {
-	return $_[0]->[3];
+	return $_[0]->[COLUMNTYPE];
+}
+
+# If this column is masked (because it is a inherited idref on a concept hosted in a hash)
+# it will return true, otherwise undef
+sub isMasked {
+	return $_[0]->[ISMASKED];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept, this method will return a DCC::Model::Concept instance
+# Otherwise, it will return undef
+sub relatedConcept {
+	return $_[0]->[RELCONCEPT];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept, this method will return a DCC::Model::Column instance
+# which correlates to
+# Otherwise, it will return undef
+sub relatedColumn {
+	return $_[0]->[RELCOLUMN];
+}
+
+# clone parameters:
+#	doMask: optional, it signals whether to mark cloned column
+#		as masked, so it should not be considered for value storage in the database.
+# it returns a DCC::Model::Column instance
+sub clone(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $doMask = shift;
+	
+	# Cloning this object
+	my $retval = bless(\@{$self},ref($self));
+	
+	$retval->[ISMASKED] = ($doMask)?1:undef;
+	
+	return $retval;
+}
+
+# cloneRelated parameters:
+#	relatedConcept: A DCC::Model::Concept instance, which this column is related to.
+#		The kind of relation could be inheritance, or 1:N
+#	prefix: The optional prefix to be set to the name when the column is cloned
+# it returns a DCC::Model::Column instance
+sub cloneRelated($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $relatedConcept = shift;
+	my $prefix = shift;
+	
+	# Cloning this object
+	my $retval = $self->clone();
+	
+	# Adding the prefix
+	$retval->[NAME] = $prefix.$retval->[NAME]  if(defined($prefix) && length($prefix)>0);
+	
+	# And adding the relation info
+	# to this column
+	$retval->[RELCONCEPT] = $relatedConcept;
+	$retval->[RELCOLUMN] = $self;
+	
+	return $retval;
 }
 
 1;
@@ -1329,24 +1528,43 @@ sub baseConceptType {
 	return $_[0]->[2];
 }
 
+# The DCC::Model::ConceptDomain instance where this concept is defined
+sub conceptDomain {
+	return $_[0]->[3];
+}
+
 # A DCC::Model::DescriptionSet instance, with all the descriptions
 sub description {
-	return $_[0]->[3];
+	return $_[0]->[4];
 }
 
 # A DCC::Model::AnnotationSet instance, with all the annotations
 sub annotations {
-	return $_[0]->[4];
+	return $_[0]->[5];
 }
 
 # A DCC::Model::ColumnSet instance with all the columns (including the inherited ones) of this concept
 sub columnSet {
-	return $_[0]->[5];
+	return $_[0]->[6];
 }
 
-# related conceptNames, an array of concept names from the same concept domain
+# related conceptNames, an array of trios concept domain name, concept name, prefix
 sub relatedConceptNames {
-	return $_[0]->[6];
+	return $_[0]->[7];
+}
+
+# refColumns parameters:
+#	prefix: The optional prefix to put on cloned idref columns
+# It returns a DCC::Model::ColumnSet instance with clones of all the idref columns
+# referring to this object and with a possible prefix.
+sub refColumns(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $prefix = shift;
+	
+	return $self->columnSet->refColumns($self,$prefix);
 }
 
 1;

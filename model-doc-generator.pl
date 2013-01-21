@@ -4,6 +4,27 @@ use strict;
 use Carp;
 use File::Spec;
 
+use FindBin;
+use lib "$FindBin::Bin/lib";
+use DCC::Model;
+
+if(scalar(@ARGV)>=2) {
+	my($modelFile,$outfile)=@ARGV[0..1];
+	
+	my $sourceModelDir = File::Spec->catfile($dataModelDir,'source');
+	unless(-d $sourceModelDir) {
+		Carp::croak("Data models directory ($dataModelDir) is wrong or not well set");
+	}
+	
+	unless(-d $codecDir) {
+		Carp::croak("Codecs directory ($codecDir) is not well set");
+	}
+} else {
+	print STDERR "This program takes as input the model (in XML) and the output file\n";
+} 
+
+__END__
+
 my %COMMANDS = (
 	'file' => 'subsection',
 	'featureType' => undef,
