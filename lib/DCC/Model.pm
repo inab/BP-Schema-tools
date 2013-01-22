@@ -144,15 +144,15 @@ sub digestModel($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $model = shift;
-	my $modelRoot = $model->documentElement();
+	my $modelDoc = shift;
+	my $modelRoot = $modelDoc->documentElement();
 	
 	# First, let's store the key values, project name and schema version
-	$self->{project} = $model->getAttribute('project');
-	$self->{schemaVer} = $model->getAttribute('schemaVer');
+	$self->{project} = $modelRoot->getAttribute('project');
+	$self->{schemaVer} = $modelRoot->getAttribute('schemaVer');
 	
 	# The documentation directory, which complements this model
-	my $docsDir = $model->getAttribute('docsDir');
+	my $docsDir = $modelRoot->getAttribute('docsDir');
 	# We need to translate relative paths to absolute ones
 	$docsDir = File::Spec->rel2abs($docsDir,$self->{_modelDir})  unless(File::Spec->file_name_is_absolute($docsDir));
 	$self->{_docsDir} = $docsDir;
