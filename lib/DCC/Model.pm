@@ -283,7 +283,7 @@ sub digestModel($) {
 				}
 				
 				# And now, let's propagate!
-				$concept->addColumns($relatedConcept->refColumns($prefix));
+				$concept->columnSet->addColumns($relatedConcept->refColumns($prefix));
 			}
 		}
 	}
@@ -573,7 +573,7 @@ sub parseColumnSet($$) {
 	if(defined($parentColumnSet)) {
 		@idColumnNames = @{$parentColumnSet->idColumnNames};
 		@columnNames = @{$parentColumnSet->columnNames};
-		%columnDecl = %{$parentColumnSet->columnSet};
+		%columnDecl = %{$parentColumnSet->columns};
 	}
 	# Array with the idref column names
 	# Array with column names (all)
@@ -854,7 +854,7 @@ sub parseConceptDomain($) {
 	map { $conceptHash{$_->name} = $_; } @concepts;
 	
 	# Last, chicken and egg problem, part 2
-	$retConceptDomain->filenameFormat->registerConceptDomain($retConceptDomain);
+	$retConceptDomain->filenamePattern->registerConceptDomain($retConceptDomain);
 	
 	return $retConceptDomain;
 }
@@ -942,7 +942,7 @@ sub parseConcept($$;$) {
 	);
 	
 	# Saving the related concepts (the ones explicitly declared within this concept)
-	foreach my $relatedDecl ($self->getChildrenByTagNameNS(dccNamespace,'related-to')) {
+	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'related-to')) {
 		push(@related,[
 			($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
 			$relatedDecl->getAttribute('concept') ,
@@ -1075,7 +1075,13 @@ sub isCollection {
 	return $_[0]->[1];
 }
 
-# collection, a DCC::Model::Collection object
+# It can be either a DCC::Model::Collection instance
+# or a string
+sub path {
+	return $_[0]->[2];
+}
+
+# collection, a DCC::Model::Collection instance
 # An abstract concept type will return undef here
 sub collection {
 	return $_[0]->[2];
