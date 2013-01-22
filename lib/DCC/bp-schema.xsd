@@ -640,15 +640,16 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath="bp:filename-format"/>
             <xs:field xpath="@name"/>
         </xs:key>
+        <!--  XPath subset understood by XML Schema is not powerful enough
         <xs:key name="concept-key">
             <xs:annotation>
                 <xs:documentation>The concept key, used to validate the related-to elements</xs:documentation>
             </xs:annotation>
-            <xs:selector xpath="bp:concept-domain"></xs:selector>
-            <xs:field xpath="@domain" />
-            <xs:field xpath=".//bp:concept/@name"></xs:field>
+            <xs:selector xpath=".//bp:concept"></xs:selector>
+            <xs:field xpath="ancestor::bp:concept-domain/@domain" />
+            <xs:field xpath="@name"></xs:field>
         </xs:key>
-        
+        -->
         
         <xs:keyref refer="bp:cv-name-key" name="column-cv-keyref">
             <xs:selector xpath=".//bp:column-type"></xs:selector>
@@ -666,11 +667,12 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath=".//bp:concept"/>
             <xs:field xpath="@basetype"/>
         </xs:keyref>
+        <!-- The key referred by this FK needed an XPath expression more complex than what XML Schema can understand
         <xs:keyref refer="bp:concept-key" name="related-to-fk">
             <xs:selector xpath=".//bp:concept/bp:related-to"></xs:selector>
             <xs:field xpath="@domain" />
             <xs:field xpath="@concept" />
         </xs:keyref>
-        
+        -->
     </xs:element>
 </xs:schema>
