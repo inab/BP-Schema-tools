@@ -2,7 +2,10 @@
 
 use strict;
 use Carp;
+use TeX::Encode;
+use Encode;
 use File::Spec;
+use File::Temp;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
@@ -93,7 +96,7 @@ sub genSQL($$) {
 	my($model,$outfileSQL) = @_;
 	
 	my $SQL;
-	if(open($SQL,'>',$outfileSQL)) {
+	if(open($SQL,'>:utf8',$outfileSQL)) {
 		# Let's iterate over all the concept domains and their concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			my $conceptDomainName = $conceptDomain->name;
@@ -140,9 +143,9 @@ sub genSQL($$) {
 #	templateFile: The LaTeX template file to be used to generate the PDF
 #	model: DCC::Model instance
 #	bodyFile: The temporal file where the generated documentation has been written.
-#	
+#	outputFile: The output PDF file.
 sub assemblePDF($$$$) {
-	my($templateFile,$model,$bodyFile,$overview, = @_;
+	my($templateFile,$model,$bodyFile,$outputFile) = @_;
 	
 	unless(-f $templateFile && -r $templateFile) {
 		die "ERROR: Unable to find readable template LaTeX file $templateFile\n";
@@ -177,33 +180,29 @@ sub assemblePDF($$$$) {
 		die "ERROR: Unable to find readable overview LaTeX file $overviewFile (declared in model!)\n";
 	}
 	
-	my($bodyDir,$bodyName);
-	if(-f $bodyFile && -r $bodyFile) {
-		my $absbody = File::Spec->rel2abs($bodyFile);
-		$bodyDir = dirname($absbody);
-		$bodyName = basename($absbody);
-	} else {
-		die "ERROR: Unable to find readable body LaTeX file $bodyFile\n";
-	}
-	
-	my $jobname = $ARGV[4];
-	
 	# Storing the document generation parameters
-	my @params = map { [$_,$annotations->{$_}] } keys(%{$annotations});
-	push(@params,['project',$model->projectName],['schemaVer',$model->schemaVer]);
+	my @params = map { ['ANNOT'.$_,encode('latex',$annotations->{$_})] } keys(%{$annotations});
+	push(@params,['projectName',$model->projectName],['schemaVer',$model->schemaVer]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
-	push(@params,['latexoverviewdir',$overviewDir.'/'],['latexoverviewname',$overviewName]);
-	push(@params,['latexbodydir',$bodyDir.'/'],['latexbodyname',$bodyName]);
+	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
+	push(@params,['INCLUDEbodydir',$bodyDir.'/'],['INCLUDEbodyname',$bodyName]);
+	
+	# Setting the jobname and the jobdir, pruning the .pdf extension from the output
+	my $absjob = File::Spec->rel2abs($outputFile);
+	my $jobDir = dirname($absjob);
+	my $jobName = basename($absjob,'.pdf');
+
 	
 	# And now, let's prepare the command line
 	my @pdflatex = (
 		'pdflatex',
-		'-jobname',$jobname,
+		'-jobname',$jobName,
+		'-output-directory',$jobDir,
 		join(' ',map { '\def\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$templateFile.'}'
 	);
 	
-	print "COMMAND LINE => ",join(' ',@pdflatex),"\n";
+	print STDERR "[DOCGEN] => ",join(' ',@pdflatex),"\n";
 	
 	# exit 0;
 	
@@ -213,8 +212,10 @@ sub assemblePDF($$$$) {
 }
 
 if(scalar(@ARGV)>=3) {
-	my($modelFile,$templateDocFile,$outfile)=@ARGV[0..1];
+	my($modelFile,$templateDocFile,$outfile)=@ARGV;
 	
+	binmode(STDERR,':utf8');
+	binmode(STDOUT,':utf8');
 	my $model = undef;
 	
 	eval {
@@ -230,15 +231,12 @@ if(scalar(@ARGV)>=3) {
 	genSQL($model,$outfile.'.sql');
 	
 	# Generating the document to be included in the template
+	my $bodyFile = File::Temp->new();
 	
 	
 	# Now, let's generate the documentation!
-
-	close($O);
-	} else {
-		Carp::croak("Unable to create output file $outfile");
-	}
+	assemblePDF($templateDocFile,$model,$bodyFile->filename,$outfile);
 } else {
-	print STDERR "This program takes as input the model (in XML) and the output file\n";
+	print STDERR "This program takes as input the model (in XML), the LaTeX template and the output file\n";
 	exit 1;
-} 
+}

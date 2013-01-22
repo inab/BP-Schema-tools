@@ -38,6 +38,10 @@
 	urlcolor=olive
 }
 
+% In order to keep compatibility along all the documentation
+\def\cvKey{\ANNOTcvKey}
+\def\cvDesc{\ANNOTcvDesc}
+\def\EnsemblVer{\ANNOTEnsemblVer}
 %\newcommand{\cvKey}{Key}
 %\newcommand{\cvDesc}{Description}
 %\newcommand{\EnsemblVer}{68}
@@ -45,9 +49,9 @@
 
 \begin{document}
 
-\title{BLUEPRINT proposed data submission schemas \\
+\title{\projectName proposed data submission schemas \\
 Draft v\schemaVer{}}
-\author{José María Fernández}
+\author{\ANNOTauthor}
 \date{\today}
 \maketitle
 \tableofcontents
@@ -55,8 +59,8 @@ Draft v\schemaVer{}}
 \texttt{}
 
 
-\subimport*{\latexoverviewdir}{\latexoverviewname}
+\subimport*{\INCLUDEoverviewdir}{\INCLUDEoverviewname}
 
-\subimport*{\latexbodydir}{\latexbodyname}
+\subimport*{\INCLUDEbodydir}{\INCLUDEbodyname}
 
 \end{document}
