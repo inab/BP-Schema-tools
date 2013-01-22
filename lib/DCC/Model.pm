@@ -962,7 +962,7 @@ sub parseConcept($$;$) {
 	return @concepts;
 }
 
-# It returns an array with DCC::Model::ConceptDomain objects (all the concept domains)
+# It returns an array with DCC::Model::ConceptDomain instances (all the concept domains)
 sub conceptDomains() {
 	my $self = shift;
 	
@@ -982,6 +982,42 @@ sub getConceptDomain($) {
 	my $conceptDomainName = shift;
 	
 	return exists($self->{CDOMAINHASH}{$conceptDomainName})?$self->{CDOMAINHASH}{$conceptDomainName}:undef;
+}
+
+# It returns a DCC::Model::AnnotationSet instance
+sub annotations() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{ANNOTATIONS};
+}
+
+# It returns the project name
+sub projectName() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{project};
+}
+
+# It returns a schema version
+sub schemaVer() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{schemaVer};
+}
+
+# The base documentation directory
+sub documentationDir() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_docsDir};
 }
 
 1;
