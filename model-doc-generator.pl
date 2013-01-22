@@ -8,12 +8,159 @@ use FindBin;
 use lib "$FindBin::Bin/lib";
 use DCC::Model;
 
+sub latex_escape($);
+sub latex_format($);
+sub genSQL($$);
+
+# Original code obtained from:
+# http://ommammatips.blogspot.com.es/2011/01/perl-function-for-latex-escape.html
+sub latex_escape_internal($) {
+	my $paragraph = shift;
+	
+	# Must be done after escape of \ since this command adds latex escapes
+	# Replace characters that can be escaped
+	$paragraph =~ s/([\$\#&%_])/\\$1/g;
+	
+	# "Less than" and "greater than"
+	$paragraph =~ s/>/\\textgreater/g;
+	$paragraph =~ s/</\\textless/g;
+	
+	# Replace ^ characters with \^{} so that $^F works okay
+	$paragraph =~ s/(\^)/\\$1\{\}/g;
+	
+	# Replace tilde (~) with \texttt{\~{}}
+	$paragraph =~ s/~/\\texttt\{\\~\{\}\}/g;
+	
+	# Now add the dollars around each \backslash
+	$paragraph =~ s/(\\backslash)/\$$1\$/g;
+	$paragraph =~ s/(\\textgreater)/\$$1\$/g;
+	$paragraph =~ s/(\\textless)/\$$1\$/g;
+	return $paragraph;
+}
+
+sub latex_escape($) {
+	my $paragraph = shift;
+	
+	# Replace a \ with $\backslash$
+	# This is made more complicated because the dollars will be escaped
+	# by the subsequent replacement. Easiest to add \backslash
+	# now and then add the dollars
+	$paragraph =~ s/\\/\\backslash/g;
+	
+	# Must be done after escape of \ since this command adds latex escapes
+	# Replace characters that can be escaped
+	$paragraph =~ s/([{}])/\\$1/g;
+	
+	return latex_escape_internal($paragraph);
+}
+
+sub latex_format($) {
+	my $paragraph = shift;
+	
+	# Replace a \ with $\backslash$
+	# This is made more complicated because the dollars will be escaped
+	# by the subsequent replacement. Easiest to add \backslash
+	# now and then add the dollars
+	$paragraph =~ s/\\/\\backslash/g;
+	
+	# Must be done after escape of \ since this command adds latex escapes
+	# Replace characters that can be escaped
+	$paragraph =~ s/([{}])/\\$1/g;
+	
+	$paragraph =~ s/\<br\>/\n\n/g;
+	$paragraph =~ s/\<i\>([^<]+)\<\/i\>/\\textit{$1}/msg;
+	$paragraph =~ s/\<b\>([^<]+)\<\/b\>/\\textbf{$1}/msg;
+	$paragraph =~ s/\<tt\>([^<]+)\<\/tt\>/\\texttt{$1}/msg;
+	$paragraph =~ s/\<u\>([^<]+)\<\/u\>/\\textunderscore{$1}/msg;
+	$paragraph =~ s/\<a\shref=["']([^>'"]+)['"]\>([^<]+)\<\/a\>/\\href{$1}{$2}/msg;
+	
+	return latex_escape_internal($paragraph);
+}
+
+my %ABSTYPE2SQL= (
+	'string' => 'VARCHAR(4096)',
+	'integer' => 'INTEGER',
+	'decimal' => 'DOUBLE',
+	'boolean' => 'BOOL',
+	'timestamp' => 'DATETIME',
+	'complex' => 'VARCHAR(4096)',
+);
+
+# genSQL parameters:
+#	model: a DCC::Model instance, with the parsed model.
+#	the path to the SQL output file
+sub genSQL($$) {
+	my($model,$outfileSQL) = @_;
+	
+	my $SQL;
+	if(open($SQL,'>',$outfileSQL)) {
+		# Let's iterate over all the concept domains and their concepts
+		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			my $conceptDomainName = $conceptDomain->name;
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				#my $conceptName = $concept->name;
+				my $basename = $conceptDomainName.'_'.$concept->name;
+				print $SQL "\n-- ",$concept->fullname;
+				print $SQL "\nCREATE TABLE $basename (";
+				
+				my $columnSet = $concept->columnSet;
+				
+				my $gottable=undef;
+				# First, the idref columns
+				my @colorder=@{$columnSet->idColumnNames};
+				
+				# And then, the others
+				my %idcols = map { $_ => undef } @colorder;
+				foreach my $columnName (@{$columnSet->columnNames}) {
+					push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
+				}
+				
+				foreach my $column (@{$columnSet->columns}{@colorder}) {
+					print $SQL ','  if(defined($gottable));
+					
+					my $columnType = $column->columnType;
+					my $type = $ABSTYPE2SQL{$columnType->type};
+					print $SQL "\n\t",$column->name,' ',$type;
+					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
+					print $SQL ' DEFAULT ',$columnType->default  if(defined($columnType->default));
+					$gottable = 1;
+				}
+				
+				print $SQL "\n);\n\n";
+			}
+		}
+		
+		close($SQL);
+	} else {
+		Carp::croak("Unable to create output file $outfileSQL");
+	}
+}
+
 if(scalar(@ARGV)>=2) {
 	my($modelFile,$outfile)=@ARGV[0..1];
 	
-	DCC::Model->new($modelFile);
+	my $model = undef;
+ 	my $O;
+	
+	eval {
+		$model = DCC::Model->new($modelFile);
+	};
+	
+	if($@) {
+		print STDERR "ERROR: Model loading and validation failed. Reason: ".$@,"\n";
+		exit 2;
+	}
+	
+	if(open($O,'>',$outfile)) {
+		genSQL($model,$outfile.'.sql');
+
+		close($O);
+	} else {
+		Carp::croak("Unable to create output file $outfile");
+	}
 } else {
 	print STDERR "This program takes as input the model (in XML) and the output file\n";
+	exit 1;
 } 
 
 __END__

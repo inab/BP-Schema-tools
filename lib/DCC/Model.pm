@@ -962,6 +962,28 @@ sub parseConcept($$;$) {
 	return @concepts;
 }
 
+# It returns an array with DCC::Model::ConceptDomain objects (all the concept domains)
+sub conceptDomains() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{CDOMAINS};
+}
+
+# getConceptDomain parameters:
+#	conceptDomainName: The name of the concept domain to look for
+# returns a DCC::Model::ConceptDomain object or undef (if it does not exist)
+sub getConceptDomain($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $conceptDomainName = shift;
+	
+	return exists($self->{CDOMAINHASH}{$conceptDomainName})?$self->{CDOMAINHASH}{$conceptDomainName}:undef;
+}
+
 1;
 
 # And now, the helpers for the different pseudo-packages
