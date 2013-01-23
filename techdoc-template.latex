@@ -49,7 +49,7 @@
 
 \begin{document}
 
-\title{\projectName proposed data submission schemas \\
+\title{\projectName{} proposed data submission schemas \\
 Draft v\schemaVer{}}
 \author{\ANNOTauthor}
 \date{\today}

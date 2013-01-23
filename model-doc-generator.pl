@@ -196,19 +196,26 @@ sub assemblePDF($$$$) {
 
 	
 	# And now, let's prepare the command line
-	my @pdflatex = (
-		'pdflatex',
+	my @pdflatexParams = (
+		'-interaction=batchmode',
 		'-jobname',$jobName,
 		'-output-directory',$jobDir,
 		join(' ',map { '\def\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$templateFile.'}'
 	);
 	
-	print STDERR "[DOCGEN] => ",join(' ',@pdflatex),"\n";
+	print STDERR "[DOCGEN] => ",join(' ','pdflatex',@pdflatexParams),"\n";
 	
 	# exit 0;
 	
+	my $follow = 1;
 	foreach my $it (1..5) {
-		last  if(system(@pdflatex)!=0);
+		if(system('pdflatex','-draftmode',@pdflatexParams)!=0) {
+			$follow = undef;
+			last;
+		}
+	}
+	if(defined($follow)) {
+		system('pdflatex',@pdflatexParams);
 	}
 }
 
