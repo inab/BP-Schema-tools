@@ -162,7 +162,8 @@ sub assemblePDF($$$$) {
 	
 	my $docsDir = $model->documentationDir();
 	
-	my $annotations = $model->annotations;
+	my $annotationSet = $model->annotations;
+	my $annotations = $annotationSet->hash;
 	
 	# The name of the overview file should come from here
 	my $overviewFile = $annotations->{overviewDoc};
@@ -211,6 +212,175 @@ sub assemblePDF($$$$) {
 	}
 }
 
+my $TOCFilename = 'toc.latex';
+
+my %COMMANDS = (
+	'file' => 'subsection',
+	'featureType' => undef,
+	'fileType' => undef
+);
+
+my %CVCOMMANDS = (
+	'file' => 'section',
+	'header' => undef
+);
+
+sub printDoc($$;$) {
+	my($O,$text,$command)=@_;
+	
+	my $caption = undef;
+	
+	if(defined($command) && length($command)>0) {
+		my $latex;
+		if(exists($COMMANDS{$command})) {
+			$latex = $COMMANDS{$command};
+		} else {
+			$latex = $command;
+		}
+		$caption=$text  if($command eq 'file');
+		print $O "\\$latex\{",latex_format($text),"\}\n"  if(defined($latex));
+	} else {
+		print $O latex_format($text),"\n\n";
+	}
+	
+	return $caption;
+}
+
+# processInlineCVTable parameters:
+#	CV: a DCC::Model::CV instance
+# it returns a LaTeX formatted table
+sub processInlineCVTable($) {
+	my($CV)=@_;
+	
+	my $output='';
+	
+	# First, the embedded documentation
+	foreach my $documentation (@{$CV->description}) {
+		$output .= latex_format($documentation)."\n";
+	}
+	# TODO: process the annotations
+	
+	$output .= "\n";
+	$output .= '\begin{tabular}{r@{ = }p{0.4\textwidth}}'."\n";
+	#$output .= '\begin{tabular}{r@{ = }l}'."\n";
+	
+	my $CVhash = $CV->CV;
+	foreach my $key (@{$CV->CVorder}) {
+		$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}))."\\\\\n";
+	}
+	$output .= '\end{tabular}'."\n";
+	
+	return $output;
+}
+
+sub processConceptDomain($$$) {
+	my($model,$conceptDomain,$O)=@_;
+	
+	# The title
+	# TODO: consider using encode('latex',...) for the content
+	print $O '\\section{'.$conceptDomain->fullname.'}\\label{fea:'.$conceptDomain->name."}\n";
+	
+	# The additional documentation
+	# The concept domain holds its additional documentation in a subdirectory with
+	# the same name as the concept domain
+	my $domainDocDir = File::Spec->catfile($model->documentationDir,$conceptDomain->name);
+	my $docfile = File::Spec->catfile($domainDocDir,$TOCFilename);
+	
+	if(-f $docfile && -r $docfile){
+		# Full paths, so import instead of subimport
+		print $O "\\import*\{$domainDocDir/\}\{$TOCFilename\}\n";
+	}
+	
+	# Let's iterate over the concepts of this concept domain
+	foreach my $concept (@{$conceptDomain->concepts}) {
+		my $columnSet = $concept->columnSet;
+		
+		# The embedded documentation of each concept
+		my $caption = $concept->fullname;
+		print $O '\\subsection{'.latex_format($caption)."}\n";
+		foreach my $documentation (@{$concept->description}) {
+			printDoc($O,$documentation);
+		}
+		my $annotationSet = $concept->annotations;
+		my $annotations = $annotationSet->hash;
+		foreach my $annotKey (@{$annotationSet->order}) {
+			my $tcap = printDoc($O,$annotations->{$annotKey},$annotKey);
+			$caption = $tcap  if(defined($tcap));
+		}
+		
+		# The table header
+		$caption = latex_format($caption);
+		my $entry = $conceptDomain->name.'_'.$concept->name;
+		print $O "\\topcaption{$caption} \\label{tab:$entry}\n";
+		print $O <<'EOF' ;
+\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline\hline }
+\tablehead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
+\tablelasthead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
+\tabletail{\hline \multicolumn{4}{|r|}{{Continued on next page}} \\ \hline}
+\tablelasttail{\hline \hline}
+
+\begin{center}
+%\begin{tabularx}{\linewidth}{ | l | c | c | X |}
+\begin{xtabular}{|l|c|c|p{0.5\textwidth}|}
+%\hline
+%Name & Type & R/O & Description / Values \\
+%\hline\hline
+EOF
+		
+		# Determining the order of the columns
+		# First, the idref columns
+		my @colorder = @{$columnSet->idColumnNames};
+		
+		# And then, the others
+		my %idcols = map { $_ => undef } @colorder;
+		foreach my $columnName (@{$columnSet->columnNames}) {
+			push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
+		}
+
+		# Now, let's print the documentation of each column
+		foreach my $column (@{$columnSet->columns}{@colorder}) {
+			# Preparing the documentation
+			my $description='';
+			foreach my $documentation (@{$column->description}) {
+				$description = "\n\n" if(length($description)>0);
+				$description .= latex_format($documentation);
+			}
+			
+			# The comment about the values
+			my $values='';
+			if(exists($column->annotations->hash->{values})) {
+				$values = '\\textit{'.latex_format($column->annotations->hash->{values}).'}';
+			}
+			
+			# Now the possible CV
+			my $columnType = $column->columnType;
+			my $restriction = $columnType->restriction;
+			if(ref($restriction) eq 'DCC::Model::CV') {
+				# Is it an anonymous CV?
+				unless(defined($restriction->name)) {
+					$values .= processInlineCVTable($restriction);
+				} else {
+					my $cv = $restriction->name;
+					$values .= "\n".'\textit{(See \hyperref[cv:'.$cv.']{CV Table \ref*{cv:'.$cv.'}})}';
+				}
+			}
+			print $O join(' & ',latex_escape($column->name),'\\texttt{'.latex_escape($columnType->type).'}','\\texttt{'.($columnType->use eq DCC::Model::ColumnType::OPTIONAL?'O':'R').'}',$description."\n\n".$values),'\\\\ \hline',"\n";
+		}
+		# End of the table!
+		print $O <<EOF ;
+\\end{xtabular}
+%\\end{tabularx}
+%\\label{tab:$entry}
+\\end{center}
+EOF
+	}
+}
+
 if(scalar(@ARGV)>=3) {
 	my($modelFile,$templateDocFile,$outfile)=@ARGV;
 	
@@ -231,11 +401,21 @@ if(scalar(@ARGV)>=3) {
 	genSQL($model,$outfile.'.sql');
 	
 	# Generating the document to be included in the template
-	my $bodyFile = File::Temp->new();
+	my $TO = File::Temp->new();
 	
+	print $TO '\chapter{DCC Submission Tabular Formats}\label{ch:tabFormat}',"\n";
+	
+	# Let's iterate over all the concept domains and their concepts
+	foreach my $conceptDomain (@{$model->conceptDomains}) {
+		processConceptDomain($model,$conceptDomain,$TO);
+	}
+
+	print $TO "\\appendix\n";
+	print $TO "\\chapter{Controlled Vocabulary Tables}\n";
+	# TODO
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateDocFile,$model,$bodyFile->filename,$outfile);
+	assemblePDF($templateDocFile,$model,$TO->filename,$outfile);
 } else {
 	print STDERR "This program takes as input the model (in XML), the LaTeX template and the output file\n";
 	exit 1;

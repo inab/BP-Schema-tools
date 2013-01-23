@@ -179,7 +179,9 @@ sub digestModel($) {
 	
 	# Next stop, controlled vocabulary
 	my %cv = ();
+	my @cvArray = ();
 	$self->{CV} = \%cv;
+	$self->{CVARRAY} = \@cvArray;
 	foreach my $cvDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'cv-declarations')) {
 		# Let's setup the path to disk stored CVs
 		my $cvdir = undef;
@@ -205,7 +207,10 @@ sub digestModel($) {
 			my $p_structCV = $self->parseCVElement($cv);
 			
 			# Let's store named CVs here, not anonymous ones
-			$cv{$p_structCV->name}=$p_structCV  if(defined($p_structCV->name));
+			if(defined($p_structCV->name)) {
+				$cv{$p_structCV->name}=$p_structCV;
+				push(@cvArray,$p_structCV);
+			}
 		}
 		
 		last;
@@ -348,12 +353,17 @@ sub parseAnnotations($) {
 	
 	my $container = shift;
 	
-	my %annotations = ();
+	my %annotationHash = ();
+	my @annotationOrder = ();
+	my @annotations = (\%annotationHash,\@annotationOrder);
 	foreach my $annotation ($container->getChildrenByTagNameNS(dccNamespace,'annotation')) {
-		$annotations{$annotation->getAttribute('key')} = $annotation->textContent();
+		unless(exists($annotationHash{$annotation->getAttribute('key')})) {
+			push(@annotationOrder,$annotation->getAttribute('key'));
+		}
+		$annotationHash{$annotation->getAttribute('key')} = $annotation->textContent();
 	}
 	
-	return bless(\%annotations,'DCC::Model::AnnotationSet');
+	return bless(\@annotations,'DCC::Model::AnnotationSet');
 }
 
 # parseCVElement parameters:
@@ -368,9 +378,13 @@ sub parseCVElement($) {
 	my $cv = shift;
 	
 	# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
-	my %cvAnnot = ();
+	my @cvAnnotKeys = ();
+	my %cvAnnotHash = ();
+	my @cvAnnot = (\%cvAnnotHash,\@cvAnnotKeys);
 	my @cvDoc = ();
-	my @structCV=(undef,undef,bless(\%cvAnnot,'DCC::Model::AnnotationSet'),bless(\@cvDoc,'DCC::Model::DescriptionSet'),{});
+	my %cvHash = ();
+	my @cvKeys = ();
+	my @structCV=(undef,undef,bless(\@cvAnnot,'DCC::Model::AnnotationSet'),bless(\@cvDoc,'DCC::Model::DescriptionSet'),\%cvHash,\@cvKeys);
 	
 	$structCV[0] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
@@ -395,7 +409,8 @@ sub parseCVElement($) {
 							if($key eq '') {
 								push(@cvDoc,$value);
 							} else {
-								$cvAnnot{$key}=$value;
+								$cvAnnotHash{$key}=$value;
+								push(@cvAnnotKeys,$key);
 							}
 						} else {
 							next;
@@ -404,7 +419,8 @@ sub parseCVElement($) {
 					
 					chomp($cvline);
 					my($key,$value) = split(/\t/,$cvline,2);
-					$structCV[4]{$key}=$value;
+					$cvHash{$key}=$value;
+					push(@cvKeys,$key);
 				}
 				close($CV);
 			} else {
@@ -784,7 +800,7 @@ sub parseFilenameFormat($) {
 				push(@parts,$annot);
 			} elsif(exists($self->{ANNOTATIONS}{$annot})) {
 				# As annotations are at this point known constants, then check the exact value
-				$pattern .= '(\Q'.$self->{ANNOTATIONS}{$annot}.'\E)';
+				$pattern .= '(\Q'.$self->{ANNOTATIONS}->hash->{$annot}.'\E)';
 				
 				# No additional check
 				push(@parts,undef);
@@ -1020,6 +1036,15 @@ sub documentationDir() {
 	return $self->{_docsDir};
 }
 
+# A reference to an array of DCC::Model::CV instances
+sub namedCVs() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{CVARRAY};
+}
+
 1;
 
 # And now, the helpers for the different pseudo-packages
@@ -1070,7 +1095,14 @@ package DCC::Model::DescriptionSet;
 
 package DCC::Model::AnnotationSet;
 
-# No method yet (it is a pure hash)
+sub hash {
+	return $_[0]->[0];
+}
+
+# The order of the keys (when they are given in a description)
+sub order {
+	return $_[0]->[1];
+}
 
 1;
 
@@ -1098,13 +1130,18 @@ sub annotations {
 
 # An instance of a DCC::Model::DescriptionSet, holding the documentation
 # for this CV
-sub documentation {
+sub description {
 	return $_[0]->[3];
 }
 
 # The hash holding the CV in memory
 sub CV {
 	return $_[0]->[4];
+}
+
+# The order of the CV values (as in the file)
+sub CVorder {
+	return $_[0]->[5];
 }
 
 # With this method a key is validated
