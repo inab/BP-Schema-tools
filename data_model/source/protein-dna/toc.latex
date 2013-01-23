@@ -1,9 +1,0 @@
-\section{Protein-DNA interactions}\label{fea:pdna}
-
-\begin{figure*}[!h]
-\centering
-
-\includegraphics[width=1.0\textwidth]{protein-dna-interaction.pdf}
-\caption{Protein-DNA interactions Sub-Schema}
-\end{figure*}
-
