@@ -229,7 +229,8 @@ my %COMMANDS = (
 
 my %CVCOMMANDS = (
 	'file' => 'section',
-	'header' => undef
+	'header' => undef,
+	'disposition' => undef,
 );
 
 sub printDoc($$;$) {
@@ -353,7 +354,6 @@ EOF
 	my $CVhash = $CV->CV;
 	foreach my $cvKey (@{$CV->order}) {
 		print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
-		print join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
 	}
 	
 	# Table footer
@@ -457,7 +457,7 @@ EOF
 			my $restriction = $columnType->restriction;
 			if(ref($restriction) eq 'DCC::Model::CV') {
 				# Is it an anonymous CV?
-				if(!defined($restriction->name) || (exists($restriction->annotations->hash->{disposition}) && $restriction->annotations->hash->{disposition} eq 'inline')) {
+				if(!defined($restriction->name) || (exists($restriction->annotations->hash->{'disposition'}) && $restriction->annotations->hash->{disposition} eq 'inline')) {
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;

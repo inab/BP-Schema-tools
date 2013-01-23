@@ -378,13 +378,9 @@ sub parseCVElement($) {
 	my $cv = shift;
 	
 	# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
-	my @cvAnnotKeys = ();
-	my %cvAnnotHash = ();
-	my @cvAnnot = (\%cvAnnotHash,\@cvAnnotKeys);
-	my @cvDoc = ();
 	my %cvHash = ();
 	my @cvKeys = ();
-	my @structCV=(undef,undef,bless(\@cvAnnot,'DCC::Model::AnnotationSet'),bless(\@cvDoc,'DCC::Model::DescriptionSet'),\%cvHash,\@cvKeys);
+	my @structCV=(undef,undef,$self->parseAnnotations($cv),$self->parseDescriptions($cv),\%cvHash,\@cvKeys);
 	
 	$structCV[0] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
@@ -392,8 +388,20 @@ sub parseCVElement($) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
 		
 		if($el->localname eq 'e') {
-			$structCV[4]{$el->getAttribute('v')} = $el->textContent();
+			my $key = $el->getAttribute('v');
+			if(exists($cvHash{$key})) {
+				Carp::croak('Repeated key '.$key.' on inline controlled vocabulary');
+			}
+			$cvHash{$key} = $el->textContent();
+			push(@cvKeys,$key);
 		} elsif($el->localname eq 'cv-file') {
+			my @cvAnnotKeys = ();
+			my %cvAnnotHash = ();
+			my @cvAnnot = (\%cvAnnotHash,\@cvAnnotKeys);
+			my @cvDoc = ();
+			$structCV[2] = bless(\@cvAnnot,'DCC::Model::AnnotationSet');
+			$structCV[3] = bless(\@cvDoc,'DCC::Model::DescriptionSet');
+			
 			my $cvPath = $el->textContent();
 			$cvPath  = File::Spec->rel2abs($cvPath,$self->{_cvDir})  unless(File::Spec->file_name_is_absolute($cvPath));
 			
@@ -418,6 +426,9 @@ sub parseCVElement($) {
 						}
 					} else {
 						my($key,$value) = split(/\t/,$cvline,2);
+						if(exists($cvHash{$key})) {
+							Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath);
+						}
 						$cvHash{$key}=$value;
 						push(@cvKeys,$key);
 					}
