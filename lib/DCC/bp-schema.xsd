@@ -27,10 +27,10 @@
     </xs:simpleType>
     
     <!--
-        TODO: complex types are going to be refactored in the near future
-    <xs:simpleType name="complexTypePatternType">
+        TODO: compound types are going to be refactored in the near future
+    <xs:simpleType name="compoundTypePatternType">
         <xs:annotation>
-            <xs:documentation>The complex type pattern pattern, which validates the right patterns</xs:documentation>
+            <xs:documentation>The compound type pattern pattern, which validates the right patterns</xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:minLength value="1" />
@@ -168,9 +168,9 @@
                                             <xs:documentation>Timestamp</xs:documentation>
                                         </xs:annotation>
                                     </xs:enumeration>
-                                    <xs:enumeration value="complex">
+                                    <xs:enumeration value="compound">
                                         <xs:annotation>
-                                            <xs:documentation>A complex type, like a hash or a structure</xs:documentation>
+                                            <xs:documentation>A compound type, like a hash or a structure</xs:documentation>
                                         </xs:annotation>
                                     </xs:enumeration>
                                 </xs:restriction>
@@ -181,21 +181,21 @@
                                 <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="complex-template" use="optional">
+                        <xs:attribute name="compound-template" use="optional">
                             <xs:annotation>
-                                <xs:documentation>When this column holds a complex type, the template of the pieces, separated by the separators.
-                                    For instance, if the complex separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
+                                <xs:documentation>When this column holds a compound type, the template of the pieces, separated by the separators.
+                                    For instance, if the compound separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
                             </xs:annotation>
-                            <!-- Hack to be removed when complex-template is redesigned -->
+                            <!-- Hack to be removed when compound-template is redesigned -->
                             <xs:simpleType>
                                 <xs:restriction base="xs:string">
                                     <xs:minLength value="3" />
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="complex-seps" type="bp:sepsType" use="optional">
+                        <xs:attribute name="compound-seps" type="bp:sepsType" use="optional">
                             <xs:annotation>
-                                <xs:documentation>This attribute must be set when the column is a complex type, it is a string whose characters are separators for the faceted values in the complex type.</xs:documentation>
+                                <xs:documentation>This attribute must be set when the column is a compound type, it is a string whose characters are separators for the faceted values in the compound type.</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
                         <xs:attribute name="cv" type="xs:string" use="optional">

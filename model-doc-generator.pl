@@ -86,7 +86,7 @@ my %ABSTYPE2SQL= (
 	'decimal' => 'DOUBLE',
 	'boolean' => 'BOOL',
 	'timestamp' => 'DATETIME',
-	'complex' => 'VARCHAR(4096)',
+	'compound' => 'VARCHAR(4096)',
 );
 
 # genSQL parameters:
@@ -235,8 +235,6 @@ my %CVCOMMANDS = (
 sub printDoc($$;$) {
 	my($O,$text,$command)=@_;
 	
-	my $caption = undef;
-	
 	if(defined($command) && length($command)>0) {
 		my $latex;
 		if(exists($COMMANDS{$command})) {
@@ -244,13 +242,10 @@ sub printDoc($$;$) {
 		} else {
 			$latex = $command;
 		}
-		$caption=$text  if($command eq 'file');
 		print $O "\\$latex\{",latex_format($text),"\}\n"  if(defined($latex));
 	} else {
 		print $O latex_format($text),"\n\n";
 	}
-	
-	return $caption;
 }
 
 # processInlineCVTable parameters:
@@ -272,7 +267,7 @@ sub processInlineCVTable($) {
 	#$output .= '\begin{tabular}{r@{ = }l}'."\n";
 	
 	my $CVhash = $CV->CV;
-	foreach my $key (@{$CV->CVorder}) {
+	foreach my $key (@{$CV->order}) {
 		$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}))."\\\\\n";
 	}
 	$output .= '\end{tabular}'."\n";
@@ -280,7 +275,100 @@ sub processInlineCVTable($) {
 	return $output;
 }
 
-sub processConceptDomain($$$) {
+# printCVTable parameters:
+#	CV: A named DCC::Model::CV instance (the controlled vocabulary)
+#	O: The output filehandle where the documentation about the
+#		controlled vocabulary is written.
+sub printCVTable($$) {
+	my($CV,$O)=@_;
+	
+	my $cvname = $CV->name;
+	
+	my $annotationSet = $CV->annotations;
+	my $annotations = $annotationSet->hash;
+	
+	# The caption
+	my $caption = undef;
+	if(exists($annotations->{'file'})) {
+		$caption = $annotations->{'file'};
+	} else {
+		$caption = "CV Table $cvname";
+	}
+	print $O "\\section{",latex_escape($caption),"}\n";
+	
+	my @header = ();
+	
+	# The header names used by the LaTeX table
+	if(exists($annotations->{'header'})) {
+		@header = split(/\t/,$annotations->{'header'},2);
+	} else {
+		@header = ('Key','Description');
+	}
+	$header[0] = latex_format($header[0]);
+	$header[1] = latex_format($header[1]);
+	
+	# Printing embedded documentation
+	foreach my $documentation (@{$CV->description}) {
+		print $O latex_format($documentation),"\n";
+	}
+	
+	# And annotations
+	foreach my $annotName (@{$annotationSet->order}) {
+		next  if($annotName eq 'file' || $annotName eq 'header');
+		
+		my $latex = undef;
+		if(exists($CVCOMMANDS{$annotName})) {
+			$latex = $CVCOMMANDS{$annotName};
+		} else {
+			$latex = $annotName;
+		}
+		
+		print $O "\\$latex\{",latex_format($annotations->{$annotName}),"\}\n"  if(defined($latex));
+	}
+
+	# Table header
+	print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
+	print $O <<EOF ;
+\\renewcommand{\\cvKey}{$header[0]}
+\\renewcommand{\\cvDesc}{$header[1]}
+EOF
+
+	print $O <<'EOF' ;
+\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{\cvKey}} &
+                       \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline\hline }
+\tablehead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\tablelasthead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\tabletail{\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline}
+\tablelasttail{\hline \hline}
+
+\begin{center}
+	\begin{xtabular}{|r|p{0.5\textwidth}|}
+%	\hline
+%	Key & Description \\
+%	\hline\hline
+EOF
+	
+	my $CVhash = $CV->CV;
+	foreach my $cvKey (@{$CV->order}) {
+		print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
+		print join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
+	}
+	
+	# Table footer
+	print $O <<EOF ;
+	\\end{xtabular}
+\\end{center}
+%\\end{table}
+EOF
+}
+
+# printConceptDomain parameters:
+#	model: A DCC::Model instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	O: The filehandle where to print the documentation about the concept domain
+sub printConceptDomain($$$) {
 	my($model,$conceptDomain,$O)=@_;
 	
 	# The title
@@ -369,7 +457,7 @@ EOF
 			my $restriction = $columnType->restriction;
 			if(ref($restriction) eq 'DCC::Model::CV') {
 				# Is it an anonymous CV?
-				unless(defined($restriction->name)) {
+				if(!defined($restriction->name) || (exists($restriction->annotations->hash->{disposition}) && $restriction->annotations->hash->{disposition} eq 'inline')) {
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;
@@ -414,12 +502,17 @@ if(scalar(@ARGV)>=3) {
 	
 	# Let's iterate over all the concept domains and their concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
-		processConceptDomain($model,$conceptDomain,$TO);
+		printConceptDomain($model,$conceptDomain,$TO);
 	}
 
 	print $TO "\\appendix\n";
 	print $TO "\\chapter{Controlled Vocabulary Tables}\n";
-	# TODO
+	
+	foreach my $CV (@{$model->namedCVs}) {
+		unless(exists($CV->annotations->hash->{disposition}) && $CV->annotations->hash->{disposition} eq 'inline') {
+			printCVTable($CV,$TO);
+		}
+	}
 	
 	# Now, let's generate the documentation!
 	assemblePDF($templateDocFile,$model,$TO->filename,$outfile);

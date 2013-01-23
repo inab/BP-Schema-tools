@@ -30,7 +30,7 @@ package DCC::Model;
 # DCC::Model::CV
 # DCC::Model::ConceptType
 # DCC::Model::ColumnSet
-# DCC::Model::ComplexType
+# DCC::Model::CompoundType
 # DCC::Model::ColumnType
 # DCC::Model::Column
 # DCC::Model::FilenamePattern
@@ -45,7 +45,7 @@ use constant ItemTypes => {
 	'decimal'	=> qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,
 	'boolean'	=> qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,
 	'timestamp'	=> qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,
-	'complex'	=> undef
+	'compound'	=> undef
 };
 
 use constant FileTypeSymbolPrefixes => {
@@ -400,10 +400,11 @@ sub parseCVElement($) {
 			my $CV;
 			if(open($CV,'<',$cvPath)) {
 				while(my $cvline=<$CV>) {
+					chomp($cvline);
 					if(substr($cvline,0,1) eq '#') {
-						if(substr($cvline,1,2) eq '#') {
-							# Registring the additional documentation
-							chomp($cvline);
+						if(substr($cvline,1,1) eq '#') {
+							# Registering the additional documentation
+							$cvline = substr($cvline,2);
 							my($key,$value) = split(/ /,$cvline,2);
 							
 							if($key eq '') {
@@ -415,12 +416,11 @@ sub parseCVElement($) {
 						} else {
 							next;
 						}
+					} else {
+						my($key,$value) = split(/\t/,$cvline,2);
+						$cvHash{$key}=$value;
+						push(@cvKeys,$key);
 					}
-					
-					chomp($cvline);
-					my($key,$value) = split(/\t/,$cvline,2);
-					$cvHash{$key}=$value;
-					push(@cvKeys,$key);
 				}
 				close($CV);
 			} else {
@@ -662,19 +662,19 @@ sub parseColumn($) {
 		$columnType[1] = ($columnKind eq 'idref')?DCC::Model::ColumnType::IDREF :(($columnKind eq 'required')?DCC::Model::ColumnType::REQUIRED : DCC::Model::ColumnType::OPTIONAL);
 		
 		# Content restrictions (children have precedence over attributes)
-		# First, is it a complex type?
+		# First, is it a compound type?
 		unless(defined($self->{TYPES}{$itemType})) {
-			if($colType->hasAttribute('complex-template') && $colType->hasAttribute('complex-seps')) {
+			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
 				# tokens, separators
-				my $seps = $colType->getAttribute('complex-seps');
-				my @tokenNames = split(/[$seps]/,$colType->getAttribute('complex-template'));
+				my $seps = $colType->getAttribute('compound-seps');
+				my @tokenNames = split(/[$seps]/,$colType->getAttribute('compound-template'));
 				
-				# TODO: refactor complex types
-				# complex separators, token names
-				my @complexDecl = ($seps,\@tokenNames);
-				$columnType[2] = bless(\@complexDecl,'DCC::Model::ComplexType');
+				# TODO: refactor compound types
+				# compound separators, token names
+				my @compoundDecl = ($seps,\@tokenNames);
+				$columnType[2] = bless(\@compoundDecl,'DCC::Model::CompoundType');
 			} else {
-				Carp::croak("Column $column[0] was declared as complex, but some of the needed attributes (complex-template, complex-seps) is not declared");
+				Carp::croak("Column $column[0] was declared as compund, but some of the needed attributes (compound-template, compound-seps) is not declared");
 			}
 		} else {
 			my @cvChildren = $colType->getChildrenByTagNameNS(dccNamespace,'cv');
@@ -1140,7 +1140,7 @@ sub CV {
 }
 
 # The order of the CV values (as in the file)
-sub CVorder {
+sub order {
 	return $_[0]->[5];
 }
 
@@ -1329,8 +1329,8 @@ sub addColumns($;$) {
 1;
 
 
-package DCC::Model::ComplexType;
-# TODO: Complex type refactor in the near future, so work for filename patterns
+package DCC::Model::CompoundType;
+# TODO: Compound type refactor in the near future, so work for filename patterns
 # can be reused
 
 1;
