@@ -110,13 +110,15 @@ sub genSQL($$) {
 				
 				my $gottable=undef;
 				# First, the idref columns
-				my @colorder=@{$columnSet->idColumnNames};
+				my @idcolorder=sort(@{$columnSet->idColumnNames});
+				my @colorder=();
 				
 				# And then, the others
-				my %idcols = map { $_ => undef } @colorder;
+				my %idcols = map { $_ => undef } @idcolorder;
 				foreach my $columnName (@{$columnSet->columnNames}) {
 					push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
 				}
+				@colorder=(@idcolorder,sort(@colorder));
 				
 				foreach my $column (@{$columnSet->columns}{@colorder}) {
 					print $SQL ','  if(defined($gottable));
@@ -429,13 +431,15 @@ EOF
 		
 		# Determining the order of the columns
 		# First, the idref columns
-		my @colorder = @{$columnSet->idColumnNames};
+		my @idcolorder=sort(@{$columnSet->idColumnNames});
+		my @colorder=();
 		
 		# And then, the others
-		my %idcols = map { $_ => undef } @colorder;
+		my %idcols = map { $_ => undef } @idcolorder;
 		foreach my $columnName (@{$columnSet->columnNames}) {
 			push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
 		}
+		@colorder=(@idcolorder,sort(@colorder));
 
 		# Now, let's print the documentation of each column
 		foreach my $column (@{$columnSet->columns}{@colorder}) {
