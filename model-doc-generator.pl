@@ -4,6 +4,7 @@ use strict;
 use Carp;
 use TeX::Encode;
 use Encode;
+use File::Copy;
 use File::Spec;
 use File::Temp;
 
@@ -80,13 +81,21 @@ sub latex_format($) {
 	return latex_escape_internal($paragraph);
 }
 
-my %ABSTYPE2SQL= (
+my %ABSTYPE2SQL = (
 	'string' => 'VARCHAR(4096)',
 	'integer' => 'INTEGER',
 	'decimal' => 'DOUBLE',
 	'boolean' => 'BOOL',
 	'timestamp' => 'DATETIME',
+	'duration' => 'VARCHAR(128)',
 	'compound' => 'VARCHAR(4096)',
+);
+
+my %COLKIND2ABBR = (
+	DCC::Model::ColumnType::IDREF	=>	'I',
+	DCC::Model::ColumnType::REQUIRED	=>	'R',
+	DCC::Model::ColumnType::DESIRABLE	=>	'D',
+	DCC::Model::ColumnType::OPTIONAL	=>	'O'
 );
 
 # genSQL parameters:
@@ -97,6 +106,8 @@ sub genSQL($$) {
 	
 	my $SQL;
 	if(open($SQL,'>:utf8',$outfileSQL)) {
+		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
+		print $SQL '-- '.localtime()."\n";
 		# Let's iterate over all the concept domains and their concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			my $conceptDomainName = $conceptDomain->name;
@@ -185,7 +196,7 @@ sub assemblePDF($$$$) {
 	
 	# Storing the document generation parameters
 	my @params = map { ['ANNOT'.$_,encode('latex',$annotations->{$_})] } keys(%{$annotations});
-	push(@params,['projectName',$model->projectName],['schemaVer',$model->schemaVer]);
+	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
@@ -202,7 +213,7 @@ sub assemblePDF($$$$) {
 		'-interaction=batchmode',
 		'-jobname',$jobName,
 		'-output-directory',$jobDir,
-		join(' ',map { '\def\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$templateFile.'}'
+		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$templateFile.'}'
 	);
 	
 	print STDERR "[DOCGEN] => ",join(' ','pdflatex',@pdflatexParams),"\n";
@@ -222,6 +233,7 @@ sub assemblePDF($$$$) {
 }
 
 my $TOCFilename = 'toc.latex';
+my $NotesFilename = 'notes.latex';
 
 my %COMMANDS = (
 	'file' => 'subsection',
@@ -468,7 +480,7 @@ EOF
 					$values .= "\n".'\textit{(See \hyperref[cv:'.$cv.']{CV Table \ref*{cv:'.$cv.'}})}';
 				}
 			}
-			print $O join(' & ',latex_escape($column->name),'\\texttt{'.latex_escape($columnType->type).'}','\\texttt{'.($columnType->use eq DCC::Model::ColumnType::OPTIONAL?'O':'R').'}',$description."\n\n".$values),'\\\\ \hline',"\n";
+			print $O join(' & ',latex_escape($column->name),'\\texttt{'.latex_escape($columnType->type).'}','\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',$description."\n\n".$values),'\\\\ \hline',"\n";
 		}
 		# End of the table!
 		print $O <<EOF ;
@@ -478,10 +490,18 @@ EOF
 \\end{center}
 EOF
 	}
+	
+	my $notesfile = File::Spec->catfile($domainDocDir,$NotesFilename);
+	
+	if(-f $notesfile && -r $notesfile){
+		# Full paths, so import instead of subimport
+		print $O "\\import*\{$domainDocDir/\}\{$NotesFilename\}\n";
+	}
+	
 }
 
 if(scalar(@ARGV)>=3) {
-	my($modelFile,$templateDocFile,$outfile)=@ARGV;
+	my($modelFile,$templateDocFile,$out)=@ARGV;
 	
 	binmode(STDERR,':utf8');
 	binmode(STDOUT,':utf8');
@@ -496,8 +516,31 @@ if(scalar(@ARGV)>=3) {
 		exit 2;
 	}
 	
+	# In case $out is a directory, then fill-in the other variables
+	my $outfilePDF = undef;
+	my $outfileSQL = undef;
+	my $outfileXML = undef;
+	if(-d $out) {
+		my (undef,undef,undef,$day,$month,$year) = localtime();
+		# Doing numerical adjustments
+		$year += 1900;
+		$month ++;
+		my $thisdate = sprintf("%d%.2d%.2d",$year,$month,$day);
+		
+		my $outfileRoot = File::Spec->catfile($out,join('-',$model->projectName,'data_model',$model->versionString,$thisdate));
+		$outfilePDF = $outfileRoot . '.pdf';
+		$outfileSQL = $outfileRoot . '.sql';
+		$outfileXML = $outfileRoot . '.xml';
+	} else {
+		$outfilePDF = $out;
+		$outfileSQL = $out.'.sql';
+	}
+	
+	# Copying the original XML (if it is reasonable)
+	copy($modelFile,$outfileXML)  if(defined($outfileXML));
+	
 	# Generating the SQL file for BioMart
-	genSQL($model,$outfile.'.sql');
+	genSQL($model,$outfileSQL);
 	
 	# Generating the document to be included in the template
 	my $TO = File::Temp->new();
@@ -519,7 +562,7 @@ if(scalar(@ARGV)>=3) {
 	}
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateDocFile,$model,$TO->filename,$outfile);
+	assemblePDF($templateDocFile,$model,$TO->filename,$outfilePDF);
 } else {
 	print STDERR "This program takes as input the model (in XML), the LaTeX template and the output file\n";
 	exit 1;

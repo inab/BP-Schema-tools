@@ -6,6 +6,7 @@ use Carp;
 use File::Basename;
 use File::Spec;
 use XML::LibXML;
+use Digest::SHA1;
 
 # Early subpackage constant declarations
 package DCC::Model::ColumnType;
@@ -13,7 +14,15 @@ package DCC::Model::ColumnType;
 use constant {
 	IDREF	=>	0,
 	REQUIRED	=>	1,
-	OPTIONAL	=>	-1,
+	DESIRABLE	=>	-1,
+	OPTIONAL	=>	-2
+};
+
+use constant STR2TYPE => {
+	'idref' => IDREF,
+	'required' => REQUIRED,
+	'desirable' => DESIRABLE,
+	'optional' => OPTIONAL
 };
 
 
@@ -45,6 +54,7 @@ use constant ItemTypes => {
 	'decimal'	=> qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,
 	'boolean'	=> qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,
 	'timestamp'	=> qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,
+	'duration'	=> qr/^$/,
 	'compound'	=> undef
 };
 
@@ -95,8 +105,23 @@ sub new($) {
 	
 	# DCC model XML file parsing
 	my $model = undef;
+	my $modelSHA1 = undef;
+	my $SHA = Digest::SHA1->new;
+	my $CVSHA = Digest::SHA1->new;
+	
+	$self->{_SHA}=$SHA;
+	$self->{_CVSHA}=$CVSHA;
 	
 	eval {
+		my $X;
+		# First, let's compute SHA1
+		if(open($X,'<',$modelPath)) {
+			$SHA->addfile($X);
+			$modelSHA1 = $SHA->clone->hexdigest;
+			close($X);
+		} else {
+			Carp::croak("Unable to open model to compute its SHA1");
+		}
 		$model = XML::LibXML->load_xml(location=>$modelPath);
 	};
 	
@@ -104,6 +129,8 @@ sub new($) {
 	if($@) {
 		Carp::croak("Error while parsing model $modelPath: ".$@);
 	}
+	
+	$self->{_modelSHA1} = $modelSHA1;
 	
 	# Schema preparation
 	my $schemaDir = File::Basename::dirname(__FILE__);
@@ -127,6 +154,12 @@ sub new($) {
 	
 	# No error, so, let's process it!!
 	$self->digestModel($model);
+	
+	# Now, we should have SHA1 of full model (model+CVs) and CVs only
+	$self->{_fullmodelSHA1} = $self->{_SHA}->hexdigest;
+	$self->{_cvSHA1} = $self->{_CVSHA}->hexdigest;
+	delete($self->{_SHA});
+	delete($self->{_CVSHA});
 	
 	return $self;
 }
@@ -408,6 +441,8 @@ sub parseCVElement($) {
 			my $CV;
 			if(open($CV,'<',$cvPath)) {
 				while(my $cvline=<$CV>) {
+					$self->{_SHA}->add($cvline);
+					$self->{_CVSHA}->add($cvline);
 					chomp($cvline);
 					if(substr($cvline,0,1) eq '#') {
 						if(substr($cvline,1,1) eq '#') {
@@ -433,6 +468,7 @@ sub parseCVElement($) {
 						push(@cvKeys,$key);
 					}
 				}
+				
 				close($CV);
 			} else {
 				Carp::croak("Unable to open CV file $cvPath");
@@ -669,8 +705,12 @@ sub parseColumn($) {
 		
 		# Column use
 		my $columnKind = $colType->getAttribute('column-kind');
-		# Idref equals 0; required, 1; optional, -1
-		$columnType[1] = ($columnKind eq 'idref')?DCC::Model::ColumnType::IDREF :(($columnKind eq 'required')?DCC::Model::ColumnType::REQUIRED : DCC::Model::ColumnType::OPTIONAL);
+		# Idref equals 0; required, 1; desirable, -1; optional, -2
+		if(exists((DCC::Model::ColumnType::STR2TYPE)->{$columnKind})) {
+			$columnType[1] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
+		} else {
+			Carp::croak("Column $column[0] has a unknown kind: $columnKind");
+		}
 		
 		# Content restrictions (children have precedence over attributes)
 		# First, is it a compound type?
@@ -685,7 +725,7 @@ sub parseColumn($) {
 				my @compoundDecl = ($seps,\@tokenNames);
 				$columnType[2] = bless(\@compoundDecl,'DCC::Model::CompoundType');
 			} else {
-				Carp::croak("Column $column[0] was declared as compund, but some of the needed attributes (compound-template, compound-seps) is not declared");
+				Carp::croak("Column $column[0] was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
 			}
 		} else {
 			my @cvChildren = $colType->getChildrenByTagNameNS(dccNamespace,'cv');
@@ -1029,13 +1069,47 @@ sub projectName() {
 	return $self->{project};
 }
 
-# It returns a schema version
+# It returns a model version
 sub schemaVer() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	return $self->{schemaVer};
+}
+
+# It returns the SHA1 digest of the model
+sub modelSHA1() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_modelSHA1};
+}
+
+sub fullmodelSHA1() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_fullmodelSHA1};
+}
+
+sub CVSHA1() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_cvSHA1};
+}
+
+# It returns schemaVer-modelSHA1
+sub versionString() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{schemaVer}.'-'.$self->{_fullmodelSHA1};
 }
 
 # The base documentation directory

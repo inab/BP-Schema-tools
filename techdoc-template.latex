@@ -17,6 +17,7 @@
 \usepackage{multirow}
 \usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage{forarray}
 
 \usepackage{color}
 \usepackage[usenames,svgnames,table]{xcolor}
@@ -47,17 +48,25 @@
 %\newcommand{\EnsemblVer}{68}
 %\newcommand{\schemaVer}{0.1.5.1}
 
+\newcommand{\DCCdomain}[2]{\hyperref[fea:#1]{#2}}
+
 \begin{document}
 
 \title{\projectName{} proposed data submission schemas \\
-Draft v\schemaVer{}}
+\large Draft v\schemaVer{} \\
+\small\textit{(model SHA1 \modelSHA{})}\\
+\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
 \author{\ANNOTauthor}
 \date{\today}
 \maketitle
+
+\frontmatter
 \tableofcontents
 % Hack used to activate beramono
 \texttt{}
 
+
+\mainmatter
 
 \subimport*{\INCLUDEoverviewdir}{\INCLUDEoverviewname}
 
