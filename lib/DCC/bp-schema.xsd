@@ -61,38 +61,77 @@
         </xs:complexType>
     </xs:element>
     
+    <xs:element name="e">
+        <xs:annotation>
+            <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:simpleContent>
+                <xs:extension base="xs:string">
+                    <xs:attribute name="v" type="xs:string" use="required">
+                        <xs:annotation>
+                            <xs:documentation>The enumerated value which is used</xs:documentation>
+                        </xs:annotation>
+                    </xs:attribute>
+                </xs:extension>
+            </xs:simpleContent>
+        </xs:complexType>
+    </xs:element>
+    
     <!-- First, the reusable complex types -->
     <xs:complexType name="cvType">
         <xs:annotation>
             <xs:documentation>A controlled vocabulary either inline or stored</xs:documentation>
         </xs:annotation>
-        <xs:choice>
-            <xs:element name="cv-file" type="xs:string">
-                <xs:annotation>
-                    <xs:documentation>A tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
-                </xs:annotation>
-            </xs:element>
-            <xs:sequence>
-                <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
-                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
-                <xs:element name="e" minOccurs="1" maxOccurs="unbounded">
+        <xs:sequence>
+            <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
+            <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+            <xs:choice>
+                <xs:element name="cv-file" type="xs:string">
                     <xs:annotation>
-                        <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
+                        <xs:documentation>A local tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
+                    </xs:annotation>
+                </xs:element>
+                <xs:element name="cv-uri">
+                    <xs:annotation>
+                        <xs:documentation>A external controlled vocabulary</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
                         <xs:simpleContent>
-                            <xs:extension base="xs:string">
-                                <xs:attribute name="v" type="xs:string" use="required">
-                                    <xs:annotation>
-                                        <xs:documentation>The enumerated value which is used</xs:documentation>
-                                    </xs:annotation>
+                            <xs:extension base="xs:anyURI">
+                                <xs:attribute name="format" use="required">
+                                    <xs:simpleType>
+                                        <xs:restriction base="xs:string">
+                                            <xs:enumeration value="obo">
+                                                <xs:annotation>
+                                                    <xs:documentation>Open Bioinformatics and Biomedical Ontologies format</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:enumeration>
+                                            <xs:enumeration value="RDF">
+                                                <xs:annotation>
+                                                    <xs:documentation>Resource Description Framework format (used for instance for GO)</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:enumeration>
+                                            <xs:enumeration value="OWL">
+                                                <xs:annotation>
+                                                    <xs:documentation>Web Ontology Language format</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:enumeration>
+                                            <xs:enumeration value="EnsemblMySQLDump">
+                                                <xs:annotation>
+                                                    <xs:documentation>Ensembl MySQL dump with Ensembl Genes or Transcripts identifiers</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:enumeration>
+                                        </xs:restriction>
+                                    </xs:simpleType>
                                 </xs:attribute>
                             </xs:extension>
                         </xs:simpleContent>
                     </xs:complexType>
                 </xs:element>
-            </xs:sequence>
-        </xs:choice>
+                <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
+            </xs:choice>
+        </xs:sequence>
     </xs:complexType>
     
     <xs:complexType name="patternType">
@@ -125,18 +164,25 @@
                         <xs:documentation>The type and restrictions of the column</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
-                        <xs:choice minOccurs="0" maxOccurs="1">
-                            <xs:element name="cv" type="bp:cvType">
+                        <xs:sequence>
+                            <xs:element name="null" minOccurs="0" maxOccurs="unbounded" type="xs:string">
                                 <xs:annotation>
-                                    <xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                                    <xs:documentation>These elements contain the allowed null values for this column</xs:documentation>
                                 </xs:annotation>
                             </xs:element>
-                            <xs:element name="pattern" type="bp:patternType">
-                                <xs:annotation>
-                                    <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
-                                </xs:annotation>
-                            </xs:element>
-                        </xs:choice>
+                            <xs:choice minOccurs="0" maxOccurs="1">
+                                <xs:element name="cv" type="bp:cvType">
+                                    <xs:annotation>
+                                        <xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                                <xs:element name="pattern" type="bp:patternType">
+                                    <xs:annotation>
+                                        <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                            </xs:choice>
+                        </xs:sequence>
                         <xs:attribute name="item-type" use="required">
                             <xs:annotation>
                                 <xs:documentation>The basic type of the values for this column, either in single or in multi-dimensional array mode</xs:documentation>
@@ -244,10 +290,16 @@
                                     the number of separators (i.e. the length of this attribute)</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="default" type="xs:string" use="optional">
+                        <xs:attribute name="default" use="optional">
                             <xs:annotation>
-                                <xs:documentation>If this attribute is set, it is a value recognized as "default" for this column, so it must bypass all the checks</xs:documentation>
+                                <xs:documentation>If this attribute is set, it is a value recognized as "default" for this column. It must fullfil all the checks.
+If if starts as $$, it tells the required or idref column with the value for this when a '#DE#' default value is set</xs:documentation>
                             </xs:annotation>
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:pattern value="($$)?[^$].*"></xs:pattern>
+                                </xs:restriction>
+                            </xs:simpleType>
                         </xs:attribute>
                     </xs:complexType>
                 </xs:element>
@@ -517,6 +569,16 @@
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
+                <xs:element name="null-values">
+                    <xs:annotation>
+                        <xs:documentation>The null values recognized in this model</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
                 <xs:element name="pattern-declarations">
                     <xs:annotation>
                         <xs:documentation>Patterns used either in the schema or on the tabular data modelled by the schema</xs:documentation>
@@ -564,7 +626,7 @@
                     <xs:annotation>
                         <xs:documentation>The format of the filenames for files containing knwoledge from a concept domain.
                             Inside these filenames, when something starts with $ (dollar), it is the name of an
-                            annotation or a context constant (like $$domain or $$concept). $$domain is the concept domain name,
+                            annotation or a context-dependent value (like $$domain or $$concept). $$domain is the concept domain name,
                             and $$concept is the concept name.
                             When something starts with @ (at), it is the name of a previously declared controlled vocabulary.
                             When something starts with \ (backslash), it is the name of a previously declared pattern to validate against.
