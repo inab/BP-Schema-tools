@@ -571,10 +571,11 @@ If if starts as $$, it tells the required or idref column with the value for thi
                 </xs:element>
                 <xs:element name="null-values">
                     <xs:annotation>
-                        <xs:documentation>The null values recognized in this model</xs:documentation>
+                        <xs:documentation>The null values recognized in this model. Annotations can be used to give hints about the null values</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
                         <xs:sequence>
+                            <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                             <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
                         </xs:sequence>
                     </xs:complexType>
