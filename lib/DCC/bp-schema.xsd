@@ -16,6 +16,12 @@
         </xs:restriction>
     </xs:simpleType>
     
+    <xs:simpleType name="aliasType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
     <xs:simpleType name="fileNameType">
         <xs:annotation>
             <xs:documentation>The filename pattern, which validates the right patterns</xs:documentation>
@@ -61,6 +67,22 @@
         </xs:complexType>
     </xs:element>
     
+    <xs:attributeGroup name="vGroup">
+        <xs:attribute name="v" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>The enumerated value which is used</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    
+    <xs:attributeGroup name="nameGroup">
+        <xs:attribute name="name" use="required" type="bp:symbolType">
+            <xs:annotation>
+                <xs:documentation>The symbolic name of the CV, used inside this schema</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    
     <xs:element name="e">
         <xs:annotation>
             <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
@@ -68,11 +90,7 @@
         <xs:complexType>
             <xs:simpleContent>
                 <xs:extension base="xs:string">
-                    <xs:attribute name="v" type="xs:string" use="required">
-                        <xs:annotation>
-                            <xs:documentation>The enumerated value which is used</xs:documentation>
-                        </xs:annotation>
-                    </xs:attribute>
+                    <xs:attributeGroup ref="bp:vGroup" />
                 </xs:extension>
             </xs:simpleContent>
         </xs:complexType>
@@ -92,14 +110,22 @@
                         <xs:documentation>A local tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
                     </xs:annotation>
                 </xs:element>
-                <xs:element name="cv-uri">
+                <xs:element name="cv-uri" minOccurs="1" maxOccurs="unbounded">
                     <xs:annotation>
                         <xs:documentation>A external controlled vocabulary</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
                         <xs:simpleContent>
                             <xs:extension base="xs:anyURI">
-                                <xs:attribute name="format" use="required">
+                                <xs:attribute name="doc" use="optional" type="xs:anyURI">
+                                    <xs:annotation>
+                                        <xs:documentation>Optional online documentation about the controlled vocabulary</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                                <xs:attribute name="format" use="optional">
+                                    <xs:annotation>
+                                        <xs:documentation>The format followed by this controlled vocabulary/ontology</xs:documentation>
+                                    </xs:annotation>
                                     <xs:simpleType>
                                         <xs:restriction base="xs:string">
                                             <xs:enumeration value="obo">
@@ -122,6 +148,11 @@
                                                     <xs:documentation>Ensembl MySQL dump with Ensembl Genes or Transcripts identifiers</xs:documentation>
                                                 </xs:annotation>
                                             </xs:enumeration>
+                                            <xs:enumeration value="ISO_3166-1">
+                                                <xs:annotation>
+                                                    <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
+                                                </xs:annotation>
+                                            </xs:enumeration>
                                         </xs:restriction>
                                     </xs:simpleType>
                                 </xs:attribute>
@@ -131,6 +162,23 @@
                 </xs:element>
                 <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
             </xs:choice>
+            <xs:element name="term-alias" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                    <xs:documentation>An alias for a set of terms of this controlled vocabulary</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element ref="bp:description" minOccurs="0" maxOccurs="1" />
+                        <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
+                    </xs:sequence>
+                    <xs:attribute name="name" use="required" type="bp:aliasType">
+                        <xs:annotation>
+                            <xs:documentation>The symbolic name of this alias inside this CV, used inside this schema, which must not appear in the controlled vocabulary.
+Any alias must have one and only one colon, which separates a "namespace" from the key</xs:documentation>
+                        </xs:annotation>
+                    </xs:attribute>
+                </xs:complexType>
+            </xs:element>
         </xs:sequence>
     </xs:complexType>
     
@@ -536,11 +584,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                 <xs:complexType>
                                     <xs:complexContent>
                                         <xs:extension base="bp:cvType">
-                                            <xs:attribute name="name" use="required" type="bp:symbolType">
-                                                <xs:annotation>
-                                                    <xs:documentation>The symbolic name of the CV, used inside this schema</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:attribute>
+                                            <xs:attributeGroup ref="bp:nameGroup" />
                                         </xs:extension>
                                     </xs:complexContent>
                                 </xs:complexType>
