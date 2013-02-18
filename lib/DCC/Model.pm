@@ -7,9 +7,32 @@ use File::Basename;
 use File::Spec;
 use XML::LibXML;
 use Digest::SHA1;
+use URI;
 
 # Early subpackage constant declarations
+package DCC::Model::Column;
+
+use constant {
+	NAME => 0,
+	DESCRIPTION => 1,
+	ANNOTATIONS => 2,
+	COLUMNTYPE => 3,
+	ISMASKED => 4,
+	RELCONCEPT => 5,
+	RELCOLUMN => 6
+};
+
+
 package DCC::Model::ColumnType;
+
+use constant {
+	TYPE	=>	0,
+	USE	=>	1,
+	RESTRICTION	=>	2,
+	DEFAULT	=>	3,
+	ARRAYSEPS	=>	4,
+	ALLOWEDNULLS	=>	5
+};
 
 use constant {
 	IDREF	=>	0,
@@ -25,6 +48,27 @@ use constant STR2TYPE => {
 	'optional' => OPTIONAL
 };
 
+package DCC::Model::CV;
+
+# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
+use constant {
+	CVNAME	=>	0,
+	CVKIND	=>	1,
+	CVURI	=>	2,
+	CVANNOT	=>	3,
+	CVDESC	=>	4,
+	CVHASH	=>	5,
+	CVKEYS	=>	6,
+	CVALHASH	=>	7,
+	CVALKEYS	=>	8,
+};
+
+use constant {
+	INLINE	=>	'inline',
+	NULLVALUES	=>	'null-values',
+	CVFORMAT	=>	'cvformat',
+	URIFETCHED	=>	'uris',
+};
 
 # Main package
 package DCC::Model;
@@ -48,14 +92,20 @@ package DCC::Model;
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
+# The pattern matching the contents for this type, and whether it is not a numeric type or yes
+use constant {
+	TYPEPATTERN	=>	0,
+	ISNOTNUMERIC	=>	1
+};
+
 use constant ItemTypes => {
-	'string'	=> 1,	# With this we avoid costly checks
-	'integer'	=> qr/^0|(?:-?[1-9][0-9]*)$/,
-	'decimal'	=> qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,
-	'boolean'	=> qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,
-	'timestamp'	=> qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,
-	'duration'	=> qr/^$/,
-	'compound'	=> undef
+	'string'	=> [1,1],	# With this we avoid costly checks
+	'integer'	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef],
+	'decimal'	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef],
+	'boolean'	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1],
+	'timestamp'	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1],
+	'duration'	=> [qr/^$/,1],
+	'compound'	=> [undef,1]
 };
 
 use constant FileTypeSymbolPrefixes => {
@@ -249,6 +299,14 @@ sub digestModel($) {
 		last;
 	}
 	
+	foreach my $nullDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'null-values')) {
+		my $p_nullCV = $self->parseCVElement($nullDecl);
+		
+		# Let's store the controlled vocabulary for nulls
+		# as a DCC::Model::CV
+		$self->{NULLCV} = $p_nullCV;
+	}
+	
 	# A safeguard for this parameter
 	$self->{_cvDir} = $self->{_modelDir}  unless(exists($self->{_cvDir}));
 	
@@ -401,8 +459,10 @@ sub parseAnnotations($) {
 
 # parseCVElement parameters:
 #	cv: a XML::LibXML::Element 'dcc:cv' node
-# returns a DCC:CV array reference, with all the controlled vocabulary
-# stored inside. If the CV is in an external file, this method reads it
+# returns a DCC::Model::CV array reference, with all the controlled vocabulary
+# stored inside.
+# If the CV is in an external file, this method reads it.
+# If the CV is in an external URI, this method only checks whether it is available
 sub parseCVElement($) {
 	my $self = shift;
 	
@@ -410,33 +470,53 @@ sub parseCVElement($) {
 	
 	my $cv = shift;
 	
-	# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
+	# The CV symbolic name, the CV type, the CV filename, the annotations, the documentation paragraphs, the CV (hash and array), and aliases
+	my $cvAnnot = $self->parseAnnotations($cv);
+	my $cvDesc = $self->parseDescriptions($cv);
+	my @structCV=(undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,{},[]);
+	
+	$structCV[DCC::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
+	
 	my %cvHash = ();
 	my @cvKeys = ();
-	my @structCV=(undef,undef,$self->parseAnnotations($cv),$self->parseDescriptions($cv),\%cvHash,\@cvKeys);
-	
-	$structCV[0] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
-	
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
 		
 		if($el->localname eq 'e') {
+			unless(defined($structCV[DCC::Model::CV::CVHASH])) {
+				$structCV[DCC::Model::CV::CVHASH] = \%cvHash;
+				$structCV[DCC::Model::CV::CVKEYS] = \@cvKeys;
+				$structCV[DCC::Model::CV::CVKIND] = ($cv->localname eq DCC::Model::CV::NULLVALUES) ? DCC::Model::CV::NULLVALUES : DCC::Model::CV::INLINE;
+			}
 			my $key = $el->getAttribute('v');
 			if(exists($cvHash{$key})) {
-				Carp::croak('Repeated key '.$key.' on inline controlled vocabulary');
+				Carp::croak('Repeated key '.$key.' on inline controlled vocabulary'.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
 			}
 			$cvHash{$key} = $el->textContent();
 			push(@cvKeys,$key);
-		} elsif($el->localname eq 'cv-file') {
-			my @cvAnnotKeys = ();
-			my %cvAnnotHash = ();
-			my @cvAnnot = (\%cvAnnotHash,\@cvAnnotKeys);
-			my @cvDoc = ();
-			$structCV[2] = bless(\@cvAnnot,'DCC::Model::AnnotationSet');
-			$structCV[3] = bless(\@cvDoc,'DCC::Model::DescriptionSet');
+		} elsif($el->localname eq 'cv-uri') {
+			unless(defined($structCV[DCC::Model::CV::CVKIND])) {
+				$structCV[DCC::Model::CV::CVKIND] = DCC::Model::CV::URIFETCHED;
+				$structCV[DCC::Model::CV::CVURI] = [];
+			}
 			
+			# Although it is not going to be materialized here (at least, not yet)
+			# let's check whether it is a valid cv-uri
+			my $cvURI = $el->textContent();
+			
+			# TODO: validate URI
+			my @externalCV = (URI->new($cvURI),$el->getAttribute('format'),$el->hasAttribute('doc')?URI->new($el->getAttribute('doc')):undef);
+			push(@{$structCV[DCC::Model::CV::CVURI]},bless(\@externalCV,'DCC::Model::CV::External'));
+			
+			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
+		} elsif($el->localname eq 'cv-file') {
 			my $cvPath = $el->textContent();
 			$cvPath  = File::Spec->rel2abs($cvPath,$self->{_cvDir})  unless(File::Spec->file_name_is_absolute($cvPath));
+			
+			$structCV[DCC::Model::CV::CVKIND] = DCC::Model::CV::CVFORMAT;
+			$structCV[DCC::Model::CV::CVURI] = $cvPath;
+			$structCV[DCC::Model::CV::CVHASH] = \%cvHash;
+			$structCV[DCC::Model::CV::CVKEYS] = \@cvKeys;
 			
 			my $CV;
 			if(open($CV,'<',$cvPath)) {
@@ -450,11 +530,11 @@ sub parseCVElement($) {
 							$cvline = substr($cvline,2);
 							my($key,$value) = split(/ /,$cvline,2);
 							
+							# Adding embedded documentation and annotations
 							if($key eq '') {
-								push(@cvDoc,$value);
+								$cvDesc->addDescription($value);
 							} else {
-								$cvAnnotHash{$key}=$value;
-								push(@cvAnnotKeys,$key);
+								$cvAnnot->addAnnotation($key,$value);
 							}
 						} else {
 							next;
@@ -462,7 +542,7 @@ sub parseCVElement($) {
 					} else {
 						my($key,$value) = split(/\t/,$cvline,2);
 						if(exists($cvHash{$key})) {
-							Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath);
+							Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
 						}
 						$cvHash{$key}=$value;
 						push(@cvKeys,$key);
@@ -473,6 +553,15 @@ sub parseCVElement($) {
 			} else {
 				Carp::croak("Unable to open CV file $cvPath");
 			}
+		} elsif($el->localname eq 'term-alias') {
+			my $alias = $self->parseCVElement($el);
+			my $key = $alias->name;
+			if(exists($structCV[DCC::Model::CV::CVALHASH]->{$key})) {
+				Carp::croak('Repeated term alias '.$key.' on controlled vocabulary'.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
+			}
+			
+			$structCV[DCC::Model::CV::CVALHASH]->{$key} = $alias;
+			push(@{$structCV[DCC::Model::CV::CVALKEYS]},$key);
 		}
 	}
 	
@@ -643,6 +732,7 @@ sub parseColumnSet($$) {
 	# Hash of DCC::Model::Column instances
 	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
 	
+	my @checkDefault = ();
 	foreach my $colDecl ($container->childNodes()) {
 		next  unless($colDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $colDecl->localname() eq 'column');
 		
@@ -660,6 +750,22 @@ sub parseColumnSet($$) {
 		}
 		
 		$columnDecl{$column->name}=$column;
+		push(@checkDefault,$column)  if(defined($column->columnType->default) && ref($column->columnType->default));
+	}
+	
+	# And now, second pass, where we check the consistency of default values
+	foreach my $column (@checkDefault) {
+		if(exists($columnDecl{${$column->columnType->default}})) {
+			my $defColumn = $columnDecl{${$column->columnType->default}};
+			
+			if($defColumn->columnType->use >= DCC::Model::ColumnType::IDREF) {
+				$column->columnType->setDefault($defColumn);
+			} else {
+				Carp::croak('Column '.$column->name.' pretends to use as default value generator column '.${$column->columnType->default}.' which is not neither idref nor required!');
+			}
+		} else {
+			Carp::croak('Column '.$column->name.' pretends to use as default value generator unknown column '.${$column->columnType->default});
+		}
 	}
 	
 	return bless(\@columnSet,'DCC::Model::ColumnSet');
@@ -682,7 +788,9 @@ sub parseColumn($) {
 	# content restrictions
 	# default value
 	# array separators
-	my @columnType = (undef,undef,undef,undef,undef);
+	# null values
+	my @nullValues = ();
+	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
 	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
 	my @column = (
 		$colDecl->getAttribute('name'),
@@ -699,22 +807,22 @@ sub parseColumn($) {
 		#First, the item type
 		my $itemType = $colType->getAttribute('item-type');
 		
-		Carp::croak("unknown type '$itemType' for column $column[0]")  unless(exists($self->{TYPES}{$itemType}));
+		Carp::croak("unknown type '$itemType' for column $column[DCC::Model::Column::NAME]")  unless(exists($self->{TYPES}{$itemType}));
 		
-		$columnType[0] = $itemType;
+		$columnType[DCC::Model::ColumnType::TYPE] = $itemType;
 		
 		# Column use
 		my $columnKind = $colType->getAttribute('column-kind');
 		# Idref equals 0; required, 1; desirable, -1; optional, -2
 		if(exists((DCC::Model::ColumnType::STR2TYPE)->{$columnKind})) {
-			$columnType[1] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
+			$columnType[DCC::Model::ColumnType::USE] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
 		} else {
-			Carp::croak("Column $column[0] has a unknown kind: $columnKind");
+			Carp::croak("Column $column[DCC::Model::Column::NAME] has a unknown kind: $columnKind");
 		}
 		
 		# Content restrictions (children have precedence over attributes)
 		# First, is it a compound type?
-		unless(defined($self->{TYPES}{$itemType})) {
+		unless(defined($self->{TYPES}{$itemType}[DCC::Model::TYPEPATTERN])) {
 			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
 				# tokens, separators
 				my $seps = $colType->getAttribute('compound-seps');
@@ -723,39 +831,53 @@ sub parseColumn($) {
 				# TODO: refactor compound types
 				# compound separators, token names
 				my @compoundDecl = ($seps,\@tokenNames);
-				$columnType[2] = bless(\@compoundDecl,'DCC::Model::CompoundType');
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = bless(\@compoundDecl,'DCC::Model::CompoundType');
 			} else {
-				Carp::croak("Column $column[0] was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
+				Carp::croak("Column $column[DCC::Model::Column::NAME] was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
 			}
 		} else {
+			# Let's save allowed null values
+			foreach my $null ($colType->getChildrenByTagNameNS(dccNamespace,'null')) {
+				my $val = $null->textContent();
+				
+				if($self->{NULLCV}->isValid($val)) {
+					# Let's save the default value
+					push(@nullValues,$val);
+				} else {
+					Carp::croak("Column $column[DCC::Model::Column::NAME] uses an unknown default value: $val");
+				}
+			}
+			
 			my @cvChildren = $colType->getChildrenByTagNameNS(dccNamespace,'cv');
 			my @patChildren = $colType->getChildrenByTagNameNS(dccNamespace,'pattern');
 			if(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
 				if(scalar(@cvChildren)>0) {
-					$columnType[2] = $self->parseCVElement($cvChildren[0]);
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $self->parseCVElement($cvChildren[0]);
 				} elsif(exists($self->{CV}{$colType->getAttribute('cv')})) {
-					$columnType[2] = $self->{CV}{$colType->getAttribute('cv')};
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $self->{CV}{$colType->getAttribute('cv')};
 				} else {
-					Carp::croak("Column $column[0] tried to use undeclared CV ".$colType->getAttribute('cv'));
+					Carp::croak("Column $column[DCC::Model::Column::NAME] tried to use undeclared CV ".$colType->getAttribute('cv'));
 				}
 			} elsif(scalar(@patChildren)>0) {
-				$columnType[2] = __parse_pattern($patChildren[0]);
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = __parse_pattern($patChildren[0]);
 			} elsif($colType->hasAttribute('pattern')) {
 				if(exists($self->{PATTERNS}{$colType->getAttribute('pattern')})) {
-					$columnType[2] = $self->{PATTERNS}{$colType->getAttribute('pattern')};
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $self->{PATTERNS}{$colType->getAttribute('pattern')};
 				} else {
-					Carp::croak("Column $column[0] tried to use undeclared pattern ".$colType->getAttribute('pattern'));
+					Carp::croak("Column $column[DCC::Model::Column::NAME] tried to use undeclared pattern ".$colType->getAttribute('pattern'));
 				}
 			} else {
-				$columnType[2] = undef;
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
 			}
 		}
 		
 		# Default value
-		$columnType[3] = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
+		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
+		# Default values must be rechecked once all the columns are available
+		$columnType[DCC::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
 		
 		# Array separators
-		$columnType[4] = ($colType->hasAttribute('array-seps') && length($colType->hasAttribute('array-seps')) > 0)?$colType->getAttribute('array-seps'):undef;
+		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = ($colType->hasAttribute('array-seps') && length($colType->hasAttribute('array-seps')) > 0)?$colType->getAttribute('array-seps'):undef;
 		
 		last;
 	}
@@ -819,7 +941,7 @@ sub parseFilenameFormat($) {
 			}
 		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Type') {
 			if(exists($self->{TYPES}{$2})) {
-				my $type = $self->{TYPES}{$2};
+				my $type = $self->{TYPES}{$2}[DCC::Model::TYPEPATTERN];
 				if(defined($type)) {
 					$pattern .= '('.((ref($type) eq 'Pattern')?$type:'.+').')';
 					
@@ -1005,6 +1127,7 @@ sub parseConcept($$;$) {
 		$self->parseDescriptions($conceptDecl),
 		$self->parseAnnotations($conceptDecl),
 		$columnSet,
+		$parentConcept,
 		\@related,
 	);
 	
@@ -1130,6 +1253,23 @@ sub namedCVs() {
 	return $self->{CVARRAY};
 }
 
+# A reference to a DCC::Model::CV instance, for the valid null values for this model
+sub nullCV() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{NULLCV};
+}
+
+sub types() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{TYPES};
+}
+
 1;
 
 # And now, the helpers for the different pseudo-packages
@@ -1175,6 +1315,16 @@ package DCC::Model::DescriptionSet;
 
 # No method yet (it is a pure array)
 
+# This method adds a new annotation to the annotation set
+sub addDescription($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	my $desc = shift;
+
+	push(@{$self},$desc);
+}
+
 1;
 
 
@@ -1189,6 +1339,39 @@ sub order {
 	return $_[0]->[1];
 }
 
+# This method adds a new annotation to the annotation set
+sub addAnnotation($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	my $key = shift;
+	my $value = shift;
+	
+	my $hash = $self->hash;
+	push(@{$self->order},$key)  unless(exists($hash->{$key}));
+	$hash->{$key} = $value;
+}
+
+1;
+
+
+package DCC::Model::CV::External;
+
+# It returns a URI object, pointing to the fetchable controlled vocabulary
+sub uri {
+	return $_[0]->[0];
+}
+
+# It describes the format, so validators know how to handle it
+sub format {
+	return $_[0]->[1];
+}
+
+# It returns a URI object, pointing to the documentation about the CV
+sub docURI {
+	return $_[0]->[2];
+}
+
 1;
 
 
@@ -1199,37 +1382,64 @@ package DCC::Model::CV;
 
 # The name of this CV (optional)
 sub name {
-	return $_[0]->[0];
+	return $_[0]->[DCC::Model::CV::CVNAME];
 }
 
-# Filename holding this values (optional)
+# The kind of CV
+sub kind {
+	return $_[0]->[DCC::Model::CV::CVKIND];
+}
+
+# Filename or URI holding these values (optional)
 sub filename {
-	return $_[0]->[1];
+	return $_[0]->[DCC::Model::CV::CVURI];
 }
 
 # An instance of a DCC::Model::AnnotationSet, holding the annotations
 # for this CV
 sub annotations {
-	return $_[0]->[2];
+	return $_[0]->[DCC::Model::CV::CVANNOT];
 }
 
 # An instance of a DCC::Model::DescriptionSet, holding the documentation
 # for this CV
 sub description {
-	return $_[0]->[3];
+	return $_[0]->[DCC::Model::CV::CVDESC];
 }
 
 # The hash holding the CV in memory
 sub CV {
-	return $_[0]->[4];
+	return $_[0]->[DCC::Model::CV::CVHASH];
 }
 
 # The order of the CV values (as in the file)
 sub order {
-	return $_[0]->[5];
+	return $_[0]->[DCC::Model::CV::CVKEYS];
+}
+
+# The hash holding the aliases in memory
+sub alias {
+	return $_[0]->[DCC::Model::CV::CVALHASH];
+}
+
+# The order of the alias values (as in the file)
+sub aliasOrder {
+	return $_[0]->[DCC::Model::CV::CVALKEYS];
+}
+
+# With this method we check the locality of the CV
+sub isLocal() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $cvkey = shift;
+	
+	return defined($self->CV);
 }
 
 # With this method a key is validated
+# TODO: fetch on demand the CV is it is not materialized
 sub isValid($) {
 	my $self = shift;
 	
@@ -1425,28 +1635,43 @@ package DCC::Model::ColumnType;
 
 # Item type
 sub type {
-	return $_[0]->[0];
+	return $_[0]->[DCC::Model::ColumnType::TYPE];
 }
 
 # column use (idref, required, optional)
 # Idref equals 0; required, 1; optional, -1
 sub use {
-	return $_[0]->[1];
+	return $_[0]->[DCC::Model::ColumnType::USE];
 }
 
 # content restrictions
 sub restriction {
-	return $_[0]->[2];
+	return $_[0]->[DCC::Model::ColumnType::RESTRICTION];
 }
 
 # default value
 sub default {
-	return $_[0]->[3];
+	return $_[0]->[DCC::Model::ColumnType::DEFAULT];
 }
 
 # array separators
 sub arraySeps {
-	return $_[0]->[4];
+	return $_[0]->[DCC::Model::ColumnType::ARRAYSEPS];
+}
+
+# An array of allowed null values
+sub allowedNulls {
+	return $_[0]->[DCC::Model::ColumnType::ALLOWEDNULLS];
+}
+
+sub setDefault($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $val = shift;
+	
+	$self->[DCC::Model::ColumnType::DEFAULT] = $val;
 }
 
 1;
@@ -1454,47 +1679,37 @@ sub arraySeps {
 
 package DCC::Model::Column;
 
-use constant {
-	NAME => 0,
-	DESCRIPTION => 1,
-	ANNOTATIONS => 2,
-	COLUMNTYPE => 3,
-	ISMASKED => 4,
-	RELCONCEPT => 5,
-	RELCOLUMN => 6
-};
-
 # The column name
 sub name {
-	return $_[0]->[NAME];
+	return $_[0]->[DCC::Model::Column::NAME];
 }
 
 # The description, a DCC::Model::DescriptionSet instance
 sub description {
-	return $_[0]->[DESCRIPTION];
+	return $_[0]->[DCC::Model::Column::DESCRIPTION];
 }
 
 # Annotations, a DCC::Model::AnnotationSet instance
 sub annotations {
-	return $_[0]->[ANNOTATIONS];
+	return $_[0]->[DCC::Model::Column::ANNOTATIONS];
 }
 
 # It returns a DCC::Model::ColumnType instance
 sub columnType {
-	return $_[0]->[COLUMNTYPE];
+	return $_[0]->[DCC::Model::Column::COLUMNTYPE];
 }
 
 # If this column is masked (because it is a inherited idref on a concept hosted in a hash)
 # it will return true, otherwise undef
 sub isMasked {
-	return $_[0]->[ISMASKED];
+	return $_[0]->[DCC::Model::Column::ISMASKED];
 }
 
 # If this column is part of a foreign key pointing
 # to a concept, this method will return a DCC::Model::Concept instance
 # Otherwise, it will return undef
 sub relatedConcept {
-	return $_[0]->[RELCONCEPT];
+	return $_[0]->[DCC::Model::Column::RELCONCEPT];
 }
 
 # If this column is part of a foreign key pointing
@@ -1502,7 +1717,7 @@ sub relatedConcept {
 # which correlates to
 # Otherwise, it will return undef
 sub relatedColumn {
-	return $_[0]->[RELCOLUMN];
+	return $_[0]->[DCC::Model::Column::RELCOLUMN];
 }
 
 # clone parameters:
@@ -1519,7 +1734,7 @@ sub clone(;$) {
 	# Cloning this object
 	my $retval = bless(\@{$self},ref($self));
 	
-	$retval->[ISMASKED] = ($doMask)?1:undef;
+	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
 	
 	return $retval;
 }
@@ -1541,12 +1756,12 @@ sub cloneRelated($;$) {
 	my $retval = $self->clone();
 	
 	# Adding the prefix
-	$retval->[NAME] = $prefix.$retval->[NAME]  if(defined($prefix) && length($prefix)>0);
+	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
 	
 	# And adding the relation info
 	# to this column
-	$retval->[RELCONCEPT] = $relatedConcept;
-	$retval->[RELCOLUMN] = $self;
+	$retval->[DCC::Model::Column::RELCONCEPT] = $relatedConcept;
+	$retval->[DCC::Model::Column::RELCOLUMN] = $self;
 	
 	return $retval;
 }
@@ -1734,9 +1949,14 @@ sub columnSet {
 	return $_[0]->[6];
 }
 
+# A DCC::Model::Concept instance, which represents the parent of this concept
+sub parentConcept {
+	return $_[0]->[7];
+}
+
 # related conceptNames, an array of trios concept domain name, concept name, prefix
 sub relatedConceptNames {
-	return $_[0]->[7];
+	return $_[0]->[8];
 }
 
 # refColumns parameters:
