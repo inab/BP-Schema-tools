@@ -31,7 +31,10 @@
 
 %\usepackage{transparent}
 
+\usepackage{pbox}
 
+\usepackage{chngcntr}
+\counterwithin{table}{section}
 
 \hypersetup{
 	colorlinks=true,
@@ -62,6 +65,8 @@
 
 \frontmatter
 \tableofcontents
+\listoffigures
+\listoftables
 % Hack used to activate beramono
 \texttt{}
 

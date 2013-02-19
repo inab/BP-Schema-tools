@@ -825,12 +825,23 @@ sub parseColumn($) {
 		unless(defined($self->{TYPES}{$itemType}[DCC::Model::TYPEPATTERN])) {
 			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
 				# tokens, separators
+				my $template = $colType->getAttribute('compound-template');
 				my $seps = $colType->getAttribute('compound-seps');
-				my @tokenNames = split(/[$seps]/,$colType->getAttribute('compound-template'));
+				
+				my %sepVal = ();
+				foreach my $sep (split(//,$seps)) {
+					if(exists($sepVal{$sep})) {
+						Carp::croak("Column $column[DCC::Model::Column::NAME] has repeated the compound separator $sep!")
+					}
+					
+					$sepVal{$sep}=undef;
+				}
+				
+				my @tokenNames = split(/[$seps]/,$template);
 				
 				# TODO: refactor compound types
 				# compound separators, token names
-				my @compoundDecl = ($seps,\@tokenNames);
+				my @compoundDecl = ($template,$seps,\@tokenNames);
 				$columnType[DCC::Model::ColumnType::RESTRICTION] = bless(\@compoundDecl,'DCC::Model::CompoundType');
 			} else {
 				Carp::croak("Column $column[DCC::Model::Column::NAME] was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
@@ -877,7 +888,21 @@ sub parseColumn($) {
 		$columnType[DCC::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
 		
 		# Array separators
-		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = ($colType->hasAttribute('array-seps') && length($colType->hasAttribute('array-seps')) > 0)?$colType->getAttribute('array-seps'):undef;
+		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = undef;
+		if($colType->hasAttribute('array-seps')) {
+			my $arraySeps = $colType->getAttribute('array-seps');
+			if(length($arraySeps) > 0) {
+				my %sepVal = ();
+				foreach my $sep (split(//,$arraySeps)) {
+					if(exists($sepVal{$sep})) {
+						Carp::croak("Column $column[DCC::Model::Column::NAME] has repeated the array separator $sep!")
+					}
+					
+					$sepVal{$sep}=undef;
+				}
+				$columnType[DCC::Model::ColumnType::ARRAYSEPS] = $arraySeps;
+			}
+		}
 		
 		last;
 	}
@@ -1417,7 +1442,7 @@ sub order {
 	return $_[0]->[DCC::Model::CV::CVKEYS];
 }
 
-# The hash holding the aliases in memory
+# The hash holding the aliases (DCC::Model::CV instances) in memory
 sub alias {
 	return $_[0]->[DCC::Model::CV::CVALHASH];
 }
@@ -1627,6 +1652,18 @@ sub addColumns($;$) {
 package DCC::Model::CompoundType;
 # TODO: Compound type refactor in the near future, so work for filename patterns
 # can be reused
+
+sub template {
+	return $_[0]->[0];
+}
+
+sub seps {
+	return $_[0]->[1];
+}
+
+sub tokens {
+	return $_[0]->[2];
+}
 
 1;
 

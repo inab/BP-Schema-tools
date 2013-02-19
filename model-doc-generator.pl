@@ -1,5 +1,11 @@
 #!/usr/bin/perl -W
 
+# TODO:
+#	CV uri
+#	Column listing reordering (based on annotations)
+#	Document allowed null values
+#	Document column name used to fetch values
+
 use strict;
 use Carp;
 use TeX::Encode;
@@ -109,6 +115,7 @@ sub genSQL($$) {
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		# Let's iterate over all the concept domains and their concepts
+		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			my $conceptDomainName = $conceptDomain->name;
 			foreach my $concept (@{$conceptDomain->concepts}) {
@@ -138,11 +145,29 @@ sub genSQL($$) {
 					my $type = $ABSTYPE2SQL{$columnType->type};
 					print $SQL "\n\t",$column->name,' ',$type;
 					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
-					print $SQL ' DEFAULT ',$columnType->default  if(defined($columnType->default));
+					if(defined($columnType->default) && ref($columnType->default) eq '') {
+						my $default = $columnType->default;
+						$default = "'$default'"  if($p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC]);
+						print $SQL ' DEFAULT ',$default;
+					}
 					$gottable = 1;
 				}
 				
 				print $SQL "\n);\n\n";
+			}
+			
+			# And now, the restrictions
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				my $basename = $conceptDomainName.'_'.$concept->name;
+				if(defined($concept->parentConcept)) {
+					my $parentConcept = $concept->parentConcept;
+					my $refColnames = $parentConcept->columnSet->idColumnNames;
+					my $parentBasename = $conceptDomainName.'_'.$parentConcept->name;
+					
+					print $SQL "\n-- ",$concept->fullname, " foreign keys";
+					print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',@{$refColnames}),")";
+					print $SQL "\nREFERENCES $parentBasename(".join(',',@{$refColnames}).");\n";
+				}
 			}
 		}
 		
@@ -245,6 +270,7 @@ my %CVCOMMANDS = (
 	'file' => 'section',
 	'header' => undef,
 	'disposition' => undef,
+	'version' => undef,
 );
 
 sub printDoc($$;$) {
@@ -278,14 +304,41 @@ sub processInlineCVTable($) {
 	# TODO: process the annotations
 	
 	$output .= "\n";
-	$output .= '\begin{tabular}{r@{ = }p{0.4\textwidth}}'."\n";
-	#$output .= '\begin{tabular}{r@{ = }l}'."\n";
-	
-	my $CVhash = $CV->CV;
-	foreach my $key (@{$CV->order}) {
-		$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}))."\\\\\n";
+	if($CV->isLocal) {
+		$output .= '\begin{tabular}{r@{ = }p{0.4\textwidth}}'."\n";
+		#$output .= '\begin{tabular}{r@{ = }l}'."\n";
+
+		my $CVhash = $CV->CV;
+		foreach my $key (@{$CV->order}) {
+			$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}))."\\\\\n";
+		}
+		$output .= '\end{tabular}';
+	} else {
+		# Is it an external CV
+		$output .= '\textit{(See ';
+		
+		my @extCVs = @{$CV->filename};
+		my $extpos = 1;
+		foreach my $extCV (@extCVs) {
+			if($extpos > 1) {
+				$output .= ($extpos == scalar(@extCVs))?' and ':', ';
+			}
+			my $uri = $extCV->uri;
+			my $docURI = $extCV->docURI;
+			my $cvuri = undef;
+			# Do we have external documentation?
+			if(defined($docURI)) {
+				$cvuri = $docURI->as_string;
+			} else {
+				$cvuri = $uri->as_string;
+			}
+			
+			$output .= '\url{'.$cvuri.'}';
+			$extpos++;
+		}
+		$output .= ')}';
 	}
-	$output .= '\end{tabular}'."\n";
+	$output .= "\n";
 	
 	return $output;
 }
@@ -309,7 +362,7 @@ sub printCVTable($$) {
 	} else {
 		$caption = "CV Table $cvname";
 	}
-	print $O "\\section{",latex_escape($caption),"}\n";
+	print $O "\\section{",latex_escape($caption),"} \\label{cvsec:$cvname}\n";
 	
 	my @header = ();
 	
@@ -342,13 +395,14 @@ sub printCVTable($$) {
 	}
 
 	# Table header
-	print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
 	print $O <<EOF ;
 \\renewcommand{\\cvKey}{$header[0]}
 \\renewcommand{\\cvDesc}{$header[1]}
 EOF
 
-	print $O <<'EOF' ;
+	if($CV->isLocal) {
+		print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
+		print $O <<'EOF' ;
 \tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{\cvKey}} &
                        \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline\hline }
 \tablehead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
@@ -365,17 +419,89 @@ EOF
 %	\hline\hline
 EOF
 	
-	my $CVhash = $CV->CV;
-	foreach my $cvKey (@{$CV->order}) {
-		print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
-	}
-	
-	# Table footer
-	print $O <<EOF ;
-	\\end{xtabular}
+		my $CVhash = $CV->CV;
+		foreach my $cvKey (@{$CV->order}) {
+			print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
+		}
+		
+		# Table footer
+		print $O <<EOF ;
+		\\end{xtabular}
 \\end{center}
 %\\end{table}
 EOF
+	} else {
+		# Remote CVs
+		# Is it an external CV
+		
+		my @extCVs = @{$CV->filename};
+		print $O "\n",'\textit{(See '.((scalar(@extCVs)>1)?'them':'it').' at ';
+		my $extpos = 1;
+		foreach my $extCV (@extCVs) {
+			if($extpos > 1) {
+				print $O ($extpos == scalar(@extCVs))?' and ':', ';
+			}
+			my $uri = $extCV->uri;
+			my $docURI = $extCV->docURI;
+			my $cvuri = undef;
+			# Do we have external documentation?
+			if(defined($docURI)) {
+				$cvuri = $docURI->as_string;
+			} else {
+				$cvuri = $uri->as_string;
+			}
+			
+			print $O '\url{'.$cvuri.'}';
+			$extpos++;
+		}
+		print $O ')}';
+	}
+	
+	# And now, the aliases
+	if(scalar(@{$CV->aliasOrder}) > 0) {
+		print $O "\\topcaption{",latex_format($caption)," aliases} \\label{cv:$cvname:alias}\n";
+		print $O <<'EOF' ;
+\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Alias}} &
+			\multicolumn{1}{c|}{\textbf{\cvKey}} &
+                       \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline\hline }
+\tablehead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{Alias}} & \multicolumn{1}{c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\tablelasthead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
+           \hline \multicolumn{1}{|c|}{\textbf{Alias}} & \multicolumn{1}{c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\tabletail{\hline \multicolumn{3}{|r|}{{Continued on next page}} \\ \hline}
+\tablelasttail{\hline \hline}
+
+\begin{center}
+	\begin{xtabular}{|r|c|p{0.5\textwidth}|}
+EOF
+		
+		my $aliashash = $CV->alias;
+		foreach my $aliasKey (@{$CV->aliasOrder}) {
+			my $alias = $aliashash->{$aliasKey};
+			my $termStr = undef;
+			
+			if(scalar(@{$alias->order}) > 1) {
+				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->order}).'\end{tabular}';
+			} else {
+				$termStr = $alias->order->[0];
+			}
+			
+			my $descStr = '';
+			if(scalar(@{$alias->description}) > 1) {
+				$descStr = '{'.join(' \\\\ ',map { latex_escape($_) } @{$alias->description}).'}';
+			} elsif(scalar(@{$alias->description}) == 1) {
+				$descStr = $alias->description->[0];
+			}
+			print $O join(' & ', latex_escape($aliasKey), $termStr, $descStr),'\\\\ \hline',"\n";
+		}
+
+		# Table footer
+		print $O <<EOF ;
+		\\end{xtabular}
+\\end{center}
+%\\end{table}
+EOF
+	}
 }
 
 # printConceptDomain parameters:
@@ -387,7 +513,7 @@ sub printConceptDomain($$$) {
 	
 	# The title
 	# TODO: consider using encode('latex',...) for the content
-	print $O '\\section{'.$conceptDomain->fullname.'}\\label{fea:'.$conceptDomain->name."}\n";
+	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
 	
 	# The additional documentation
 	# The concept domain holds its additional documentation in a subdirectory with
@@ -422,13 +548,13 @@ sub printConceptDomain($$$) {
 		my $entry = $conceptDomain->name.'_'.$concept->name;
 		print $O "\\topcaption{$caption} \\label{tab:$entry}\n";
 		print $O <<'EOF' ;
-\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
                        \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline\hline }
 \tablehead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
                        \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
 \tablelasthead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{R/O}} &
+           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
                        \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
 \tabletail{\hline \multicolumn{4}{|r|}{{Continued on next page}} \\ \hline}
 \tablelasttail{\hline \hline}
@@ -477,10 +603,28 @@ EOF
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;
-					$values .= "\n".'\textit{(See \hyperref[cv:'.$cv.']{CV Table \ref*{cv:'.$cv.'}})}';
+					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.($restriction->isLocal?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 				}
 			}
-			print $O join(' & ',latex_escape($column->name),'\\texttt{'.latex_escape($columnType->type).'}','\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',$description."\n\n".$values),'\\\\ \hline',"\n";
+			
+			# What it goes to the column type column
+			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
+			
+			push(@colTypeLines,'\textit{'.latex_escape($restriction->template).'}')  if(ref($restriction) eq 'DCC::Model::CompoundType');
+			
+			push(@colTypeLines,'\textcolor{gray}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}')  if(defined($columnType->arraySeps));
+			
+			# Stringify it!
+			my $colTypeStr = '\\texttt{'.(
+				(scalar(@colTypeLines)>1)?
+#					'\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @colTypeLines).'\end{tabular}'
+#					'\begin{minipage}[t]{8em}'.join(' \\\\ ',@colTypeLines).'\end{minipage}'
+					'\pbox[t]{10cm}{\relax\ifvmode\centering\fi'."\n".join(' \\\\ ',@colTypeLines).'}'
+					:
+					$colTypeLines[0]
+				).'}';
+			
+			print $O join(' & ',latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',$description."\n\n".$values),'\\\\ \hline',"\n";
 		}
 		# End of the table!
 		print $O <<EOF ;
@@ -491,9 +635,11 @@ EOF
 EOF
 	}
 	
+	# And at last, optional notes about this!
 	my $notesfile = File::Spec->catfile($domainDocDir,$NotesFilename);
 	
 	if(-f $notesfile && -r $notesfile){
+		print $O '\\subsection{Further notes on '.latex_format($conceptDomain->fullname)."}\n";
 		# Full paths, so import instead of subimport
 		print $O "\\import*\{$domainDocDir/\}\{$NotesFilename\}\n";
 	}
@@ -553,7 +699,7 @@ if(scalar(@ARGV)>=3) {
 	}
 
 	print $TO "\\appendix\n";
-	print $TO "\\chapter{Controlled Vocabulary Tables}\n";
+	print $TO "\\chapter{Controlled Vocabularies}\n";
 	
 	foreach my $CV (@{$model->namedCVs}) {
 		unless(exists($CV->annotations->hash->{disposition}) && $CV->annotations->hash->{disposition} eq 'inline') {
