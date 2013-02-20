@@ -126,9 +126,11 @@ sub genSQL($$) {
 				
 				my $columnSet = $concept->columnSet;
 				
+				my @idColumnNames = @{$columnSet->idColumnNames};
+
 				my $gottable=undef;
 				# First, the idref columns
-				my @idcolorder=sort(@{$columnSet->idColumnNames});
+				my @idcolorder=sort(@idColumnNames);
 				my @colorder=();
 				
 				# And then, the others
@@ -151,6 +153,11 @@ sub genSQL($$) {
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
+				}
+				
+				# Declaring a primary key
+				if(scalar(@idColumnNames)>0) {
+					print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')'
 				}
 				
 				print $SQL "\n);\n\n";
@@ -403,20 +410,32 @@ EOF
 	if($CV->isLocal) {
 		print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
 		print $O <<'EOF' ;
-\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{\cvKey}} &
-                       \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline\hline }
+\tablefirsthead{\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline\hline }
+
 \tablehead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline }
+
 \tablelasthead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
-\tabletail{\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline}
-\tablelasttail{\hline \hline}
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline }
+
+\tabletail{\hline
+\multicolumn{2}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline}
+
+\tablelasttail{\hline\hline}
 
 \begin{center}
+	\arrayrulecolor{DarkOrange}
 	\begin{xtabular}{|r|p{0.5\textwidth}|}
-%	\hline
-%	Key & Description \\
-%	\hline\hline
 EOF
 	
 		my $CVhash = $CV->CV;
@@ -426,9 +445,8 @@ EOF
 		
 		# Table footer
 		print $O <<EOF ;
-		\\end{xtabular}
+	\\end{xtabular}
 \\end{center}
-%\\end{table}
 EOF
 	} else {
 		# Remote CVs
@@ -461,17 +479,33 @@ EOF
 	if(scalar(@{$CV->aliasOrder}) > 0) {
 		print $O "\\topcaption{",latex_format($caption)," aliases} \\label{cv:$cvname:alias}\n";
 		print $O <<'EOF' ;
-\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Alias}} &
-			\multicolumn{1}{c|}{\textbf{\cvKey}} &
-                       \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline\hline }
+\tablefirsthead{\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline\hline }
+
 \tablehead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Alias}} & \multicolumn{1}{c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline }
+
 \tablelasthead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Alias}} & \multicolumn{1}{c|}{\textbf{\cvKey}} & \multicolumn{1}{c|}{\textbf{\cvDesc}} \\ \hline }
-\tabletail{\hline \multicolumn{3}{|r|}{{Continued on next page}} \\ \hline}
-\tablelasttail{\hline \hline}
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline }
+
+\tabletail{\hline \multicolumn{3}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline}
+
+\tablelasttail{\hline\hline}
 
 \begin{center}
+	\arrayrulecolor{DarkOrange}
 	\begin{xtabular}{|r|c|p{0.5\textwidth}|}
 EOF
 		
@@ -499,7 +533,6 @@ EOF
 		print $O <<EOF ;
 		\\end{xtabular}
 \\end{center}
-%\\end{table}
 EOF
 	}
 }
@@ -548,23 +581,38 @@ sub printConceptDomain($$$) {
 		my $entry = $conceptDomain->name.'_'.$concept->name;
 		print $O "\\topcaption{$caption} \\label{tab:$entry}\n";
 		print $O <<'EOF' ;
-\tablefirsthead{\hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
-                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline\hline }
+\tablefirsthead{\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+\hline\hline }
+
 \tablehead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
-                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+\hline }
+
 \tablelasthead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-           \hline \multicolumn{1}{|c|}{\textbf{Name}} & \multicolumn{1}{c|}{\textbf{Type}} & \multicolumn{1}{c|}{\textbf{Need}} &
-                       \multicolumn{1}{c|}{\textbf{Description / Values}} \\ \hline }
-\tabletail{\hline \multicolumn{4}{|r|}{{Continued on next page}} \\ \hline}
-\tablelasttail{\hline \hline}
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+\hline }
+
+\tabletail{\hline
+\multicolumn{4}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline}
+
+\tablelasttail{\hline\hline}
 
 \begin{center}
-%\begin{tabularx}{\linewidth}{ | l | c | c | X |}
-\begin{xtabular}{|l|c|c|p{0.5\textwidth}|}
-%\hline
-%Name & Type & R/O & Description / Values \\
-%\hline\hline
+	\arrayrulecolor{DarkOrange}
+	\begin{xtabular}{|l|c|c|p{0.5\textwidth}|}
 EOF
 		
 		# Determining the order of the columns
@@ -628,9 +676,7 @@ EOF
 		}
 		# End of the table!
 		print $O <<EOF ;
-\\end{xtabular}
-%\\end{tabularx}
-%\\label{tab:$entry}
+	\\end{xtabular}
 \\end{center}
 EOF
 	}
