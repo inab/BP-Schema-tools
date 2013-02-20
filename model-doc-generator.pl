@@ -114,13 +114,24 @@ sub genSQL($$) {
 	if(open($SQL,'>:utf8',$outfileSQL)) {
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
+		
+		# Needed later for foreign keys
+		my @fks = ();
+
 		# Let's iterate over all the concept domains and their concepts
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			my $conceptDomainName = $conceptDomain->name;
+			
+			my %pcon = ();
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				#my $conceptName = $concept->name;
 				my $basename = $conceptDomainName.'_'.$concept->name;
+
+				my %fkselemrefs = ();
+				my @fkselem = ($basename,$concept,\%fkselemrefs);
+				my $fksinit = undef;
+
 				print $SQL "\n-- ",$concept->fullname;
 				print $SQL "\nCREATE TABLE $basename (";
 				
@@ -141,6 +152,19 @@ sub genSQL($$) {
 				@colorder=(@idcolorder,sort(@colorder));
 				
 				foreach my $column (@{$columnSet->columns}{@colorder}) {
+					# Is it involved in a foreign key?
+					if(defined($column->relatedColumn)) {
+						$fksinit = 1;
+						
+						my $relatedConcept = $column->relatedConcept;
+						my $relatedBasename = $relatedConcept->conceptDomain->name . '_' . $relatedConcept->name;
+						
+						$fkselemrefs{$relatedBasename} = [$relatedConcept,[]]  unless(exists($fkselemrefs{$relatedBasename}));
+						
+						push(@{$fkselemrefs{$relatedBasename}[1]}, $column);
+					}
+					
+					# Let's print
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
@@ -155,26 +179,45 @@ sub genSQL($$) {
 					$gottable = 1;
 				}
 				
-				# Declaring a primary key
+				push(@fks,\@fkselem)  if(defined($fksinit));
+				
+				# Declaring a primary key (if any!)
 				if(scalar(@idColumnNames)>0) {
-					print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')'
+					print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')';
+					$pcon{$basename} = undef;
 				}
 				
 				print $SQL "\n);\n\n";
 			}
 			
-			# And now, the restrictions
-			foreach my $concept (@{$conceptDomain->concepts}) {
-				my $basename = $conceptDomainName.'_'.$concept->name;
-				if(defined($concept->parentConcept)) {
-					my $parentConcept = $concept->parentConcept;
-					my $refColnames = $parentConcept->columnSet->idColumnNames;
-					my $parentBasename = $conceptDomainName.'_'.$parentConcept->name;
-					
-					print $SQL "\n-- ",$concept->fullname, " foreign keys";
-					print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',@{$refColnames}),")";
-					print $SQL "\nREFERENCES $parentBasename(".join(',',@{$refColnames}).");\n";
-				}
+			## Now, the FK restrictions from inheritance
+			#foreach my $concept (@{$conceptDomain->concepts}) {
+			#	my $basename = $conceptDomainName.'_'.$concept->name;
+			#	if(defined($concept->parentConcept)) {
+			#		my $parentConcept = $concept->parentConcept;
+			#		my $refColnames = $parentConcept->columnSet->idColumnNames;
+			#		my $parentBasename = $conceptDomainName.'_'.$parentConcept->name;
+			#		
+			#		# Referencing only concepts with keys
+			#		if(exists($pcon{$parentBasename})) {
+			#			print $SQL "\n-- ",$concept->fullname, " foreign keys";
+			#			print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',@{$refColnames}),")";
+			#			print $SQL "\nREFERENCES $parentBasename(".join(',',@{$refColnames}).");\n";
+			#		}
+			#	}
+			#}
+		}
+			
+		# And now, the FK restrictions from related concepts
+		foreach my $p_fks (@fks) {
+			my($basename,$concept,$p_fkconcept) = @{$p_fks};
+			
+			print $SQL "\n-- ",$concept->fullname, " foreign keys";
+			foreach my $relatedBasename (keys(%{$p_fkconcept})) {
+				my $p_columns = $p_fkconcept->{$relatedBasename}[1];
+				
+				print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @{$p_columns}),")";
+				print $SQL "\nREFERENCES $relatedBasename(".join(',',map { $_->relatedColumn->name } @{$p_columns}).");\n";
 			}
 		}
 		

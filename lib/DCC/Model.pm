@@ -109,10 +109,10 @@ use constant ItemTypes => {
 };
 
 use constant FileTypeSymbolPrefixes => {
-	'$' => 'DCC::Annotation',
+	'$' => 'DCC::Model::Annotation',
 	'@' => 'DCC::Model::CV',
-	'\\' => 'Pattern',
-	'%' => 'DCC::Type'
+	'\\' => 'Regexp',
+	'%' => 'DCC::Model::SimpleType'
 };
 
 ##############
@@ -359,8 +359,10 @@ sub digestModel($) {
 	# we have to propagate the foreign keys
 	foreach my $conceptDomain (@conceptDomains) {
 		foreach my $concept (@{$conceptDomain->concepts}) {
-			foreach my $relatedConceptNames (@{$concept->relatedConceptNames}) {
-				my($domainName, $conceptName, $prefix) = @{$relatedConceptNames};
+			foreach my $relatedConceptName (@{$concept->relatedConceptNames}) {
+				my $domainName = $relatedConceptName->conceptDomainName;
+				my $conceptName = $relatedConceptName->conceptName;
+				my $prefix = $relatedConceptName->keyPrefix;
 				
 				my $relatedDomain = $conceptDomain;
 				if(defined($domainName)) {
@@ -374,6 +376,7 @@ sub digestModel($) {
 				my $relatedConcept = undef;
 				if(exists($relatedDomain->conceptHash->{$conceptName})) {
 					$relatedConcept = $relatedDomain->conceptHash->{$conceptName};
+					$relatedConceptName->setRelatedConcept($relatedConcept);
 				} else {
 					Carp::croak("Concept $domainName.$conceptName referred from concept ".$conceptDomain->name.'.'.$concept->name." does not exist");
 				}
@@ -954,7 +957,7 @@ sub parseFilenameFormat($) {
 	# Now, the different pieces
 	while($tokenString =~ /([$validSepsR])(\$?[a-zA-Z][a-zA-Z0-9]*)([^$validSeps]*)/g) {
 		# Pattern for the content
-		if(FileTypeSymbolPrefixes->{$1} eq 'Pattern') {
+		if(FileTypeSymbolPrefixes->{$1} eq 'Regexp') {
 			if(exists($self->{PATTERNS}{$2})) {
 				# Check against the pattern!
 				$pattern .= '('.$self->{PATTERNS}{$2}.')';
@@ -964,11 +967,11 @@ sub parseFilenameFormat($) {
 			} else {
 				Carp::croak("Unknown pattern '$2' used in filename-format '$formatString'");
 			}
-		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Type') {
+		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::SimpleType') {
 			if(exists($self->{TYPES}{$2})) {
 				my $type = $self->{TYPES}{$2}[DCC::Model::TYPEPATTERN];
 				if(defined($type)) {
-					$pattern .= '('.((ref($type) eq 'Pattern')?$type:'.+').')';
+					$pattern .= '('.(($type->isa('Regexp'))?$type:'.+').')';
 					
 					# No additional check
 					push(@parts,undef);
@@ -987,7 +990,7 @@ sub parseFilenameFormat($) {
 			} else {
 				Carp::croak("Unknown controlled vocabulary '$2' used in filename-format '$formatString'");
 			}
-		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Annotation') {
+		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::Annotation') {
 			my $annot = $2;
 			
 			# Is it a context-constant?
@@ -1020,7 +1023,7 @@ sub parseFilenameFormat($) {
 	# Finishing the pattern building
 	$pattern .= '$';
 	
-	# Now, the Pattern object!
+	# Now, the Regexp object!
 	$filenamePattern[1] = qr/$pattern/;
 	
 	return bless(\@filenamePattern,'DCC::Model::FilenamePattern');
@@ -1134,7 +1137,7 @@ sub parseConcept($$;$) {
 	# and adding the ones from the parent concept
 	# (and later from the related stuff)
 	
-	$columnSet->addColumns($parentConcept->columnSet->idColumns(! $parentConcept->baseConceptType->isCollection),1)  if(defined($parentConcept));
+	$columnSet->addColumns($parentConcept->idColumns(! $parentConcept->baseConceptType->isCollection),1)  if(defined($parentConcept));
 	
 	# name
 	# fullname
@@ -1158,11 +1161,13 @@ sub parseConcept($$;$) {
 	
 	# Saving the related concepts (the ones explicitly declared within this concept)
 	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'related-to')) {
-		push(@related,[
-			($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
-			$relatedDecl->getAttribute('concept') ,
-			($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
-		]);
+		push(@related,bless([
+				($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
+				$relatedDecl->getAttribute('concept') ,
+				($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
+				undef
+			],'DCC::Model::RelatedConcept')
+		);
 	}
 	
 	# And last, the subconcepts
@@ -1547,19 +1552,21 @@ sub columns {
 }
 
 # idColumns parameters:
+#	parentConcept: The concept owning the id columns
 #	doMask: Are the columns masked for storage?
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
-sub idColumns(;$) {
+sub idColumns($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $parentConcept = shift;
 	my $doMask = shift;
 	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
-	my %columns = map { $_ => $p_columns->{$_}->clone($doMask) } @columnNames;
+	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($parentConcept,undef,$doMask) } @columnNames;
 	
 	my @columnSet = (
 		\@columnNames,
@@ -1576,7 +1583,7 @@ sub idColumns(;$) {
 #	prefix: The optional prefix to be set to the name when the columns are cloned
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
-sub refColumns(;$) {
+sub refColumns(;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -1769,7 +1776,8 @@ sub clone(;$) {
 	my $doMask = shift;
 	
 	# Cloning this object
-	my $retval = bless(\@{$self},ref($self));
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
 	
 	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
 	
@@ -1779,18 +1787,21 @@ sub clone(;$) {
 # cloneRelated parameters:
 #	relatedConcept: A DCC::Model::Concept instance, which this column is related to.
 #		The kind of relation could be inheritance, or 1:N
-#	prefix: The optional prefix to be set to the name when the column is cloned
+#	prefix: optional, prefix to be set to the name when the column is cloned
+#	doMask: optional, it signals whether to mark cloned column
+#		as masked, so it should not be considered for value storage in the database.
 # it returns a DCC::Model::Column instance
-sub cloneRelated($;$) {
+sub cloneRelated($;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $relatedConcept = shift;
 	my $prefix = shift;
+	my $doMask = shift;
 	
 	# Cloning this object
-	my $retval = $self->clone();
+	my $retval = $self->clone($doMask);
 	
 	# Adding the prefix
 	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
@@ -1815,7 +1826,7 @@ sub name {
 	return $_[0]->[0];
 }
 
-# A Pattern object, representing the filename format
+# A Regexp object, representing the filename format
 sub pattern {
 	return $_[0]->[1];
 }
@@ -1859,7 +1870,7 @@ sub match($) {
 		next  unless(defined($part));
 		
 		# Is it a CV?
-		if(ref($part) eq 'DCC::Model::CV') {
+		if($part->isa('DCC::Model::CV')) {
 			Carp::croak('Validation against CV did not match')  unless($part->isValid($values[$ipart]));
 			
 			# Let's save the matched CV value
@@ -1991,7 +2002,7 @@ sub parentConcept {
 	return $_[0]->[7];
 }
 
-# related conceptNames, an array of trios concept domain name, concept name, prefix
+# related conceptNames, an array of DCC::Model::RelatedConcept (trios concept domain name, concept name, prefix)
 sub relatedConceptNames {
 	return $_[0]->[8];
 }
@@ -2008,6 +2019,51 @@ sub refColumns(;$) {
 	my $prefix = shift;
 	
 	return $self->columnSet->refColumns($self,$prefix);
+}
+
+# idColumns parameters:
+#	doMask: Are the columns masked for storage?
+sub idColumns(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $doMask = shift;
+	
+	return $self->columnSet->idColumns($self,$doMask);
+}
+
+1;
+
+
+package DCC::Model::RelatedConcept;
+
+sub conceptDomainName {
+	return $_[0]->[0];
+}
+
+sub conceptName {
+	return $_[0]->[1];
+}
+
+sub keyPrefix {
+	return $_[0]->[2];
+}
+
+sub concept {
+	return $_[0]->[3];
+}
+
+sub setRelatedConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $concept = shift;
+	
+	Carp::croak('Parameter must be either a DCC::Model::Concept or undef')  unless(!defined($concept) || (ref($concept) && $concept->isa('DCC::Model::Concept')));
+	
+	$self->[3] = $concept;
 }
 
 1;
