@@ -1,7 +1,6 @@
 #!/usr/bin/perl -W
 
 # TODO:
-#	CV uri
 #	Column listing reordering (based on annotations)
 #	Document allowed null values
 #	Document column name used to fetch values
@@ -755,6 +754,7 @@ if(scalar(@ARGV)>=3) {
 	my $outfilePDF = undef;
 	my $outfileSQL = undef;
 	my $outfileXML = undef;
+	my $outfileLaTeX = undef;
 	if(-d $out) {
 		my (undef,undef,undef,$day,$month,$year) = localtime();
 		# Doing numerical adjustments
@@ -769,6 +769,7 @@ if(scalar(@ARGV)>=3) {
 	} else {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
+		$outfileLaTeX = $out.'.latex';
 	}
 	
 	# Copying the original XML (if it is reasonable)
@@ -778,7 +779,14 @@ if(scalar(@ARGV)>=3) {
 	genSQL($model,$outfileSQL);
 	
 	# Generating the document to be included in the template
-	my $TO = File::Temp->new();
+	my $TO = undef;
+	
+	if(defined($outfileLaTeX)) {
+		open($TO,'>',$outfileLaTeX) || die "ERROR: Unable to create output LaTeX file";
+	} else {
+		$TO = File::Temp->new();
+		$outfileLaTeX = $TO->filename;
+	}
 	
 	print $TO '\chapter{DCC Submission Tabular Formats}\label{ch:tabFormat}',"\n";
 	
@@ -795,9 +803,11 @@ if(scalar(@ARGV)>=3) {
 			printCVTable($CV,$TO);
 		}
 	}
+	# Flushing the temp file
+	$TO->flush();
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateDocFile,$model,$TO->filename,$outfilePDF);
+	assemblePDF($templateDocFile,$model,$outfileLaTeX,$outfilePDF);
 } else {
 	print STDERR "This program takes as input the model (in XML), the LaTeX template and the output file\n";
 	exit 1;
