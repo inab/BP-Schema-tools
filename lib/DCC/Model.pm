@@ -455,7 +455,7 @@ sub saveBPModel($) {
 		
 		# Let's create the output
 		my $bpModel = Archive::Zip->new();
-		$bpModel->zipfileComment("Created by ".ref($self)." \$Rev\$");
+		$bpModel->zipfileComment("Created by ".ref($self).' $Rev$');
 		
 		# First, add the file which contains the SHA1 sums about all the saved contents
 		$bpModel->addString(join("\n",$self->__keys2string(@{(Signatures)})),BPMODEL_SIG);
