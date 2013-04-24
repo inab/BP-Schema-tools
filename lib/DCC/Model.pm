@@ -4,10 +4,14 @@ use strict;
 
 use Carp;
 use File::Basename;
+use File::Copy;
 use File::Spec;
+use IO::File;
 use XML::LibXML;
 use Digest::SHA1;
 use URI;
+use Archive::Zip;
+use Archive::Zip::MemberRead;
 
 # Early subpackage constant declarations
 package DCC::Model::Column;
@@ -61,6 +65,7 @@ use constant {
 	CVKEYS	=>	6,
 	CVALHASH	=>	7,
 	CVALKEYS	=>	8,
+	CVXMLEL		=>	9
 };
 
 use constant {
@@ -115,6 +120,16 @@ use constant FileTypeSymbolPrefixes => {
 	'%' => 'DCC::Model::SimpleType'
 };
 
+use constant {
+	BPMODEL_MODEL	=> 'bp-model.xml',
+	BPMODEL_SCHEMA	=> 'bp-schema.xsd',
+	BPMODEL_CV	=> 'cv',
+	BPMODEL_SIG	=> 'signatures.txt',
+	BPMODEL_SIG_KEYVAL_SEP	=> ': '
+};
+
+use constant Signatures => ['schemaSHA1','modelSHA1','cvSHA1'];
+
 ##############
 # Prototypes #
 ##############
@@ -138,7 +153,7 @@ sub parseFilenameFormat($);
 #################
 
 # The constructor takes as input the filename
-sub new($) {
+sub new($;$) {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	
@@ -148,10 +163,31 @@ sub new($) {
 	
 	# Let's start processing the input model
 	my $modelPath = shift;
+	my $forceBPModel = shift;
 	my $modelAbsPath = File::Spec->rel2abs($modelPath);
 	my $modelDir = File::Basename::dirname($modelAbsPath);
 	
-	$self->{_modelDir}=$modelDir;
+	$self->{_modelAbsPath} = $modelAbsPath;
+	$self->{_modelDir} = $modelDir;
+	
+	# First, let's try opening it as a bpmodel
+	my $zipErrMsg = undef;
+	Archive::Zip::setErrorHandler(sub { $zipErrMsg = $_[0]; });
+	my $bpzip = Archive::Zip->new($modelAbsPath);
+	# Was a bpmodel required?
+	Archive::Zip::setErrorHandler(undef);
+	if(defined($forceBPModel)  && !defined($bpzip)) {
+		Carp::croak("Passed model is not in BPModel format: ".$zipErrMsg);
+	}
+	
+	# Now, let's save what it is needed
+	my $expectedModelSHA1 = undef;
+	my $expectedSchemaSHA1 = undef;
+	my $expectedCvSHA1 = undef;
+	if(defined($bpzip)) {
+		$self->{_BPZIP} = $bpzip;
+		($expectedSchemaSHA1,$expectedModelSHA1,$expectedCvSHA1) = $self->readSignatures(@{(Signatures)});
+	}
 	
 	# DCC model XML file parsing
 	my $model = undef;
@@ -165,14 +201,19 @@ sub new($) {
 	eval {
 		my $X;
 		# First, let's compute SHA1
-		if(open($X,'<',$modelPath)) {
+		$X = $self->openModel();
+		if(defined($X)) {
 			$SHA->addfile($X);
 			$modelSHA1 = $SHA->clone->hexdigest;
-			close($X);
+			
+			Carp::croak("$modelPath is corrupted (wrong model SHA1) $modelSHA1 => $expectedModelSHA1")  if(defined($expectedModelSHA1) && $expectedModelSHA1 ne $modelSHA1);
 		} else {
 			Carp::croak("Unable to open model to compute its SHA1");
 		}
-		$model = XML::LibXML->load_xml(location=>$modelPath);
+		seek($X,0,0);
+		$model = XML::LibXML->load_xml(IO => $X);
+		# Temp filehandles are closed by File::Temp
+		close($X)  unless($X->isa('File::Temp'));
 	};
 	
 	# Was there some model parsing error?
@@ -182,12 +223,24 @@ sub new($) {
 	
 	$self->{_modelSHA1} = $modelSHA1;
 	
-	# Schema preparation
-	my $schemaDir = File::Basename::dirname(__FILE__);
-	$self->{_schemaDir}=$schemaDir;
+	# Schema SHA1
+	my $SCHpath = $self->librarySchemaPath();
+	my $SCH = undef;
+	if(open($SCH,'<',$SCHpath)) {
+		my $SCSHA = Digest::SHA1->new;
+		
+		$SCSHA->addfile($SCH);
+		close($SCH);
+		
+		my $schemaSHA1 = $SCSHA->hexdigest;
+		Carp::croak("$modelPath is corrupted (wrong schema SHA1) $schemaSHA1 => $expectedSchemaSHA1")  if(defined($expectedSchemaSHA1) && $expectedSchemaSHA1 ne $schemaSHA1);
+		$self->{_schemaSHA1} = $schemaSHA1;
+	} else {
+		Carp::croak("Unable to calculate bpmodel schema SHA1");
+	}
 	
-	my $schemaPath = File::Spec->catfile($schemaDir,DCCSchemaFilename);
-	my $dccschema = XML::LibXML::Schema->new(location=>$schemaPath);
+	# Schema preparation
+	my $dccschema = $self->schemaModel();
 	
 	# Model validated against the XML Schema
 	eval {
@@ -196,7 +249,7 @@ sub new($) {
 	
 	# Was there some schema validation error?
 	if($@) {
-		Carp::croak("Error while validating model $modelPath against $schemaPath: ".$@);
+		Carp::croak("Error while validating model $modelPath against the schema: ".$@);
 	}
 	
 	# Setting the internal system item types
@@ -206,12 +259,233 @@ sub new($) {
 	$self->digestModel($model);
 	
 	# Now, we should have SHA1 of full model (model+CVs) and CVs only
+	my $cvSHA1 = $self->{_CVSHA}->hexdigest;
+	Carp::croak("$modelPath is corrupted (wrong CV SHA1) $cvSHA1 => $expectedCvSHA1")  if(defined($expectedCvSHA1) && $expectedCvSHA1 ne $cvSHA1);
+		
+	$self->{_cvSHA1} = $cvSHA1;
 	$self->{_fullmodelSHA1} = $self->{_SHA}->hexdigest;
-	$self->{_cvSHA1} = $self->{_CVSHA}->hexdigest;
 	delete($self->{_SHA});
 	delete($self->{_CVSHA});
 	
 	return $self;
+}
+
+sub modelPath() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_modelAbsPath};
+}
+
+# openModel parameters:
+#	(none)
+# It returns an open filehandle (either a File::Temp instance or a Perl GLOB (file handle))
+sub openModel() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# Is it inside a Zip?
+	if(exists($self->{_BPZIP})) {
+		# Extracting to a temp file
+		my $temp = File::Temp->new();
+		my $member = $self->{_BPZIP}->memberNamed(BPMODEL_MODEL);
+		
+		Carp::croak("Model not found inside bpmodel ".$self->{_modelAbsPath})  unless(defined($member));
+		
+		Carp::croak("Error extracting model from bpmodel ".$self->{_modelAbsPath}) if($member->extractToFileHandle($temp)!=Archive::Zip::AZ_OK);
+		
+		# Assuring the file pointer is in the right place
+		$temp->seek(0,0);
+		
+		return $temp;
+	} else {
+		my $X;
+		
+		open($X,'<',$self->{_modelAbsPath});
+		
+		return $X;
+	}
+}
+
+sub librarySchemaPath() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	unless(exists($self->{_schemaPath})) {
+		if(exists($self->{_BPZIP})) {
+			my $memberSchema = $self->{_BPZIP}->memberNamed(BPMODEL_SCHEMA);
+			Carp::croak("Unable to find embedded bpmodel schema in bpmodel")  unless(defined($memberSchema));
+			my $tempSchema = File::Temp->new();
+			Carp::croak("Unable to save embedded bpmodel schema")  if($memberSchema->extractToFileNamed($tempSchema->filename())!=Archive::Zip::AZ_OK);
+			
+			$self->{_schemaPath} = $tempSchema;
+		} else {
+			my $schemaDir = File::Basename::dirname(__FILE__);
+			
+			$self->{_schemaPath} = File::Spec->catfile($schemaDir,DCCSchemaFilename);
+		}
+	}
+	
+	return $self->{_schemaPath};
+}
+
+# schemaModel parameters:
+#	(none)
+# returns a XML::LibXML::Schema instance
+sub schemaModel() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# Schema preparation
+	my $dccschema = XML::LibXML::Schema->new(location => $self->librarySchemaPath());
+	
+	return $dccschema;
+}
+
+# reformatModel parameters:
+#	(none)
+# The method applies the needed changes on DOM representation of the model
+# in order to be valid once it is stored in bpmodel format
+sub reformatModel() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# Used later
+	my $modelDoc = $self->{modelDoc};
+
+	# change CV root
+	$self->{_cvDecl}->setAttribute('dir',BPMODEL_CV);
+	
+	# This hash is used to avoid collisions
+	my %newPaths = ();
+	# Change CV paths to relative ones
+	foreach my $CVfile (@{$self->{CVfiles}}) {
+		my $cv = $CVfile->xmlElement();
+		
+		my $origPath = $CVfile->filename();
+		
+		my(undef,undef,$newPath) = File::Spec->splitpath($origPath);
+		
+		# Fixing collisions
+		if(exists($newPaths{$newPath})) {
+			my $newNewPath = $newPaths{$newPath}[1].'-'.$newPaths{$newPath}[0].$newPaths{$newPath}[2];
+			$newPaths{$newPath}[0]++;
+			$newPath = $newNewPath;
+		} else {
+			my $extsep = rindex($newPath,'.');
+			my $newPathName = ($extsep!=-1)?substr($newPath,0,$extsep):$newPath;
+			my $newPathExt = ($extsep!=-1)?substr($newPath,$extsep):'';
+			$newPaths{$newPath} = [1,$newPathName,$newPathExt];
+		}
+		
+		# As the path is a text node
+		# first we remove all the text nodes
+		# and we append a new one with the new path
+		$cv->removeChildNodes();
+		$cv->appendChild($modelDoc->createTextNode($newPath));
+	}
+	
+	# Create a temp file and save the model to it
+	my $tempModelFile = File::Temp->new();
+	$modelDoc->toFile($tempModelFile->filename(),2);
+	
+	# Calculate new SHA1, and store it
+	my $SHA = Digest::SHA1->new();
+	$SHA->addfile($tempModelFile);
+	$self->{_modelSHA1} = $SHA->hexdigest();
+	
+	# Return Temp::File instance
+	seek($tempModelFile,0,0);
+	return $tempModelFile;
+}
+
+sub readSignatures(@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	Carp::croak("Signatures can only be read from a bpmodel")  unless(exists($self->{_BPZIP}));
+	
+	my(@keys) = @_;
+
+	my($signatures,$status) = $self->{_BPZIP}->contents(BPMODEL_SIG);
+	
+	Carp::croak("Signatures not found/not read in bpmodel")  if($status!=Archive::Zip::AZ_OK);
+	my %signatures = ();
+	foreach my $sigline (split("\n",$signatures)) {
+		my($key,$val) = split(BPMODEL_SIG_KEYVAL_SEP,$sigline,2);
+		$signatures{$key} = $val;
+	}
+	
+	return @signatures{@keys};
+}
+
+sub __keys2string(@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my(@keys) = @_;
+	
+	return join("\n",map { $_.BPMODEL_SIG_KEYVAL_SEP.$self->{'_'.$_} } @keys);
+}
+
+# saveBPModel parameters:
+#	filename: The file where the model (in bpmodel format) is going to be saved
+# TODO/TOFINISH
+sub saveBPModel($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $filename = shift;
+	
+	my $retval = undef;
+	if(exists($self->{_BPZIP})) {
+		# A simple copy does the work
+		$retval = ::copy($self->modelPath(),$filename);
+	} else {
+		# Let's reformat the model in order to be stored as a bpmodel format
+		my $tempModelFile = $self->reformatModel();
+		
+		# Let's create the output
+		my $bpModel = Archive::Zip->new();
+		$bpModel->zipfileComment("Created by ".ref($self)." \$Rev\$");
+		
+		# First, add the file which contains the SHA1 sums about all the saved contents
+		$bpModel->addString(join("\n",$self->__keys2string(@{(Signatures)})),BPMODEL_SIG);
+
+		# Let's store the model (which could have changed since it was loaded)
+		my $modelMember = $bpModel->addFile($tempModelFile->filename(),BPMODEL_MODEL,Archive::Zip::COMPRESSION_LEVEL_BEST_COMPRESSION);
+		# Setting up the right timestamp
+		my @modelstats = stat($self->modelPath());
+		$modelMember->setLastModFileDateTimeFromUnix($modelstats[9]);
+		
+		# Next, the used schema
+		$bpModel->addFile($self->librarySchemaPath(),BPMODEL_SCHEMA,Archive::Zip::COMPRESSION_LEVEL_BEST_COMPRESSION);
+		
+		# Add the controlled vocabulary
+		my $cvprefix = BPMODEL_CV.'/';
+		my $cvprefixLength = length($cvprefix);
+		
+		# First, the CV directory declaration
+		my $cvmember = $bpModel->addDirectory($cvprefix);
+		
+		# And now, the CV members
+		foreach my $CVfile (@{$self->{CVfiles}}) {
+			$bpModel->addFile($CVfile->filename(),$cvprefix.$CVfile->xmlElement()->textContent(),Archive::Zip::COMPRESSION_LEVEL_BEST_COMPRESSION);
+		}
+		
+		# Let's save it
+		$retval = $bpModel->overwriteAs($filename) == Archive::Zip::AZ_OK;
+	}
+	
+	return $retval;
 }
 
 ####################
@@ -229,6 +503,8 @@ sub digestModel($) {
 	
 	my $modelDoc = shift;
 	my $modelRoot = $modelDoc->documentElement();
+	
+	$self->{modelDoc} = $modelDoc;
 	
 	# First, let's store the key values, project name and schema version
 	$self->{project} = $modelRoot->getAttribute('project');
@@ -266,12 +542,14 @@ sub digestModel($) {
 	$self->{CV} = \%cv;
 	$self->{CVARRAY} = \@cvArray;
 	foreach my $cvDecl ($modelRoot->getChildrenByTagNameNS(dccNamespace,'cv-declarations')) {
+		$self->{_cvDecl} = $cvDecl;
 		# Let's setup the path to disk stored CVs
 		my $cvdir = undef;
 		$cvdir = $cvDecl->getAttribute('dir')  if($cvDecl->hasAttribute('dir'));
 		if(defined($cvdir)) {
 			# We need to translate relative paths to absolute ones
-			$cvdir = File::Spec->rel2abs($cvdir,$self->{_modelDir})  unless(File::Spec->file_name_is_absolute($cvdir));
+			# but only when the model is not yet a bpmodel
+			$cvdir = File::Spec->rel2abs($cvdir,$self->{_modelDir})  unless(exists($self->{_BPZIP}) || File::Spec->file_name_is_absolute($cvdir));
 		} else {
 			$cvdir = $self->{_modelDir};
 		}
@@ -464,8 +742,8 @@ sub parseAnnotations($) {
 #	cv: a XML::LibXML::Element 'dcc:cv' node
 # returns a DCC::Model::CV array reference, with all the controlled vocabulary
 # stored inside.
-# If the CV is in an external file, this method reads it.
-# If the CV is in an external URI, this method only checks whether it is available
+# If the CV is in an external file, this method reads it, and registers it to save it later.
+# If the CV is in an external URI, this method only checks whether it is available (TBD)
 sub parseCVElement($) {
 	my $self = shift;
 	
@@ -473,10 +751,14 @@ sub parseCVElement($) {
 	
 	my $cv = shift;
 	
-	# The CV symbolic name, the CV type, the CV filename, the annotations, the documentation paragraphs, the CV (hash and array), and aliases
+	# This key is internally used to register all the file CVs
+	$self->{CVfiles} = []  unless(exists($self->{CVfiles}));
+	
+	# The CV symbolic name, the CV type, the CV filename, the annotations, the documentation paragraphs, the CV (hash and array), aliases (hash and array), XML element of cv-file element
 	my $cvAnnot = $self->parseAnnotations($cv);
 	my $cvDesc = $self->parseDescriptions($cv);
-	my @structCV=(undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,{},[]);
+	my @structCV=(undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,{},[],undef);
+	my $createdCV = bless(\@structCV,'DCC::Model::CV');
 	
 	$structCV[DCC::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
@@ -514,48 +796,65 @@ sub parseCVElement($) {
 			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
 		} elsif($el->localname eq 'cv-file') {
 			my $cvPath = $el->textContent();
-			$cvPath  = File::Spec->rel2abs($cvPath,$self->{_cvDir})  unless(File::Spec->file_name_is_absolute($cvPath));
+			if(exists($self->{_BPZIP})) {
+				# It must be self contained
+				$cvPath = $self->{_cvDir}.'/'.$cvPath;
+			} else {
+				$cvPath  = File::Spec->rel2abs($cvPath,$self->{_cvDir})  unless(File::Spec->file_name_is_absolute($cvPath));
+			}
 			
 			$structCV[DCC::Model::CV::CVKIND] = DCC::Model::CV::CVFORMAT;
 			$structCV[DCC::Model::CV::CVURI] = $cvPath;
 			$structCV[DCC::Model::CV::CVHASH] = \%cvHash;
 			$structCV[DCC::Model::CV::CVKEYS] = \@cvKeys;
+			# Saving it for a possible storage in a bpmodel
+			$structCV[DCC::Model::CV::CVXMLEL] = $el;
 			
 			my $CV;
-			if(open($CV,'<',$cvPath)) {
-				while(my $cvline=<$CV>) {
-					$self->{_SHA}->add($cvline);
-					$self->{_CVSHA}->add($cvline);
-					chomp($cvline);
-					if(substr($cvline,0,1) eq '#') {
-						if(substr($cvline,1,1) eq '#') {
-							# Registering the additional documentation
-							$cvline = substr($cvline,2);
-							my($key,$value) = split(/ /,$cvline,2);
-							
-							# Adding embedded documentation and annotations
-							if($key eq '') {
-								$cvDesc->addDescription($value);
-							} else {
-								$cvAnnot->addAnnotation($key,$value);
-							}
-						} else {
-							next;
-						}
-					} else {
-						my($key,$value) = split(/\t/,$cvline,2);
-						if(exists($cvHash{$key})) {
-							Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
-						}
-						$cvHash{$key}=$value;
-						push(@cvKeys,$key);
-					}
+			if(exists($self->{_BPZIP})) {
+				my $cvMember = $self->{_BPZIP}->memberNamed($cvPath);
+				if(defined($cvMember)) {
+					$CV = $cvMember->readFileHandle();
+				} else {
+					Carp::croak("Unable to open CV member $cvPath");
 				}
-				
-				close($CV);
-			} else {
+			} elsif(!open($CV,'<',$cvPath)) {
 				Carp::croak("Unable to open CV file $cvPath");
 			}
+			while(my $cvline=$CV->getline()) {
+				chomp($cvline);
+				
+				$self->{_SHA}->add($cvline);
+				$self->{_CVSHA}->add($cvline);
+				chomp($cvline);
+				if(substr($cvline,0,1) eq '#') {
+					if(substr($cvline,1,1) eq '#') {
+						# Registering the additional documentation
+						$cvline = substr($cvline,2);
+						my($key,$value) = split(/ /,$cvline,2);
+						
+						# Adding embedded documentation and annotations
+						if($key eq '') {
+							$cvDesc->addDescription($value);
+						} else {
+							$cvAnnot->addAnnotation($key,$value);
+						}
+					} else {
+						next;
+					}
+				} else {
+					my($key,$value) = split(/\t/,$cvline,2);
+					if(exists($cvHash{$key})) {
+						Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
+					}
+					$cvHash{$key}=$value;
+					push(@cvKeys,$key);
+				}
+			}
+			
+			$CV->close();
+			
+			push(@{$self->{CVfiles}},$createdCV);
 		} elsif($el->localname eq 'term-alias') {
 			my $alias = $self->parseCVElement($el);
 			my $key = $alias->name;
@@ -568,7 +867,7 @@ sub parseCVElement($) {
 		}
 	}
 	
-	return bless(\@structCV,'DCC::Model::CV');
+	return $createdCV;
 }
 
 # __parse_pattern parameters:
@@ -1256,13 +1555,21 @@ sub CVSHA1() {
 	return $self->{_cvSHA1};
 }
 
-# It returns schemaVer-modelSHA1
+sub schemaSHA1() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_schemaSHA1};
+}
+
+# It returns schemaVer
 sub versionString() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return $self->{schemaVer}.'-'.$self->{_fullmodelSHA1};
+	return $self->{schemaVer};
 }
 
 # The base documentation directory
@@ -1455,6 +1762,12 @@ sub alias {
 # The order of the alias values (as in the file)
 sub aliasOrder {
 	return $_[0]->[DCC::Model::CV::CVALKEYS];
+}
+
+# The original XML::LibXML::Element instance where
+# the path to a CV file was read from
+sub xmlElement {
+	return $_[0]->[DCC::Model::CV::CVXMLEL];
 }
 
 # With this method we check the locality of the CV

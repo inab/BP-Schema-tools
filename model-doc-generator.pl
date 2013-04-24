@@ -89,7 +89,7 @@ sub latex_format($) {
 my %ABSTYPE2SQL = (
 	'string' => 'VARCHAR(4096)',
 	'integer' => 'INTEGER',
-	'decimal' => 'DOUBLE',
+	'decimal' => 'DOUBLE PRECISION',
 	'boolean' => 'BOOL',
 	'timestamp' => 'DATETIME',
 	'duration' => 'VARCHAR(128)',
@@ -270,7 +270,7 @@ sub assemblePDF($$$$) {
 	
 	# Storing the document generation parameters
 	my @params = map { ['ANNOT'.$_,encode('latex',$annotations->{$_})] } keys(%{$annotations});
-	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1]);
+	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1],['schemaSHA',$model->schemaSHA1]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
@@ -753,7 +753,7 @@ if(scalar(@ARGV)>=3) {
 	# In case $out is a directory, then fill-in the other variables
 	my $outfilePDF = undef;
 	my $outfileSQL = undef;
-	my $outfileXML = undef;
+	my $outfileBPMODEL = undef;
 	my $outfileLaTeX = undef;
 	if(-d $out) {
 		my (undef,undef,undef,$day,$month,$year) = localtime();
@@ -765,15 +765,15 @@ if(scalar(@ARGV)>=3) {
 		my $outfileRoot = File::Spec->catfile($out,join('-',$model->projectName,'data_model',$model->versionString,$thisdate));
 		$outfilePDF = $outfileRoot . '.pdf';
 		$outfileSQL = $outfileRoot . '.sql';
-		$outfileXML = $outfileRoot . '.xml';
+		$outfileBPMODEL = $outfileRoot . '.bpmodel';
 	} else {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
 		$outfileLaTeX = $out.'.latex';
 	}
 	
-	# Copying the original XML (if it is reasonable)
-	copy($modelFile,$outfileXML)  if(defined($outfileXML));
+	# Generating the bpmodel bundle (if it is reasonable)
+	$model->saveBPModel($outfileBPMODEL)  if(defined($outfileBPMODEL));
 	
 	# Generating the SQL file for BioMart
 	genSQL($model,$outfileSQL);
