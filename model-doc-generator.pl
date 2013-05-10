@@ -226,13 +226,20 @@ sub genSQL($$) {
 	}
 }
 
+use constant {
+	REL_TEMPLATES_DIR	=>	'doc-templates',
+	TEMPLATE_FILE	=>	'template.latex'
+};
+
 # assemblePDF parameters:
-#	templateFile: The LaTeX template file to be used to generate the PDF
+#	templateDir: The LaTeX template dir to be used to generate the PDF
 #	model: DCC::Model instance
 #	bodyFile: The temporal file where the generated documentation has been written.
 #	outputFile: The output PDF file.
 sub assemblePDF($$$$) {
-	my($templateFile,$model,$bodyFile,$outputFile) = @_;
+	my($templateDir,$model,$bodyFile,$outputFile) = @_;
+	
+	my $templateFile = File::Spec->catfile($templateDir,TEMPLATE_FILE);
 	
 	unless(-f $templateFile && -r $templateFile) {
 		die "ERROR: Unable to find readable template LaTeX file $templateFile\n";
@@ -579,6 +586,16 @@ EOF
 	}
 }
 
+# printConceptDomainGraph parameters:
+#	model: A DCC::Model instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	O: The filehandle where to print the documentation about the concept domain
+sub printConceptDomainGraph($$$) {
+	my($model,$conceptDomain,$O)=@_;
+	
+	
+}
+
 # printConceptDomain parameters:
 #	model: A DCC::Model instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
@@ -589,6 +606,9 @@ sub printConceptDomain($$$) {
 	# The title
 	# TODO: consider using encode('latex',...) for the content
 	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
+	
+	# generate dot graph representing the concept domain
+	printConceptDomainGraph($model,$conceptDomain,$O);
 	
 	# The additional documentation
 	# The concept domain holds its additional documentation in a subdirectory with
@@ -678,6 +698,11 @@ EOF
 				$description .= latex_format($documentation);
 			}
 			
+			my $related='';
+			if(defined($column->relatedColumn)) {
+				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->relatedConcept->conceptDomain->name.'.'.$column->relatedConcept->name.'.'.$column->relatedColumn->name).']{'.latex_escape($column->relatedConcept->fullname.' ('.$column->relatedColumn->name.')').'}}}';
+			}
+			
 			# The comment about the values
 			my $values='';
 			if(exists($column->annotations->hash->{values})) {
@@ -714,7 +739,7 @@ EOF
 					$colTypeLines[0]
 				).'}';
 			
-			print $O join(' & ',latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',$description."\n\n".$values),'\\\\ \hline',"\n";
+			print $O join(' & ','\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',join("\n\n",$description,$related,$values)),'\\\\ \hline',"\n";
 		}
 		# End of the table!
 		print $O <<EOF ;
@@ -735,11 +760,23 @@ EOF
 }
 
 if(scalar(@ARGV)>=3) {
-	my($modelFile,$templateDocFile,$out)=@ARGV;
+	my($modelFile,$templateDocDir,$out)=@ARGV;
 	
 	binmode(STDERR,':utf8');
 	binmode(STDOUT,':utf8');
 	my $model = undef;
+	
+	# Preparing the absolute template documentation directory
+	# and checking whether it exists
+	my $templateAbsDocDir = $templateDocDir;
+	unless(File::Spec->file_name_is_absolute($templateDocDir)) {
+		$templateAbsDocDir = File::Spec->catfile($FindBin::Bin,REL_TEMPLATES_DIR,$templateDocDir);
+	}
+	
+	unless(-d $templateAbsDocDir) {
+		print STDERR "ERROR: Template directory $templateDocDir (treated as $templateAbsDocDir) does not exist!\n";
+		exit 2;
+	}
 	
 	eval {
 		$model = DCC::Model->new($modelFile);
@@ -770,6 +807,7 @@ if(scalar(@ARGV)>=3) {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
 		$outfileLaTeX = $out.'.latex';
+		$outfileBPMODEL = $out . '.bpmodel';
 	}
 	
 	# Generating the bpmodel bundle (if it is reasonable)
@@ -807,8 +845,8 @@ if(scalar(@ARGV)>=3) {
 	$TO->flush();
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateDocFile,$model,$outfileLaTeX,$outfilePDF);
+	assemblePDF($templateAbsDocDir,$model,$outfileLaTeX,$outfilePDF);
 } else {
-	print STDERR "This program takes as input the model (in XML), the LaTeX template and the output file\n";
+	print STDERR "This program takes as input the model (in XML or BPModel formats), the documentation template directory and the output file\n";
 	exit 1;
 }
