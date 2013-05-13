@@ -1,0 +1,8 @@
+\title{\projectName{} proposed data submission schemas \\
+\large Draft v\schemaVer{} \\
+\small\textit{(model SHA1 \modelSHA{})}\\
+\textit{(schema model SHA1 \schemaSHA{})}\\
+\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
+\author{\ANNOTauthor}
+\date{\today}
+\maketitle

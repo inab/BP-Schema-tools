@@ -3,9 +3,6 @@
 % For relative/absolute imported pages which import themselves resources in a relative way
 \usepackage{import}
 
-% Setting homogeneous margins on the four borders
-\usepackage{fullpage}
-
 % Multicultural support
 \usepackage[english]{babel}
 
@@ -24,9 +21,6 @@
 % Table environment for tables which span (and must be broken) over several pages
 \usepackage{xtab}
 
-% Allows having cells which span on multiple rows (instead of columns)
-\usepackage{multirow}
-
 % Including PDFs and other kind of graphics
 \usepackage{graphicx}
 
@@ -41,57 +35,31 @@
 \usepackage[usenames,svgnames,table]{xcolor}
 \usepackage{colortbl}
 
-% Improved verbatim
-\usepackage{fancyvrb}
-
 %\usepackage{transparent}
 
 % Flexible parbox
 \usepackage{pbox}
 
-% The fonts used in the document
-\usepackage{iwona}
-\usepackage[scaled=0.8]{beramono}
 
-% To have table counters per section
-\usepackage{chngcntr}
-\counterwithin{table}{section}
-
-\hypersetup{
-	colorlinks=true,
-	linkcolor=blue,
-	urlcolor=olive
-}
-
-% In order to keep compatibility along all the documentation
-\def\cvKey{\ANNOTcvKey}
-\def\cvDesc{\ANNOTcvDesc}
-\def\EnsemblVer{\ANNOTEnsemblVer}
-%\newcommand{\cvKey}{Key}
-%\newcommand{\cvDesc}{Description}
-%\newcommand{\EnsemblVer}{68}
-%\newcommand{\schemaVer}{0.1.5.1}
-
-\newcommand{\DCCdomain}[2]{\hyperref[fea:#1]{#2}}
+% The subimport corresponding to the customizations
+%\subimport*{\INCLUDEtemplatedir}{packages.latex}
+% Must be done in this way in order to have working usepackage
+\input{\INCLUDEtemplatedir%
+packages.latex}
 
 \begin{document}
 
-\title{\projectName{} proposed data submission schemas \\
-\large Draft v\schemaVer{} \\
-\small\textit{(model SHA1 \modelSHA{})}\\
-\textit{(schema model SHA1 \schemaSHA{})}\\
-\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
-\author{\ANNOTauthor}
-\date{\today}
-\maketitle
+% The subimport corresponding to the cover
+\input{\INCLUDEtemplatedir%
+cover.latex}
 
 \frontmatter
-\tableofcontents
-\listoffigures
-\listoftables
-% Hack used to activate beramono
-\texttt{}
 
+% The subimport corresponding to the front matter
+% (table of contents, list of tables, figures, etc...)
+% Must be done in this way in order to have a right table of contents
+\input{\INCLUDEtemplatedir%
+frontmatter.latex}
 
 \mainmatter
 

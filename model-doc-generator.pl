@@ -228,7 +228,9 @@ sub genSQL($$) {
 
 use constant {
 	REL_TEMPLATES_DIR	=>	'doc-templates',
-	TEMPLATE_FILE	=>	'template.latex'
+	PACKAGES_TEMPLATE_FILE	=>	'packages.latex',
+	COVER_TEMPLATE_FILE	=>	'cover.latex',
+	FRONTMATTER_TEMPLATE_FILE	=>	'frontmatter.latex'
 };
 
 # assemblePDF parameters:
@@ -239,10 +241,17 @@ use constant {
 sub assemblePDF($$$$) {
 	my($templateDir,$model,$bodyFile,$outputFile) = @_;
 	
-	my $templateFile = File::Spec->catfile($templateDir,TEMPLATE_FILE);
+	my $masterTemplate = File::Spec->catfile($FindBin::Bin,basename($0,'.pl').'.latex');
+	unless(-f $masterTemplate && -r $masterTemplate) {
+		die "ERROR: Unable to find master template LaTeX file $masterTemplate\n";
+	}
 	
-	unless(-f $templateFile && -r $templateFile) {
-		die "ERROR: Unable to find readable template LaTeX file $templateFile\n";
+	foreach my $relfile (PACKAGES_TEMPLATE_FILE,COVER_TEMPLATE_FILE,FRONTMATTER_TEMPLATE_FILE) {
+		my $templateFile = File::Spec->catfile($templateDir,$relfile);
+		
+		unless(-f $templateFile && -r $templateFile) {
+			die "ERROR: Unable to find readable template LaTeX file $relfile in dir $templateDir\n";
+		}
 	}
 
 	my($bodyDir,$bodyName);
@@ -280,6 +289,7 @@ sub assemblePDF($$$$) {
 	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1],['schemaSHA',$model->schemaSHA1]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
+	push(@params,['INCLUDEtemplatedir',$templateDir.'/']);
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
 	push(@params,['INCLUDEbodydir',$bodyDir.'/'],['INCLUDEbodyname',$bodyName]);
 	
@@ -292,9 +302,10 @@ sub assemblePDF($$$$) {
 	# And now, let's prepare the command line
 	my @pdflatexParams = (
 		'-interaction=batchmode',
+		'-shell-escape',
 		'-jobname',$jobName,
 		'-output-directory',$jobDir,
-		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$templateFile.'}'
+		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$masterTemplate.'}'
 	);
 	
 	print STDERR "[DOCGEN] => ",join(' ','pdflatex',@pdflatexParams),"\n";
