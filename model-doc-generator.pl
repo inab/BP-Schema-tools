@@ -48,7 +48,13 @@ sub latex_escape_internal($) {
 }
 
 sub latex_escape($) {
-	my $paragraph = shift;
+	my $par = shift;
+	
+	my $paragraph = $par;
+	# Let's serialize this nodeset
+	if(ref($par) eq 'ARRAY') {
+		$paragraph = join('',map { $_->toString(0)} @{$par});
+	}
 	
 	# Replace a \ with $\backslash$
 	# This is made more complicated because the dollars will be escaped
@@ -64,7 +70,13 @@ sub latex_escape($) {
 }
 
 sub latex_format($) {
-	my $paragraph = shift;
+	my $par = shift;
+	
+	my $paragraph = $par;
+	# Let's serialize this nodeset
+	if(ref($par) eq 'ARRAY') {
+		$paragraph = join('',map { $_->toString(0)} @{$par});
+	}
 	
 	# Replace a \ with $\backslash$
 	# This is made more complicated because the dollars will be escaped
@@ -76,12 +88,21 @@ sub latex_format($) {
 	# Replace characters that can be escaped
 	$paragraph =~ s/([{}])/\\$1/g;
 	
-	$paragraph =~ s/\<br\>/\n\n/g;
+	# HTML content
+	$paragraph =~ s/\<br *\/?\>/\n\n/g;
 	$paragraph =~ s/\<i\>([^<]+)\<\/i\>/\\textit{$1}/msg;
 	$paragraph =~ s/\<b\>([^<]+)\<\/b\>/\\textbf{$1}/msg;
 	$paragraph =~ s/\<tt\>([^<]+)\<\/tt\>/\\texttt{$1}/msg;
 	$paragraph =~ s/\<u\>([^<]+)\<\/u\>/\\textunderscore{$1}/msg;
-	$paragraph =~ s/\<a\shref=["']([^>'"]+)['"]\>([^<]+)\<\/a\>/\\href{$1}{$2}/msg;
+	$paragraph =~ s/\<a\s+href=["']([^>'"]+)['"]\>([^<]+)\<\/a\>/\\href{$1}{$2}/msg;
+	
+	# XHTML content
+	$paragraph =~ s/\<[^:]+:br *\/\>/\n\n/g;
+	$paragraph =~ s/\<[^:]+:i\>([^<]+)\<\/[^:]+:i\>/\\textit{$1}/msg;
+	$paragraph =~ s/\<[^:]+:b\>([^<]+)\<\/[^:]+:b\>/\\textbf{$1}/msg;
+	$paragraph =~ s/\<[^:]+:tt\>([^<]+)\<\/[^:]+:tt\>/\\texttt{$1}/msg;
+	$paragraph =~ s/\<[^:]+:u\>([^<]+)\<\/[^:]+:u\>/\\textunderscore{$1}/msg;
+	$paragraph =~ s/\<[^:]+:a\s+href=["']([^>'"]+)['"]\>([^<]+)\<\/[^:]+:a\>/\\href{$1}{$2}/msg;
 	
 	return latex_escape_internal($paragraph);
 }
@@ -102,6 +123,29 @@ my %COLKIND2ABBR = (
 	DCC::Model::ColumnType::DESIRABLE	=>	'D',
 	DCC::Model::ColumnType::OPTIONAL	=>	'O'
 );
+
+# fancyColumnOrdering parameters:
+#	concept: a DCC::Concept instance
+# It returns an array with the column names from the concept in a fancy
+# order, based on several criteria, like annotations
+sub fancyColumnOrdering($) {
+	my($concept)=@_;
+	
+	my @colorder = ();
+	
+	my $columnSet = $concept->columnSet;
+
+	# First, the idref columns, alphabetically ordered
+	my @idcolorder=sort(@{$columnSet->idColumnNames});
+
+	# And then, the others
+	my %idcols = map { $_ => undef } @idcolorder;
+	foreach my $columnName (@{$columnSet->columnNames}) {
+		push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
+	}
+	
+	return (@idcolorder,sort(@colorder));
+}
 
 # genSQL parameters:
 #	model: a DCC::Model instance, with the parsed model.
@@ -134,21 +178,10 @@ sub genSQL($$) {
 				print $SQL "\n-- ",$concept->fullname;
 				print $SQL "\nCREATE TABLE $basename (";
 				
+				
+				my @colorder = fancyColumnOrdering($concept);
 				my $columnSet = $concept->columnSet;
-				
-				my @idColumnNames = @{$columnSet->idColumnNames};
-
 				my $gottable=undef;
-				# First, the idref columns
-				my @idcolorder=sort(@idColumnNames);
-				my @colorder=();
-				
-				# And then, the others
-				my %idcols = map { $_ => undef } @idcolorder;
-				foreach my $columnName (@{$columnSet->columnNames}) {
-					push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
-				}
-				@colorder=(@idcolorder,sort(@colorder));
 				
 				foreach my $column (@{$columnSet->columns}{@colorder}) {
 					# Is it involved in a foreign key?
@@ -181,6 +214,8 @@ sub genSQL($$) {
 				push(@fks,\@fkselem)  if(defined($fksinit));
 				
 				# Declaring a primary key (if any!)
+				my @idColumnNames = @{$columnSet->idColumnNames};
+				
 				if(scalar(@idColumnNames)>0) {
 					print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')';
 					$pcon{$basename} = undef;
@@ -230,16 +265,18 @@ use constant {
 	REL_TEMPLATES_DIR	=>	'doc-templates',
 	PACKAGES_TEMPLATE_FILE	=>	'packages.latex',
 	COVER_TEMPLATE_FILE	=>	'cover.latex',
-	FRONTMATTER_TEMPLATE_FILE	=>	'frontmatter.latex'
+	FRONTMATTER_TEMPLATE_FILE	=>	'frontmatter.latex',
+	ICONS_DIR	=>	'icons'
 };
 
 # assemblePDF parameters:
 #	templateDir: The LaTeX template dir to be used to generate the PDF
 #	model: DCC::Model instance
+#	bpmodelFile: The model in bpmodel format
 #	bodyFile: The temporal file where the generated documentation has been written.
 #	outputFile: The output PDF file.
-sub assemblePDF($$$$) {
-	my($templateDir,$model,$bodyFile,$outputFile) = @_;
+sub assemblePDF($$$$$) {
+	my($templateDir,$model,$bpmodelFile,$bodyFile,$outputFile) = @_;
 	
 	my $masterTemplate = File::Spec->catfile($FindBin::Bin,basename($0,'.pl').'.latex');
 	unless(-f $masterTemplate && -r $masterTemplate) {
@@ -285,13 +322,14 @@ sub assemblePDF($$$$) {
 	}
 	
 	# Storing the document generation parameters
-	my @params = map { ['ANNOT'.$_,encode('latex',$annotations->{$_})] } keys(%{$annotations});
+	my @params = map { my $str=encode('latex',$annotations->{$_}); $str =~ s/\{\}//g; ['ANNOT'.$_,$str] } keys(%{$annotations});
 	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1],['schemaSHA',$model->schemaSHA1]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
 	push(@params,['INCLUDEtemplatedir',$templateDir.'/']);
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
 	push(@params,['INCLUDEbodydir',$bodyDir.'/'],['INCLUDEbodyname',$bodyName]);
+	push(@params,['BPMODELpath',$bpmodelFile]);
 	
 	# Setting the jobname and the jobdir, pruning the .pdf extension from the output
 	my $absjob = File::Spec->rel2abs($outputFile);
@@ -302,6 +340,7 @@ sub assemblePDF($$$$) {
 	# And now, let's prepare the command line
 	my @pdflatexParams = (
 		'-interaction=batchmode',
+#		'-synctex=1',
 		'-shell-escape',
 		'-jobname',$jobName,
 		'-output-directory',$jobDir,
@@ -330,7 +369,8 @@ my $NotesFilename = 'notes.latex';
 my %COMMANDS = (
 	'file' => 'subsection',
 	'featureType' => undef,
-	'fileType' => undef
+	'fileType' => undef,
+	'altname' => undef
 );
 
 my %CVCOMMANDS = (
@@ -347,8 +387,8 @@ sub printDoc($$;$) {
 		my $latex;
 		if(exists($COMMANDS{$command})) {
 			$latex = $COMMANDS{$command};
-		} else {
-			$latex = $command;
+		} elsif(substr($command,0,5) eq 'LATEX') {
+			$latex = substr($command,5);
 		}
 		print $O "\\$latex\{",latex_format($text),"\}\n"  if(defined($latex));
 	} else {
@@ -454,8 +494,8 @@ sub printCVTable($$) {
 		my $latex = undef;
 		if(exists($CVCOMMANDS{$annotName})) {
 			$latex = $CVCOMMANDS{$annotName};
-		} else {
-			$latex = $annotName;
+		} elsif(substr($annotName,0,5) eq 'LATEX') {
+			$latex = substr($annotName,5);
 		}
 		
 		print $O "\\$latex\{",latex_format($annotations->{$annotName}),"\}\n"  if(defined($latex));
@@ -584,7 +624,7 @@ EOF
 			if(scalar(@{$alias->description}) > 1) {
 				$descStr = '{'.join(' \\\\ ',map { latex_escape($_) } @{$alias->description}).'}';
 			} elsif(scalar(@{$alias->description}) == 1) {
-				$descStr = $alias->description->[0];
+				$descStr = latex_escape($alias->description->[0]);
 			}
 			print $O join(' & ', latex_escape($aliasKey), $termStr, $descStr),'\\\\ \hline',"\n";
 		}
@@ -597,29 +637,216 @@ EOF
 	}
 }
 
+# parseColor parameters:
+#	color: a XML::LibXML::Element instance, from the model, with an embedded color
+# it returns an array of 2 or 4 elements, where the first one is the LaTeX color model
+# (rgb, RGB or HTML), and the next elements are the components (1 compound for HTML, 3 for the others)
+sub parseColor($) {
+	my($color) = @_;
+	
+	my $colorText = $color->textContent();
+	my $colorModel = undef;
+	my @colorComponents = ();
+	if($colorText =~ /^#([0-9a-fA-F]{3,6})$/) {
+		my $component = $1;
+		# Let's give it an upgrade
+		if(length($component)==3) {
+			$component = (substr($component,0,1) x 2) . (substr($component,1,1) x 2) . (substr($component,2,1) x 2);
+		}
+		$colorModel = 'HTML';
+		push(@colorComponents,$component);
+	} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\)$/) {
+		my $r = $1;
+		my $g = $2;
+		my $b = $3;
+		
+		$colorModel = 'RGB';
+		push(@colorComponents,$r,$g,$b);
+	} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%\)$/) {
+		my $r = $1;
+		my $g = $2;
+		my $b = $3;
+		
+		$colorModel = 'rgb';
+		push(@colorComponents,$r/100.0,$g/100.0,$b/100.0);
+	}
+	
+	return ($colorModel,@colorComponents);
+}
+
 # printConceptDomainGraph parameters:
 #	model: A DCC::Model instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	figurePrefix: path prefix for the generated figures in .dot and in .latex
+#	templateAbsDocDir: Directory of the template being used
 #	O: The filehandle where to print the documentation about the concept domain
-sub printConceptDomainGraph($$$) {
-	my($model,$conceptDomain,$O)=@_;
+sub printConceptDomainGraph($$$$$) {
+	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O)=@_;
 	
+	my @defaultColorDef = ('rgb',0,1,0);
+	if(exists($model->annotations->hash->{defaultColor})) {
+		@defaultColorDef = parseColor($model->annotations->hash->{defaultColor});
+	}
+#	node [shape=box,style="rounded corners,drop shadow"];
+
+	my $dotfile = $figurePrefix . '-domain-'. $conceptDomain->name.'.dot';
+	my $latexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'.latex';
+	my $DOT;
+	if(open($DOT,'>:utf8',$dotfile)) {
+		print $DOT <<DEOF;
+digraph G {
+	rankdir=LR;
+	node [shape=box];
+	edge [arrowhead=none];
 	
+DEOF
+	}
+	
+	my %fks = ();
+	my %colors = ();
+	# First, the concepts
+	foreach my $concept (@{$conceptDomain->concepts}) {
+		my $entry = $conceptDomain->name.'_'.$concept->name;
+		my $color = $entry;
+		
+		my @colorDef = ();
+		my $p_colorDef = \@defaultColorDef;
+		if(exists($concept->annotations->hash->{color})) {
+			my @colorDef = parseColor($concept->annotations->hash->{color});
+			$p_colorDef = \@colorDef;
+		}
+		$colors{$color} = $p_colorDef;
+		
+		my $columnSet = $concept->columnSet;
+		my %idColumnNames = map { $_ => undef } @{$concept->columnSet->idColumnNames};
+		
+		my $latexAttribs = '\arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
+		
+		my @colOrder = fancyColumnOrdering($concept);
+		my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
+		$latexAttribs .= join(' \\\\ ',map {
+			my $column = $_;
+			if(defined($column->relatedColumn) && $column->relatedConcept->conceptDomain eq $conceptDomain) {
+				my $refEntry = $column->relatedConcept->conceptDomain->name . '_' . $column->relatedConcept->name;
+				$fks{$refEntry}{$entry} = (defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
+			}
+			my $formattedColumnName = latex_escape($column->name);
+			
+			my $colType = $column->columnType->use;
+			my $isId = exists($idColumnNames{$column->name});
+			my $icon = undef;
+			if($colType eq DCC::Model::ColumnType::DESIRABLE || $colType eq DCC::Model::ColumnType::OPTIONAL) {
+				$formattedColumnName = '\textcolor{gray}{'.$formattedColumnName.'}';
+			}
+			if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
+				$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
+			}
+			if(defined($column->relatedConcept) && defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept) {
+				$formattedColumnName = '\textit{'.$formattedColumnName.'}';
+			}
+			
+			if($isId) {
+				$icon = defined($column->relatedColumn)?'fkpk':'pk';
+			} elsif(defined($column->relatedColumn)) {
+				$icon = 'fk';
+			}
+			
+			my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR,$icon.'.pdf').'}'):'';
+			if(defined($column->relatedColumn)) {
+				$image = '\hyperref[column:'.join('.',$column->relatedConcept->conceptDomain->name,$column->relatedConcept->name,$column->relatedColumn->name).']{'.$image.'}';
+			}
+			
+			$image.' & \hyperref[column:'.($labelPrefix.$column->name).']{'.$formattedColumnName.'}'
+		} @{$columnSet->columns}{@colOrder});
+		
+		$latexAttribs .= ' \end{tabular}';
+		
+		my $doubleBorder = defined($concept->parentConcept)?',double distance=2pt':'';
+		print $DOT <<DEOF;
+	$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder"];
+DEOF
+	}
+	
+	# Then, their relationships
+	print $DOT <<DEOF;
+	
+	node [shape=diamond, texlbl="Relationship"];
+	
+DEOF
+	foreach my $entry (keys(%fks)) {
+		foreach my $refEntry (keys(%{$fks{$entry}})) {
+			my $dEntry = $entry.'_'.$refEntry;
+			
+			my $doubleBorder = defined($fks{$entry}{$refEntry})?',double distance=2pt':'';
+			print $DOT <<DEOF;
+	
+	$dEntry [style="top color=$refEntry,drop shadow$doubleBorder"];
+	$entry -> $dEntry [label="1"];
+	$dEntry -> $refEntry [label="N",style="$doubleBorder"];
+DEOF
+		}
+	}
+	
+	# And now, let's close the graph
+	print $DOT <<DEOF;
+}
+DEOF
+	close($DOT);
+	
+	# The moment to call dot2tex
+	my @params = (
+		'dot2tex',
+		'--usepdflatex',
+		'--docpreamble=\usepackage{hyperref}',
+		'--autosize',
+#		'--nominsize',
+		'-c',
+		'--figonly',
+# This backend kills relationships
+#		'-ftikz',
+		'-o',$latexfile,
+		$dotfile
+	);
+	system(@params);
+	
+	# Let's do the declaration
+	my $conceptDomainFullname = $conceptDomain->fullname;
+	
+	# First, the colors
+	foreach my $color (keys(%colors)) {
+		my($colorModel,@components) = @{$colors{$color}};
+		my $compo = join(',',@components);
+		print $O <<GEOF;
+\\definecolor{$color}{$colorModel}{$compo}
+GEOF
+	}
+
+	print $O <<GEOF;
+\\begin{figure*}[!h]
+\\centering
+\\resizebox{.85\\linewidth}{!}{
+\\hypersetup{
+	linkcolor=Black
+}
+\\input{$latexfile}
+}
+\\caption{$conceptDomainFullname Sub-Schema}
+\\end{figure*}
+GEOF
 }
 
 # printConceptDomain parameters:
 #	model: A DCC::Model instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	figurePrefix: The prefix path for the generated figures (.dot, .latex, etc...)
+#	templateAbsDocDir: Directory of the template being used
 #	O: The filehandle where to print the documentation about the concept domain
-sub printConceptDomain($$$) {
-	my($model,$conceptDomain,$O)=@_;
+sub printConceptDomain($$$$$) {
+	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O)=@_;
 	
 	# The title
 	# TODO: consider using encode('latex',...) for the content
 	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
-	
-	# generate dot graph representing the concept domain
-	printConceptDomainGraph($model,$conceptDomain,$O);
 	
 	# The additional documentation
 	# The concept domain holds its additional documentation in a subdirectory with
@@ -632,25 +859,27 @@ sub printConceptDomain($$$) {
 		print $O "\\import*\{$domainDocDir/\}\{$TOCFilename\}\n";
 	}
 	
+	# generate dot graph representing the concept domain
+	printConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O);
+	
 	# Let's iterate over the concepts of this concept domain
 	foreach my $concept (@{$conceptDomain->concepts}) {
 		my $columnSet = $concept->columnSet;
+		my %idColumnNames = map { $_ => undef } @{$concept->columnSet->idColumnNames};
 		
 		# The embedded documentation of each concept
-		my $caption = $concept->fullname;
-		print $O '\\subsection{'.latex_format($caption)."}\n";
+		my $caption = latex_format($concept->fullname);
+		print $O '\\subsection{'.$caption."}\n";
 		foreach my $documentation (@{$concept->description}) {
 			printDoc($O,$documentation);
 		}
 		my $annotationSet = $concept->annotations;
 		my $annotations = $annotationSet->hash;
 		foreach my $annotKey (@{$annotationSet->order}) {
-			my $tcap = printDoc($O,$annotations->{$annotKey},$annotKey);
-			$caption = $tcap  if(defined($tcap));
+			printDoc($O,$annotations->{$annotKey},$annotKey);
 		}
 		
 		# The table header
-		$caption = latex_format($caption);
 		my $entry = $conceptDomain->name.'_'.$concept->name;
 		print $O "\\topcaption{$caption} \\label{tab:$entry}\n";
 		print $O <<'EOF' ;
@@ -689,17 +918,8 @@ sub printConceptDomain($$$) {
 EOF
 		
 		# Determining the order of the columns
-		# First, the idref columns
-		my @idcolorder=sort(@{$columnSet->idColumnNames});
-		my @colorder=();
+		my @colorder = fancyColumnOrdering($concept);
 		
-		# And then, the others
-		my %idcols = map { $_ => undef } @idcolorder;
-		foreach my $columnName (@{$columnSet->columnNames}) {
-			push(@colorder,$columnName)  unless(exists($idcols{$columnName}));
-		}
-		@colorder=(@idcolorder,sort(@colorder));
-
 		# Now, let's print the documentation of each column
 		foreach my $column (@{$columnSet->columns}{@colorder}) {
 			# Preparing the documentation
@@ -750,7 +970,7 @@ EOF
 					$colTypeLines[0]
 				).'}';
 			
-			print $O join(' & ','\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{$columnType->use}.'}',join("\n\n",$description,$related,$values)),'\\\\ \hline',"\n";
+			print $O join(' & ','\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED}.'}',join("\n\n",$description,$related,$values)),'\\\\ \hline',"\n";
 		}
 		# End of the table!
 		print $O <<EOF ;
@@ -803,6 +1023,7 @@ if(scalar(@ARGV)>=3) {
 	my $outfileSQL = undef;
 	my $outfileBPMODEL = undef;
 	my $outfileLaTeX = undef;
+	my $figurePrefix = undef;
 	if(-d $out) {
 		my (undef,undef,undef,$day,$month,$year) = localtime();
 		# Doing numerical adjustments
@@ -814,11 +1035,13 @@ if(scalar(@ARGV)>=3) {
 		$outfilePDF = $outfileRoot . '.pdf';
 		$outfileSQL = $outfileRoot . '.sql';
 		$outfileBPMODEL = $outfileRoot . '.bpmodel';
+		$figurePrefix = $outfileRoot;
 	} else {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
 		$outfileLaTeX = $out.'.latex';
 		$outfileBPMODEL = $out . '.bpmodel';
+		$figurePrefix = $out;
 	}
 	
 	# Generating the bpmodel bundle (if it is reasonable)
@@ -831,7 +1054,7 @@ if(scalar(@ARGV)>=3) {
 	my $TO = undef;
 	
 	if(defined($outfileLaTeX)) {
-		open($TO,'>',$outfileLaTeX) || die "ERROR: Unable to create output LaTeX file";
+		open($TO,'>:utf8',$outfileLaTeX) || die "ERROR: Unable to create output LaTeX file";
 	} else {
 		$TO = File::Temp->new();
 		$outfileLaTeX = $TO->filename;
@@ -841,7 +1064,7 @@ if(scalar(@ARGV)>=3) {
 	
 	# Let's iterate over all the concept domains and their concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
-		printConceptDomain($model,$conceptDomain,$TO);
+		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO);
 	}
 
 	print $TO "\\appendix\n";
@@ -856,7 +1079,7 @@ if(scalar(@ARGV)>=3) {
 	$TO->flush();
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateAbsDocDir,$model,$outfileLaTeX,$outfilePDF);
+	assemblePDF($templateAbsDocDir,$model,$outfileBPMODEL,$outfileLaTeX,$outfilePDF);
 } else {
 	print STDERR "This program takes as input the model (in XML or BPModel formats), the documentation template directory and the output file\n";
 	exit 1;
