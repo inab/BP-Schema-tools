@@ -226,7 +226,7 @@ sub new($;$) {
 	# Schema SHA1
 	my $SCHpath = $self->librarySchemaPath();
 	my $SCH = undef;
-	if(open($SCH,'<',$SCHpath)) {
+	if(open($SCH,'<:utf8',$SCHpath)) {
 		my $SCSHA = Digest::SHA1->new;
 		
 		$SCSHA->addfile($SCH);
@@ -303,7 +303,7 @@ sub openModel() {
 	} else {
 		my $X;
 		
-		open($X,'<',$self->{_modelAbsPath});
+		open($X,'<:utf8',$self->{_modelAbsPath});
 		
 		return $X;
 	}
@@ -708,7 +708,18 @@ sub parseDescriptions($) {
 	
 	my @descriptions = ();
 	foreach my $description ($container->getChildrenByTagNameNS(dccNamespace,'description')) {
-		push(@descriptions,$description->textContent());
+		my @dChildren = $description->nonBlankChildNodes();
+		
+		my $value = undef;
+		# We only save the nodeset when 
+		foreach my $dChild (@dChildren) {
+			next  unless($dChild->nodeType == XML::LibXML::XML_ELEMENT_NODE);
+			
+			$value = \@dChildren;
+			last;
+		}
+		
+		push(@descriptions,defined($value)?$value:$description->textContent());
 	}
 	
 	return bless(\@descriptions,'DCC::Model::DescriptionSet');
@@ -732,7 +743,19 @@ sub parseAnnotations($) {
 		unless(exists($annotationHash{$annotation->getAttribute('key')})) {
 			push(@annotationOrder,$annotation->getAttribute('key'));
 		}
-		$annotationHash{$annotation->getAttribute('key')} = $annotation->textContent();
+		my @aChildren = $annotation->nonBlankChildNodes();
+		
+		my $value = undef;
+		foreach my $aChild (@aChildren) {
+			next  unless($aChild->nodeType == XML::LibXML::XML_ELEMENT_NODE);
+			if($aChild->namespaceURI() eq DCC::Model::dccNamespace) {
+				$value = $aChild;
+			} else {
+				$value = \@aChildren;
+			}
+			last;
+		}
+		$annotationHash{$annotation->getAttribute('key')} = defined($value)?$value:$annotation->textContent();
 	}
 	
 	return bless(\@annotations,'DCC::Model::AnnotationSet');
@@ -818,7 +841,7 @@ sub parseCVElement($) {
 				} else {
 					Carp::croak("Unable to open CV member $cvPath");
 				}
-			} elsif(!open($CV,'<',$cvPath)) {
+			} elsif(!open($CV,'<:utf8',$cvPath)) {
 				Carp::croak("Unable to open CV file $cvPath");
 			}
 			while(my $cvline=$CV->getline()) {
