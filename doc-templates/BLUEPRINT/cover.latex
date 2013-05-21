@@ -1,8 +1,33 @@
-\title{\projectName{} proposed data submission schemas \\
-\large Draft v\schemaVer{} \\
-\small\textit{(model SHA1 \modelSHA{})}\\
+\begin{titlepage}
+
+\hypersetup{
+	pdftitle={\projectName{} proposed data submission schemas (Draft v\schemaVer{})}
+}
+
+\begin{center}
+\includegraphics[scale=0.75]{logoblueprint.png}\\[6cm]
+{\Large\textbf{\projectName{} proposed data submission schemas}}\\
+{\large Draft v\schemaVer{}}\\[4ex]
+
+% NB: pdffilemoddate is a macro only defined in PDFTeX and PDFLaTeX
+{\small\textit{(model SHA1 \modelSHA{})}\\
 \textit{(schema model SHA1 \schemaSHA{})}\\
-\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
-\author{\ANNOTauthor}
-\date{\today}
-\maketitle
+\textit{(external controlled vocabulary SHA1 \CVSHA{})}}\\[8ex]
+
+{\large\ANNOTauthor\\[4ex]
+\today}
+
+\end{center}
+\end{titlepage}
+
+%\title{\projectName{} proposed data submission schemas \\
+%\large Draft v\schemaVer{} \\
+%\small\textit{(model SHA1 \modelSHA{})}\\
+%\textit{(schema model SHA1 \schemaSHA{})}\\
+%\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
+%
+%\author{\ANNOTauthor}
+%
+%\date{\today}
+%
+%\maketitle

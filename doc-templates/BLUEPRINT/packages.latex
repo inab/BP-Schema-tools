@@ -7,6 +7,8 @@
 % Setting homogeneous margins on the four borders
 \usepackage{fullpage}
 
+%\usepackage{setspace}
+
 % The fonts used in the document
 \usepackage{iwona}
 \usepackage[scaled=0.8]{beramono}
@@ -15,6 +17,7 @@
 \usepackage{chngcntr}
 \counterwithin{table}{section}
 
+% Setting up hyperref package
 \hypersetup{
 	colorlinks=true,
 	linkcolor=blue,

@@ -40,6 +40,21 @@
 % Flexible parbox
 \usepackage{pbox}
 
+% This package is to attach to a specific place
+%\usepackage{attachfile}
+
+% Embedding files to the generated PDF
+\usepackage{embedfile}
+
+% This package is used to hide blocks when
+% PDF is printed
+\usepackage{ocg-p}
+
+% This package is used by generated graphs from dot declarations
+% as they depend on tikz package
+\usepackage{tikz}
+\usetikzlibrary{shapes,automata,snakes,backgrounds,arrows,shadows}
+%\usepackage[pgf,debug]{dot2texi}
 
 % The subimport corresponding to the customizations
 %\subimport*{\INCLUDEtemplatedir}{packages.latex}
@@ -49,9 +64,34 @@ packages.latex}
 
 \begin{document}
 
+\hypersetup{
+	pdfauthor=\ANNOTauthor,
+	pdftitle={\projectName{} DCC Data Model (Draft v\schemaVer{})}
+}
+
 % The subimport corresponding to the cover
-\input{\INCLUDEtemplatedir%
-cover.latex}
+%\input{\INCLUDEtemplatedir%
+%cover.latex}
+\subimport*{\INCLUDEtemplatedir}{cover.latex}
+
+\begin{ocg}[printocg=never]{Attached content}{aoc}{1}
+\thispagestyle{empty}
+\begin{center}
+	\textit{\textcolor{gray}{(Contents of this page should not going to be printed)}}
+\end{center}
+
+This PDF contains a file attachment named `\BPMODELpath', which is the version \schemaVer{} of \projectName{} DCC data model.
+
+%\attachfile[created=\pdffilemoddate{\BPMODELpath},modified=\pdffilemoddate{\BPMODELpath},author=\ANNOTauthor]{\BPMODELpath}{model}
+\begin{center}
+{\small\textit{(model SHA1 \modelSHA{})}\\
+\textit{(schema model SHA1 \schemaSHA{})}\\
+\textit{(external controlled vocabulary SHA1 \CVSHA{})}}
+\end{center}
+
+The attachments can be extracted using tools like newer enough versions of Adobe Reader\textsuperscript{\textregistered\textcopyright},
+FoxIt Reader\textsuperscript{\textregistered\textcopyright}, Okular (from KDE) or pdfdetach (from poppler-utils)
+\end{ocg}
 
 \frontmatter
 
@@ -66,5 +106,8 @@ frontmatter.latex}
 \subimport*{\INCLUDEoverviewdir}{\INCLUDEoverviewname}
 
 \subimport*{\INCLUDEbodydir}{\INCLUDEbodyname}
+
+%\embedfile[filespec={\projectName-model.bpmodel},desc={\projectName{} DCC BPModel}]{\BPMODELpath}
+\embedfile[desc={\projectName{} DCC BPModel}]{\BPMODELpath}
 
 \end{document}
