@@ -329,6 +329,9 @@ sub assemblePDF($$$$$) {
 	push(@params,['INCLUDEtemplatedir',$templateDir.'/']);
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
 	push(@params,['INCLUDEbodydir',$bodyDir.'/'],['INCLUDEbodyname',$bodyName]);
+	
+	my(undef,undef,$bpmodelFilename) = File::Spec->splitpath($bpmodelFile);
+	push(@params,['BPMODELfilename',latex_escape($bpmodelFilename)]);
 	push(@params,['BPMODELpath',$bpmodelFile]);
 	
 	# Setting the jobname and the jobdir, pruning the .pdf extension from the output
@@ -720,7 +723,7 @@ DEOF
 		my $columnSet = $concept->columnSet;
 		my %idColumnNames = map { $_ => undef } @{$concept->columnSet->idColumnNames};
 		
-		my $latexAttribs = '\arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
+		my $latexAttribs = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}} \arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
 		
 		my @colOrder = fancyColumnOrdering($concept);
 		my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
@@ -741,7 +744,8 @@ DEOF
 			if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
 				$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 			}
-			if(defined($column->relatedConcept) && defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept) {
+			if(defined($column->relatedConcept)) {
+#			if(defined($column->relatedConcept) && defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept) {
 				$formattedColumnName = '\textit{'.$formattedColumnName.'}';
 			}
 			
@@ -751,7 +755,7 @@ DEOF
 				$icon = 'fk';
 			}
 			
-			my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR,$icon.'.pdf').'}'):'';
+			my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
 			if(defined($column->relatedColumn)) {
 				$image = '\hyperref[column:'.join('.',$column->relatedConcept->conceptDomain->name,$column->relatedConcept->name,$column->relatedColumn->name).']{'.$image.'}';
 			}
@@ -763,7 +767,7 @@ DEOF
 		
 		my $doubleBorder = defined($concept->parentConcept)?',double distance=2pt':'';
 		print $DOT <<DEOF;
-	$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder"];
+	$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder",margin="-0.2,0"];
 DEOF
 	}
 	
@@ -809,6 +813,8 @@ DEOF
 	);
 	system(@params);
 	
+	my(undef,$absLaTeXDir,$relLaTeXFile) = File::Spec->splitpath($latexfile);
+	
 	# Let's do the declaration
 	my $conceptDomainFullname = $conceptDomain->fullname;
 	
@@ -821,6 +827,7 @@ DEOF
 GEOF
 	}
 
+	#my $gdef = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}}';
 	print $O <<GEOF;
 \\begin{figure*}[!h]
 \\centering
@@ -828,7 +835,8 @@ GEOF
 \\hypersetup{
 	linkcolor=Black
 }
-\\input{$latexfile}
+%\\input{$latexfile}
+\\import*{$absLaTeXDir/}{$relLaTeXFile}
 }
 \\caption{$conceptDomainFullname Sub-Schema}
 \\end{figure*}
@@ -1035,7 +1043,7 @@ if(scalar(@ARGV)>=3) {
 		$outfilePDF = $outfileRoot . '.pdf';
 		$outfileSQL = $outfileRoot . '.sql';
 		$outfileBPMODEL = $outfileRoot . '.bpmodel';
-		$figurePrefix = $outfileRoot;
+		$figurePrefix = File::Spec->file_name_is_absolute($outfileRoot)?$outfileRoot:File::Spec->rel2abs($outfileRoot);
 	} else {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
@@ -1057,6 +1065,7 @@ if(scalar(@ARGV)>=3) {
 		open($TO,'>:utf8',$outfileLaTeX) || die "ERROR: Unable to create output LaTeX file";
 	} else {
 		$TO = File::Temp->new();
+		binmode( $TO, ":utf8" );
 		$outfileLaTeX = $TO->filename;
 	}
 	

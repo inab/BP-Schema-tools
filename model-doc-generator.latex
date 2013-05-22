@@ -53,7 +53,7 @@
 % This package is used by generated graphs from dot declarations
 % as they depend on tikz package
 \usepackage{tikz}
-\usetikzlibrary{shapes,automata,snakes,backgrounds,arrows,shadows}
+\usetikzlibrary{shapes,automata,backgrounds,arrows,shadows}
 %\usepackage[pgf,debug]{dot2texi}
 
 % The subimport corresponding to the customizations
@@ -80,7 +80,7 @@ packages.latex}
 	\textit{\textcolor{gray}{(Contents of this page should not going to be printed)}}
 \end{center}
 
-This PDF contains a file attachment named `\BPMODELpath', which is the version \schemaVer{} of \projectName{} DCC data model.
+This PDF contains a file attachment named `\BPMODELfilename', which is the version \schemaVer{} of \projectName{} DCC data model.
 
 %\attachfile[created=\pdffilemoddate{\BPMODELpath},modified=\pdffilemoddate{\BPMODELpath},author=\ANNOTauthor]{\BPMODELpath}{model}
 \begin{center}

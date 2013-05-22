@@ -1929,11 +1929,17 @@ sub refColumns(;$$) {
 	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
-	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($relatedConcept,$prefix) } @columnNames;
+	my @refColumnNames = ();
+	my %columns = map {
+		my $refColumn = $p_columns->{$_}->cloneRelated($relatedConcept,$prefix);
+		my $refColumnName = $refColumn->name;
+		push(@refColumnNames,$refColumnName);
+		$refColumnName => $refColumn
+	} @columnNames;
 	
 	my @columnSet = (
-		\@columnNames,
-		\@columnNames,
+		\@refColumnNames,
+		\@refColumnNames,
 		\%columns
 	);
 	
