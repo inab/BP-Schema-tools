@@ -184,16 +184,16 @@ sub genSQL($$) {
 				my $gottable=undef;
 				
 				foreach my $column (@{$columnSet->columns}{@colorder}) {
-					# Is it involved in a foreign key?
-					if(defined($column->relatedColumn)) {
+					# Is it involved in a foreign key outside the relatedConcept system?
+					if(defined($column->refColumn) && !defined($column->relatedConcept)) {
 						$fksinit = 1;
 						
-						my $relatedConcept = $column->relatedConcept;
-						my $relatedBasename = $relatedConcept->conceptDomain->name . '_' . $relatedConcept->name;
+						my $refConcept = $column->refConcept;
+						my $refBasename = $refConcept->conceptDomain->name . '_' . $refConcept->name;
 						
-						$fkselemrefs{$relatedBasename} = [$relatedConcept,[]]  unless(exists($fkselemrefs{$relatedBasename}));
+						$fkselemrefs{$refBasename} = [$refConcept,[]]  unless(exists($fkselemrefs{$refBasename}));
 						
-						push(@{$fkselemrefs{$relatedBasename}[1]}, $column);
+						push(@{$fkselemrefs{$refBasename}[1]}, $column);
 					}
 					
 					# Let's print
@@ -242,16 +242,37 @@ sub genSQL($$) {
 			#}
 		}
 			
-		# And now, the FK restrictions from related concepts
+		# Now, the FK restrictions from inheritance
 		foreach my $p_fks (@fks) {
 			my($basename,$concept,$p_fkconcept) = @{$p_fks};
 			
-			print $SQL "\n-- ",$concept->fullname, " foreign keys";
+			print $SQL "\n-- ",$concept->fullname, " foreign keys from inheritance";
 			foreach my $relatedBasename (keys(%{$p_fkconcept})) {
 				my $p_columns = $p_fkconcept->{$relatedBasename}[1];
 				
 				print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @{$p_columns}),")";
-				print $SQL "\nREFERENCES $relatedBasename(".join(',',map { $_->relatedColumn->name } @{$p_columns}).");\n";
+				print $SQL "\nREFERENCES $relatedBasename(".join(',',map { $_->refColumn->name } @{$p_columns}).");\n";
+			}
+		}
+
+		# And now, the FK restrictions from related concepts
+		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			my $conceptDomainName = $conceptDomain->name;
+			
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				#my $conceptName = $concept->name;
+				my $basename = $conceptDomainName.'_'.$concept->name;
+				
+				# Let's visit each concept!
+				if(scalar(@{$concept->relatedConcepts})>0) {
+					print $SQL "\n-- ",$concept->fullname, " foreign keys from related-to";
+					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+						my @refColumns = values(%{$relatedConcept->columnSet->columns});
+						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
+						print $SQL "\nREFERENCES $refBasename(".join(',',map { $_->refColumn->name } @refColumns).");\n";
+					}
+				}
 			}
 		}
 		
@@ -729,9 +750,9 @@ DEOF
 		my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
 		$latexAttribs .= join(' \\\\ ',map {
 			my $column = $_;
-			if(defined($column->relatedColumn) && $column->relatedConcept->conceptDomain eq $conceptDomain) {
-				my $refEntry = $column->relatedConcept->conceptDomain->name . '_' . $column->relatedConcept->name;
-				$fks{$refEntry}{$entry} = (defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
+			if(defined($column->refColumn) && $column->refConcept->conceptDomain eq $conceptDomain) {
+				my $refEntry = $column->refConcept->conceptDomain->name . '_' . $column->refConcept->name;
+				$fks{$refEntry}{$entry} = (defined($concept->parentConcept) && $column->refConcept eq $concept->parentConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
 			}
 			my $formattedColumnName = latex_escape($column->name);
 			
@@ -744,20 +765,20 @@ DEOF
 			if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
 				$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 			}
-			if(defined($column->relatedConcept)) {
-#			if(defined($column->relatedConcept) && defined($concept->parentConcept) && $column->relatedConcept eq $concept->parentConcept) {
+			if(defined($column->refConcept)) {
+#			if(defined($column->refConcept) && defined($concept->parentConcept) && $column->refConcept eq $concept->parentConcept) {
 				$formattedColumnName = '\textit{'.$formattedColumnName.'}';
 			}
 			
 			if($isId) {
-				$icon = defined($column->relatedColumn)?'fkpk':'pk';
-			} elsif(defined($column->relatedColumn)) {
+				$icon = defined($column->refColumn)?'fkpk':'pk';
+			} elsif(defined($column->refColumn)) {
 				$icon = 'fk';
 			}
 			
 			my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
-			if(defined($column->relatedColumn)) {
-				$image = '\hyperref[column:'.join('.',$column->relatedConcept->conceptDomain->name,$column->relatedConcept->name,$column->relatedColumn->name).']{'.$image.'}';
+			if(defined($column->refColumn)) {
+				$image = '\hyperref[column:'.join('.',$column->refConcept->conceptDomain->name,$column->refConcept->name,$column->refColumn->name).']{'.$image.'}';
 			}
 			
 			$image.' & \hyperref[column:'.($labelPrefix.$column->name).']{'.$formattedColumnName.'}'
@@ -938,8 +959,8 @@ EOF
 			}
 			
 			my $related='';
-			if(defined($column->relatedColumn)) {
-				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->relatedConcept->conceptDomain->name.'.'.$column->relatedConcept->name.'.'.$column->relatedColumn->name).']{'.latex_escape($column->relatedConcept->fullname.' ('.$column->relatedColumn->name.')').'}}}';
+			if(defined($column->refColumn)) {
+				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
 			}
 			
 			# The comment about the values

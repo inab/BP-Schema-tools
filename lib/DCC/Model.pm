@@ -22,8 +22,9 @@ use constant {
 	ANNOTATIONS => 2,
 	COLUMNTYPE => 3,
 	ISMASKED => 4,
-	RELCONCEPT => 5,
-	RELCOLUMN => 6
+	REFCONCEPT => 5,
+	REFCOLUMN => 6,
+	RELATED_CONCEPT => 7
 };
 
 
@@ -637,30 +638,30 @@ sub digestModel($) {
 	# we have to propagate the foreign keys
 	foreach my $conceptDomain (@conceptDomains) {
 		foreach my $concept (@{$conceptDomain->concepts}) {
-			foreach my $relatedConceptName (@{$concept->relatedConceptNames}) {
-				my $domainName = $relatedConceptName->conceptDomainName;
-				my $conceptName = $relatedConceptName->conceptName;
-				my $prefix = $relatedConceptName->keyPrefix;
+			foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+				my $domainName = $relatedConcept->conceptDomainName;
+				my $conceptName = $relatedConcept->conceptName;
+				my $prefix = $relatedConcept->keyPrefix;
 				
-				my $relatedDomain = $conceptDomain;
+				my $refDomain = $conceptDomain;
 				if(defined($domainName)) {
 					unless(exists($conceptDomainHash{$domainName})) {
 						Carp::croak("Concept domain $domainName referred from concept ".$conceptDomain->name.'.'.$concept->name." does not exist");
 					}
 					
-					$relatedDomain = $conceptDomainHash{$domainName};
+					$refDomain = $conceptDomainHash{$domainName};
 				}
 				
-				my $relatedConcept = undef;
-				if(exists($relatedDomain->conceptHash->{$conceptName})) {
-					$relatedConcept = $relatedDomain->conceptHash->{$conceptName};
-					$relatedConceptName->setRelatedConcept($relatedConcept);
+				if(exists($refDomain->conceptHash->{$conceptName})) {
+					# And now, let's propagate!
+					my $refConcept = $refDomain->conceptHash->{$conceptName};
+					my $refColumnSet = $refConcept->refColumns($relatedConcept);
+					$concept->columnSet->addColumns($refColumnSet);
+					$relatedConcept->setRelatedConcept($refConcept,$refColumnSet);
 				} else {
 					Carp::croak("Concept $domainName.$conceptName referred from concept ".$conceptDomain->name.'.'.$concept->name." does not exist");
 				}
 				
-				# And now, let's propagate!
-				$concept->columnSet->addColumns($relatedConcept->refColumns($prefix));
 			}
 		}
 	}
@@ -1124,6 +1125,7 @@ sub parseColumn($) {
 		bless(\@columnType,'DCC::Model::ColumnType'),
 		undef,
 		undef,
+		undef,
 		undef
 	);
 	
@@ -1452,7 +1454,7 @@ sub parseConcept($$;$) {
 	
 	# We don't have to inherit the related concepts, because subconcepts
 	# are not subclasses!!!!!
-	#########push(@related,@{$parentConcept->relatedConceptNames})  if(defined($parentConcept));
+	#########push(@related,@{$parentConcept->relatedConcepts})  if(defined($parentConcept));
 	
 	# Preparing the columns
 	my $columnSet = $self->parseColumnSet($conceptDecl,$basetype->columnSet);
@@ -1913,25 +1915,27 @@ sub idColumns($;$) {
 	return bless(\@columnSet,ref($self));
 }
 
-# refColumns parameters:
-#	relatedConcept: A DCC::Model::Concept instance, which this columnSet belongs
+# relatedColumns parameters:
+#	myConcept: A DCC::Model::Concept instance, which this columnSet belongs
 #		The kind of relation could be inheritance, or 1:N
-#	prefix: The optional prefix to be set to the name when the columns are cloned
+#	relatedConcept: A DCC::Model::RelatedConcept instance
+#		(which contains the optional prefix to be set to the name when the columns are cloned)
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
-sub refColumns(;$$) {
+sub relatedColumns(;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $myConcept = shift;
+	
 	my $relatedConcept = shift;
-	my $prefix = shift;
 	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
 	my @refColumnNames = ();
 	my %columns = map {
-		my $refColumn = $p_columns->{$_}->cloneRelated($relatedConcept,$prefix);
+		my $refColumn = $p_columns->{$_}->cloneRelated($myConcept,$relatedConcept);
 		my $refColumnName = $refColumn->name;
 		push(@refColumnNames,$refColumnName);
 		$refColumnName => $refColumn
@@ -2094,16 +2098,24 @@ sub isMasked {
 # If this column is part of a foreign key pointing
 # to a concept, this method will return a DCC::Model::Concept instance
 # Otherwise, it will return undef
-sub relatedConcept {
-	return $_[0]->[DCC::Model::Column::RELCONCEPT];
+sub refConcept {
+	return $_[0]->[DCC::Model::Column::REFCONCEPT];
 }
 
 # If this column is part of a foreign key pointing
 # to a concept, this method will return a DCC::Model::Column instance
 # which correlates to
 # Otherwise, it will return undef
-sub relatedColumn {
-	return $_[0]->[DCC::Model::Column::RELCOLUMN];
+sub refColumn {
+	return $_[0]->[DCC::Model::Column::REFCOLUMN];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept using related-to, this method will return a DCC::Model::RelatedConcept
+# instance which correlates to
+# Otherwise, it will return undef
+sub relatedConcept {
+	return $_[0]->[DCC::Model::Column::RELATED_CONCEPT];
 }
 
 # clone parameters:
@@ -2127,9 +2139,9 @@ sub clone(;$) {
 }
 
 # cloneRelated parameters:
-#	relatedConcept: A DCC::Model::Concept instance, which this column is related to.
+#	refConcept: A DCC::Model::Concept instance, which this column is related to.
 #		The kind of relation could be inheritance, or 1:N
-#	prefix: optional, prefix to be set to the name when the column is cloned
+#	relatedConcept: optional, DCC::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
 #	doMask: optional, it signals whether to mark cloned column
 #		as masked, so it should not be considered for value storage in the database.
 # it returns a DCC::Model::Column instance
@@ -2138,8 +2150,9 @@ sub cloneRelated($;$$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $refConcept = shift;
 	my $relatedConcept = shift;
-	my $prefix = shift;
+	my $prefix = defined($relatedConcept)?$relatedConcept->keyPrefix:undef;
 	my $doMask = shift;
 	
 	# Cloning this object
@@ -2150,8 +2163,9 @@ sub cloneRelated($;$$) {
 	
 	# And adding the relation info
 	# to this column
-	$retval->[DCC::Model::Column::RELCONCEPT] = $relatedConcept;
-	$retval->[DCC::Model::Column::RELCOLUMN] = $self;
+	$retval->[DCC::Model::Column::REFCONCEPT] = $refConcept;
+	$retval->[DCC::Model::Column::REFCOLUMN] = $self;
+	$retval->[DCC::Model::Column::RELATED_CONCEPT] = $relatedConcept;
 	
 	return $retval;
 }
@@ -2345,22 +2359,22 @@ sub parentConcept {
 }
 
 # related conceptNames, an array of DCC::Model::RelatedConcept (trios concept domain name, concept name, prefix)
-sub relatedConceptNames {
+sub relatedConcepts {
 	return $_[0]->[8];
 }
 
 # refColumns parameters:
-#	prefix: The optional prefix to put on cloned idref columns
+#	relatedConcept: The DCC::Model::RelatedConcept instance which rules this (with the optional prefix to put on cloned idref columns)
 # It returns a DCC::Model::ColumnSet instance with clones of all the idref columns
 # referring to this object and with a possible prefix.
-sub refColumns(;$) {
+sub refColumns($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $prefix = shift;
+	my $relatedConcept = shift;
 	
-	return $self->columnSet->refColumns($self,$prefix);
+	return $self->columnSet->relatedColumns($self,$relatedConcept);
 }
 
 # idColumns parameters:
@@ -2396,16 +2410,24 @@ sub concept {
 	return $_[0]->[3];
 }
 
-sub setRelatedConcept($) {
+# It returns a column set with the remote columns used for this relation
+sub columnSet {
+	return $_[0]->[4];
+}
+
+sub setRelatedConcept($$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $concept = shift;
+	my $columnSet = shift;
 	
 	Carp::croak('Parameter must be either a DCC::Model::Concept or undef')  unless(!defined($concept) || (ref($concept) && $concept->isa('DCC::Model::Concept')));
+	Carp::croak('Parameter must be either a DCC::Model::ColumnSet or undef')  unless(!defined($columnSet) || (ref($columnSet) && $columnSet->isa('DCC::Model::ColumnSet')));
 	
 	$self->[3] = $concept;
+	$self->[4] = $columnSet;
 }
 
 1;
