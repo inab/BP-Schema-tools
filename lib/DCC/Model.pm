@@ -683,7 +683,7 @@ sub parseIndexes($) {
 	my @indexes = ();
 	foreach my $ind ($container->getChildrenByTagNameNS(dccNamespace,'index')) {
 		# Is index unique?, attributes (attribute name, ascending/descending)
-		my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
+		my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 1)?1:undef,[]);
 		push(@indexes,bless(\@index,'DCC::Model::Index'));
 		
 		foreach my $attr ($ind->childNodes()) {
@@ -1402,13 +1402,13 @@ sub parseConceptDomain($) {
 
 # parseConceptContainer paramereters:
 #	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
-#		or 'dcc:subconcepts' instance
+#		or 'dcc:weak-concepts' instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
 #		has been defined.
-#	parentConcept: An optional, parent DCC::Model::Concept instance of
-#		all the concepts to be parsed from the container
+#	idConcept: An optional, identifying DCC::Model::Concept instance of
+#		all the (weak) concepts to be parsed from the container
 # it returns an array of DCC::Model::Concept instances, which are all the
-# concepts and subconcepts inside the input concept container
+# concepts and weak concepts inside the input concept container
 sub parseConceptContainer($$;$) {
 	my $self = shift;
 	
@@ -1416,11 +1416,11 @@ sub parseConceptContainer($$;$) {
 	
 	my $conceptContainerDecl = shift;
 	my $conceptDomain = shift;
-	my $parentConcept = shift;	# This is optional (remember!)
+	my $idConcept = shift;	# This is optional (remember!)
 	
 	my @concepts = ();
 	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(dccNamespace,'concept')) {
-		push(@concepts,$self->parseConcept($conceptDecl,$conceptDomain,$parentConcept));
+		push(@concepts,$self->parseConcept($conceptDecl,$conceptDomain,$idConcept));
 	}
 	
 	return @concepts;
@@ -1430,10 +1430,10 @@ sub parseConceptContainer($$;$) {
 #	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
 #		has been defined.
-#	parentConcept: An optional, parent DCC::Model::Concept instance of
+#	idConcept: An optional, identifying DCC::Model::Concept instance of
 #		the concept to be parsed from conceptDecl
 # it returns an array of DCC::Model::Concept instances, the first one
-# corresponds to this concept, and the other ones are the subconcepts
+# corresponds to this concept, and the other ones are the weak-concepts
 sub parseConcept($$;$) {
 	my $self = shift;
 	
@@ -1441,27 +1441,35 @@ sub parseConcept($$;$) {
 	
 	my $conceptDecl = shift;
 	my $conceptDomain = shift;
-	my $parentConcept = shift;	# This is optional (remember!)
+	my $idConcept = shift;	# This is optional (remember!)
 
 	my $conceptName = $conceptDecl->getAttribute('name');
 	my $conceptFullname = $conceptDecl->getAttribute('fullname');
-	my $basetypeName = $conceptDecl->getAttribute('basetype');
-	Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(exists($self->{CTYPES}{$basetypeName}));
+	
+	my @baseConceptTypes = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
+	
+	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypes)==0);
+	foreach my $baseConceptType (@baseConceptTypes) {
+		my $thisBasetypeName = $baseConceptType->getAttribute('name');
+		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $thisBasetypeName")  unless(exists($self->{CTYPES}{$thisBasetypeName}));
+	}
+	
+	my $basetypeName = $baseConceptTypes[0]->getAttribute('name');
 	my $basetype = $self->{CTYPES}{$basetypeName};
 	
 	# This array will contain the names of the related concepts
 	my @related = ();
 	
-	# We don't have to inherit the related concepts, because subconcepts
+	# We don't have to inherit the related concepts, because weak concepts
 	# are not subclasses!!!!!
-	#########push(@related,@{$parentConcept->relatedConcepts})  if(defined($parentConcept));
+	#########push(@related,@{$idConcept->relatedConcepts})  if(defined($idConcept));
 	
 	# Preparing the columns
 	my $columnSet = $self->parseColumnSet($conceptDecl,$basetype->columnSet);
-	# and adding the ones from the parent concept
+	# and adding the ones from the identifying concept
 	# (and later from the related stuff)
 	
-	$columnSet->addColumns($parentConcept->idColumns(! $parentConcept->baseConceptType->isCollection),1)  if(defined($parentConcept));
+	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
 	
 	# name
 	# fullname
@@ -1479,7 +1487,7 @@ sub parseConcept($$;$) {
 		$self->parseDescriptions($conceptDecl),
 		$self->parseAnnotations($conceptDecl),
 		$columnSet,
-		$parentConcept,
+		$idConcept,
 		\@related,
 	);
 	
@@ -1489,17 +1497,21 @@ sub parseConcept($$;$) {
 				($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
 				$relatedDecl->getAttribute('concept') ,
 				($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
-				undef
+				undef,
+				undef,
+				($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
+				($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
+				($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef
 			],'DCC::Model::RelatedConcept')
 		);
 	}
 	
-	# And last, the subconcepts
+	# And last, the weak concepts
 	my $concept =  bless(\@thisConcept,'DCC::Model::Concept');
 	
 	my @concepts = ($concept);
 	
-	foreach my $conceptContainerDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'subconcepts')) {
+	foreach my $conceptContainerDecl ($conceptDecl->getChildrenByTagNameNS(dccNamespace,'weak-concepts')) {
 		push(@concepts,$self->parseConceptContainer($conceptContainerDecl,$conceptDomain,$concept));
 	}
 	
@@ -1890,7 +1902,7 @@ sub columns {
 }
 
 # idColumns parameters:
-#	parentConcept: The concept owning the id columns
+#	idConcept: The concept owning the id columns
 #	doMask: Are the columns masked for storage?
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
@@ -1899,12 +1911,12 @@ sub idColumns($;$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $parentConcept = shift;
+	my $idConcept = shift;
 	my $doMask = shift;
 	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
-	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($parentConcept,undef,$doMask) } @columnNames;
+	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($idConcept,undef,$doMask) } @columnNames;
 	
 	my @columnSet = (
 		\@columnNames,
@@ -2064,6 +2076,45 @@ sub setDefault($) {
 	$self->[DCC::Model::ColumnType::DEFAULT] = $val;
 }
 
+# clone parameters:
+#	relatedConcept: optional, it signals whether to change cloned columnType
+#		according to relatedConcept hints
+# it returns a DCC::Model::ColumnType instance
+sub clone(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $relatedConcept = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
+	
+	# Cloning this object
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
+	
+	if(defined($relatedConcept)) {
+		if($relatedConcept->isPartial) {
+			$retval->[DCC::Model::ColumnType::USE] = DCC::Model::ColumnType::DESIRABLE;
+		}
+		
+		if($relatedConcept->arity eq 'M') {
+			my $sep = $relatedConcept->mArySeparator;
+			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS]) && index($retval->[DCC::Model::ColumnType::ARRAYSEPS],$sep)!=-1) {
+				Carp::croak("Cloned column has repeated the array separator $sep!");
+			}
+			
+			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS])) {
+				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep . $retval->[DCC::Model::ColumnType::ARRAYSEPS];
+			} else {
+				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep;
+			}
+		}
+	}
+	
+	return $retval;
+}
+
 1;
 
 
@@ -2166,6 +2217,13 @@ sub cloneRelated($;$$) {
 	$retval->[DCC::Model::Column::REFCONCEPT] = $refConcept;
 	$retval->[DCC::Model::Column::REFCOLUMN] = $self;
 	$retval->[DCC::Model::Column::RELATED_CONCEPT] = $relatedConcept;
+	
+	# Does this column become optional due the participation?
+	# Does this column become an array due the arity?
+	if(defined($relatedConcept) && ($relatedConcept->isPartial || $relatedConcept->arity eq 'M')) {
+		# First, let's clone the concept type, to avoid side effects
+		$retval->[DCC::Model::Column::COLUMNTYPE] = $self->columnType->clone($relatedConcept);
+	}
 	
 	return $retval;
 }
@@ -2353,8 +2411,8 @@ sub columnSet {
 	return $_[0]->[6];
 }
 
-# A DCC::Model::Concept instance, which represents the parent of this concept
-sub parentConcept {
+# A DCC::Model::Concept instance, which represents the identifying concept of this one
+sub idConcept {
 	return $_[0]->[7];
 }
 
@@ -2413,6 +2471,21 @@ sub concept {
 # It returns a column set with the remote columns used for this relation
 sub columnSet {
 	return $_[0]->[4];
+}
+
+# It returns 1 or M
+sub arity {
+	return $_[0]->[5];
+}
+
+# It returns the separator
+sub mArySeparator {
+	return $_[0]->[6]
+}
+
+# It returns 1 or undef
+sub isPartial {
+	return $_[0]->[7];
 }
 
 sub setRelatedConcept($$) {

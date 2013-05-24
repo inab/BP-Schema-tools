@@ -53,7 +53,7 @@ sub latex_escape($) {
 	my $paragraph = $par;
 	# Let's serialize this nodeset
 	if(ref($par) eq 'ARRAY') {
-		$paragraph = join('',map { $_->toString(0)} @{$par});
+		$paragraph = join('',map { ($_->can('toString'))?$_->toString(0):$_ } @{$par});
 	}
 	
 	# Replace a \ with $\backslash$
@@ -227,22 +227,22 @@ sub genSQL($$) {
 			## Now, the FK restrictions from inheritance
 			#foreach my $concept (@{$conceptDomain->concepts}) {
 			#	my $basename = $conceptDomainName.'_'.$concept->name;
-			#	if(defined($concept->parentConcept)) {
-			#		my $parentConcept = $concept->parentConcept;
-			#		my $refColnames = $parentConcept->columnSet->idColumnNames;
-			#		my $parentBasename = $conceptDomainName.'_'.$parentConcept->name;
+			#	if(defined($concept->idConcept)) {
+			#		my $idConcept = $concept->idConcept;
+			#		my $refColnames = $idConcept->columnSet->idColumnNames;
+			#		my $idBasename = $conceptDomainName.'_'.$idConcept->name;
 			#		
 			#		# Referencing only concepts with keys
-			#		if(exists($pcon{$parentBasename})) {
+			#		if(exists($pcon{$idBasename})) {
 			#			print $SQL "\n-- ",$concept->fullname, " foreign keys";
 			#			print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',@{$refColnames}),")";
-			#			print $SQL "\nREFERENCES $parentBasename(".join(',',@{$refColnames}).");\n";
+			#			print $SQL "\nREFERENCES $idBasename(".join(',',@{$refColnames}).");\n";
 			#		}
 			#	}
 			#}
 		}
 			
-		# Now, the FK restrictions from inheritance
+		# Now, the FK restrictions from identification relations
 		foreach my $p_fks (@fks) {
 			my($basename,$concept,$p_fkconcept) = @{$p_fks};
 			
@@ -752,7 +752,7 @@ DEOF
 			my $column = $_;
 			if(defined($column->refColumn) && $column->refConcept->conceptDomain eq $conceptDomain) {
 				my $refEntry = $column->refConcept->conceptDomain->name . '_' . $column->refConcept->name;
-				$fks{$refEntry}{$entry} = (defined($concept->parentConcept) && $column->refConcept eq $concept->parentConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
+				$fks{$refEntry}{$entry} = (defined($concept->idConcept) && $column->refConcept eq $concept->idConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
 			}
 			my $formattedColumnName = latex_escape($column->name);
 			
@@ -766,7 +766,7 @@ DEOF
 				$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 			}
 			if(defined($column->refConcept)) {
-#			if(defined($column->refConcept) && defined($concept->parentConcept) && $column->refConcept eq $concept->parentConcept) {
+#			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
 				$formattedColumnName = '\textit{'.$formattedColumnName.'}';
 			}
 			
@@ -786,7 +786,7 @@ DEOF
 		
 		$latexAttribs .= ' \end{tabular}';
 		
-		my $doubleBorder = defined($concept->parentConcept)?',double distance=2pt':'';
+		my $doubleBorder = defined($concept->idConcept)?',double distance=2pt':'';
 		print $DOT <<DEOF;
 	$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder",margin="-0.2,0"];
 DEOF

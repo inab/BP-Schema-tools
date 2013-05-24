@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.0">
     <xs:annotation>
-        <xs:documentation>BLUEPRINT DCC Schema, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
+        <xs:documentation>BLUEPRINT DCC Schema 2.0, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
     <xs:simpleType name="sepsType">
@@ -72,6 +72,21 @@
             </xs:pattern>
         </xs:restriction>
     </xs:simpleType>
+    
+    <xs:complexType name="conceptRefType">
+        <xs:attribute name="domain" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>The domain where the concept is defined. By default, it is the same domain
+                    as the one where the concept containing this related-to or inherits-from element is defined.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="concept" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>The concept this one is related to or inherits from</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:complexType>
+    
     
     <xs:element name="color" type="bp:colorType">
         <xs:annotation>
@@ -484,16 +499,16 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     <xs:documentation>The collection which is going to hold the documents corresponding to concepts whose concept-type is this.
                         A main concept from a concept domain must have this attribute.
                         The concept-types using this attribute cannot use the "key" attribute.
-                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be subconcepts.
-                        Those subconcepts inherit the "collection" or "key" attribute from the nearest ancestor with it</xs:documentation>
+                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be weak concepts.
+                        Those weak concepts inherit the "collection" or "key" attribute from the identifying concept</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
             <xs:attribute name="key" type="xs:string" use="optional">
                 <xs:annotation>
                     <xs:documentation>The hash key which is going to hold the values following this concept set schema.
                         The concepts using a concept-type with a "key" attribute must be a subconcept, because they are stored with this key on documents following the parent concept, and so cannot be a main concept from a concept domain.
-                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be subconcepts.
-                        Those subconcepts inherit the "collection" or "key" attribute from the nearest ancestor with it.
+                        If neither "collection" nor "key" attributes appear, the concepts using this concept type must be weak concepts.
+                        Those weak concepts inherit the "collection" or "key" attribute from the identifying concept.
                         So, the concept-types using this attribute cannot use the "collection" attribute</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
@@ -509,6 +524,25 @@ If if starts as $$, it tells the required or idref column with the value for thi
     <xs:element name="concept">
         <xs:complexType>
             <xs:sequence>
+                <xs:choice>
+                    <xs:element name="base-concept-type" minOccurs="1" maxOccurs="unbounded">
+                        <xs:annotation>
+                            <xs:documentation></xs:documentation>
+                        </xs:annotation>
+                        <xs:complexType>
+                            <xs:attribute name="name" type="xs:string" use="required">
+                                <xs:annotation>
+                                    <xs:documentation>The base type(s) this concept is based on. All the declared columns on the type(s) are for this concept, plus the additional ones declared here</xs:documentation>
+                                </xs:annotation>
+                            </xs:attribute>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="inherits-from" type="bp:conceptRefType">
+                        <xs:annotation>
+                            <xs:documentation>This concept inherits from the concept told here</xs:documentation>
+                        </xs:annotation>
+                    </xs:element>
+                </xs:choice>
                 <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded">
                     <xs:annotation>
                         <xs:documentation>The detailed description of this concept</xs:documentation>
@@ -516,9 +550,9 @@ If if starts as $$, it tells the required or idref column with the value for thi
                 </xs:element>
                 <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element ref="bp:column" minOccurs="0" maxOccurs="unbounded"/>
-                <xs:element name="subconcepts" minOccurs="0" maxOccurs="1">
+                <xs:element name="weak-concepts" minOccurs="0" maxOccurs="1">
                     <xs:annotation>
-                        <xs:documentation>A primary concept can have secondary subconcepts.
+                        <xs:documentation>A primary concept can have secondary concepts related.
                             The secondary concepts inherit the idref columns from the primary concepts, so the concept type for these secondary concepts should not overlap columns or types with the primary one</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
@@ -529,25 +563,44 @@ If if starts as $$, it tells the required or idref column with the value for thi
                 </xs:element>
                 <xs:element name="related-to" minOccurs="0" maxOccurs="unbounded">
                     <xs:annotation>
-                        <xs:documentation>When we need to indicate relations 1:N to other concepts (being this concept the one in the N part), we use this element</xs:documentation>
+                        <xs:documentation>When we need to indicate directional relations 1:N or M:N to other concepts (being this concept the one in the N part), we use this element</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
-                        <xs:attribute name="domain" type="xs:string" use="optional">
-                            <xs:annotation>
-                                <xs:documentation>The domain where the concept is defined. By default, it is the same domain
-                                    as the one where the concept containing this related-to element is defined.</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
-                        <xs:attribute name="concept" type="xs:string" use="required">
-                            <xs:annotation>
-                                <xs:documentation>The concept this one is related to</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
-                        <xs:attribute name="prefix" type="xs:string" use="optional">
-                            <xs:annotation>
-                                <xs:documentation>The optional prefix to prepend to the column names when the idref columns are transferred</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
+                        <xs:complexContent>
+                            <xs:extension base="bp:conceptRefType">
+                                <xs:attribute name="arity" use="optional" default="1">
+                                    <xs:annotation>
+                                        <xs:documentation>The arity of this directional relation</xs:documentation>
+                                    </xs:annotation>
+                                    <xs:simpleType>
+                                        <xs:restriction base="xs:string">
+                                            <xs:enumeration value="1" />
+                                            <xs:enumeration value="M" />
+                                        </xs:restriction>
+                                    </xs:simpleType>
+                                </xs:attribute>
+                                <xs:attribute name="m-ary-sep" use="optional" default=",">
+                                    <xs:annotation>
+                                        <xs:documentation>The separator for the M-ary relations (by default, ',')</xs:documentation>
+                                    </xs:annotation>
+                                    <xs:simpleType>
+                                        <xs:restriction base="bp:sepsType">
+                                            <xs:length value="1"/>
+                                        </xs:restriction>
+                                    </xs:simpleType>
+                                </xs:attribute>
+                                <xs:attribute name="prefix" type="xs:string" use="optional">
+                                    <xs:annotation>
+                                        <xs:documentation>The optional prefix to prepend to the column names when the idref columns are transferred</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                                <xs:attribute name="partial-participation" use="optional" type="xs:boolean" default="false">
+                                    <xs:annotation>
+                                        <xs:documentation>Is this a partial or total participation relationship?</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                            </xs:extension>
+                        </xs:complexContent>
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
@@ -559,11 +612,6 @@ If if starts as $$, it tells the required or idref column with the value for thi
             <xs:attribute name="fullname" use="required" type="xs:string">
                 <xs:annotation>
                     <xs:documentation>A meaningful name of this concept</xs:documentation>
-                </xs:annotation>
-            </xs:attribute>
-            <xs:attribute name="basetype" use="required" type="xs:string">
-                <xs:annotation>
-                    <xs:documentation>The base type this concept is based on. All the declared columns on the type are for this concept, plus the additional ones declared here</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
         </xs:complexType>
@@ -823,8 +871,8 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:field xpath="@filename-format"></xs:field>
         </xs:keyref>
         <xs:keyref refer="bp:concept-type-key" name="concept-type-key-ref">
-            <xs:selector xpath=".//bp:concept"/>
-            <xs:field xpath="@basetype"/>
+            <xs:selector xpath=".//bp:concept/bp:base-concept-type"/>
+            <xs:field xpath="@name"/>
         </xs:keyref>
         <!-- The key referred by this FK needed an XPath expression more complex than what XML Schema can understand
         <xs:keyref refer="bp:concept-key" name="related-to-fk">
