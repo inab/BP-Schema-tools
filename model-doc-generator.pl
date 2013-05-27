@@ -365,7 +365,7 @@ sub assemblePDF($$$$$) {
 	my @pdflatexParams = (
 		'-interaction=batchmode',
 #		'-synctex=1',
-		'-shell-escape',
+#		'-shell-escape',
 		'-jobname',$jobName,
 		'-output-directory',$jobDir,
 		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$masterTemplate.'}'
@@ -404,7 +404,7 @@ my %CVCOMMANDS = (
 	'version' => undef,
 );
 
-sub printDoc($$;$) {
+sub printDescription($$;$) {
 	my($O,$text,$command)=@_;
 	
 	if(defined($command) && length($command)>0) {
@@ -698,14 +698,88 @@ sub parseColor($) {
 	return ($colorModel,@colorComponents);
 }
 
-# printConceptDomainGraph parameters:
+# genConceptGraphNode parameters:
+#	concept: a DCC::Model::Concept instance
+#	p_defaultColorDef: a reference to the default color
+#	templateAbsDocDir: The absolute path to the template directory
+# It returns the DOT line of the node and the color of this concept
+sub genConceptGraphNode($\@$) {
+	my($concept,$p_defaultColorDef,$templateAbsDocDir)=@_;
+	
+	my $conceptDomain = $concept->conceptDomain;
+	
+	my $entry = $conceptDomain->name.'_'.$concept->name;
+	my $color = $entry;
+	
+	my @colorDef = ();
+	my $p_colorDef = $p_defaultColorDef;
+	if(exists($concept->annotations->hash->{color})) {
+		my @colorDef = parseColor($concept->annotations->hash->{color});
+		$p_colorDef = \@colorDef;
+	}
+	
+	my $columnSet = $concept->columnSet;
+	my %idColumnNames = map { $_ => undef } @{$concept->columnSet->idColumnNames};
+	
+	my $latexAttribs = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}} \arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
+	
+	my @colOrder = fancyColumnOrdering($concept);
+	my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
+	
+	my %partialFKS = ();
+	$latexAttribs .= join(' \\\\ ',map {
+		my $column = $_;
+		if(defined($column->refColumn) && !defined($column->relatedConcept) && $column->refConcept->conceptDomain eq $conceptDomain) {
+			my $refEntry = $column->refConcept->conceptDomain->name . '_' . $column->refConcept->name;
+			$partialFKS{$refEntry} = (defined($concept->idConcept) && $column->refConcept eq $concept->idConcept)?1:undef  unless(exists($partialFKS{$refEntry}));
+		}
+		my $formattedColumnName = latex_escape($column->name);
+		
+		my $colType = $column->columnType->use;
+		my $isId = exists($idColumnNames{$column->name});
+		my $icon = undef;
+		if($colType eq DCC::Model::ColumnType::DESIRABLE || $colType eq DCC::Model::ColumnType::OPTIONAL) {
+			$formattedColumnName = '\textcolor{gray}{'.$formattedColumnName.'}';
+		}
+		if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
+			$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
+		}
+		if(defined($column->refConcept)) {
+#			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
+			$formattedColumnName = '\textit{'.$formattedColumnName.'}';
+		}
+		
+		if($isId) {
+			$icon = defined($column->refColumn)?'fkpk':'pk';
+		} elsif(defined($column->refColumn)) {
+			$icon = 'fk';
+		}
+		
+		my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
+		if(defined($column->refColumn)) {
+			$image = '\hyperref[column:'.join('.',$column->refConcept->conceptDomain->name,$column->refConcept->name,$column->refColumn->name).']{'.$image.'}';
+		}
+		
+		$image.' & \hyperref[column:'.($labelPrefix.$column->name).']{'.$formattedColumnName.'}'
+	} @{$columnSet->columns}{@colOrder});
+	
+	$latexAttribs .= ' \end{tabular}';
+	
+	my $doubleBorder = defined($concept->idConcept)?',double distance=2pt':'';
+	my $dotline = <<DEOF;
+$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder",margin="0,0"];
+DEOF
+
+	return ($dotline, $entry, \%partialFKS, $color => $p_colorDef);
+}
+
+# genConceptDomainGraph parameters:
 #	model: A DCC::Model instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
-#	O: The filehandle where to print the documentation about the concept domain
-sub printConceptDomainGraph($$$$$) {
-	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O)=@_;
+sub genConceptDomainGraph($$$$) {
+	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir)=@_;
 	
 	my @defaultColorDef = ('rgb',0,1,0);
 	if(exists($model->annotations->hash->{defaultColor})) {
@@ -730,85 +804,86 @@ DEOF
 	my %colors = ();
 	# First, the concepts
 	foreach my $concept (@{$conceptDomain->concepts}) {
-		my $entry = $conceptDomain->name.'_'.$concept->name;
-		my $color = $entry;
+		my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
 		
-		my @colorDef = ();
-		my $p_colorDef = \@defaultColorDef;
-		if(exists($concept->annotations->hash->{color})) {
-			my @colorDef = parseColor($concept->annotations->hash->{color});
-			$p_colorDef = \@colorDef;
+		print $DOT $dotline;
+		foreach my $refEntry (keys(%{$p_partialFKS})) {
+			$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
 		}
 		$colors{$color} = $p_colorDef;
-		
-		my $columnSet = $concept->columnSet;
-		my %idColumnNames = map { $_ => undef } @{$concept->columnSet->idColumnNames};
-		
-		my $latexAttribs = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}} \arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
-		
-		my @colOrder = fancyColumnOrdering($concept);
-		my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
-		$latexAttribs .= join(' \\\\ ',map {
-			my $column = $_;
-			if(defined($column->refColumn) && $column->refConcept->conceptDomain eq $conceptDomain) {
-				my $refEntry = $column->refConcept->conceptDomain->name . '_' . $column->refConcept->name;
-				$fks{$refEntry}{$entry} = (defined($concept->idConcept) && $column->refConcept eq $concept->idConcept)?1:undef  unless(exists($fks{$entry}{$refEntry}));
-			}
-			my $formattedColumnName = latex_escape($column->name);
-			
-			my $colType = $column->columnType->use;
-			my $isId = exists($idColumnNames{$column->name});
-			my $icon = undef;
-			if($colType eq DCC::Model::ColumnType::DESIRABLE || $colType eq DCC::Model::ColumnType::OPTIONAL) {
-				$formattedColumnName = '\textcolor{gray}{'.$formattedColumnName.'}';
-			}
-			if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
-				$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
-			}
-			if(defined($column->refConcept)) {
-#			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
-				$formattedColumnName = '\textit{'.$formattedColumnName.'}';
-			}
-			
-			if($isId) {
-				$icon = defined($column->refColumn)?'fkpk':'pk';
-			} elsif(defined($column->refColumn)) {
-				$icon = 'fk';
-			}
-			
-			my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
-			if(defined($column->refColumn)) {
-				$image = '\hyperref[column:'.join('.',$column->refConcept->conceptDomain->name,$column->refConcept->name,$column->refColumn->name).']{'.$image.'}';
-			}
-			
-			$image.' & \hyperref[column:'.($labelPrefix.$column->name).']{'.$formattedColumnName.'}'
-		} @{$columnSet->columns}{@colOrder});
-		
-		$latexAttribs .= ' \end{tabular}';
-		
-		my $doubleBorder = defined($concept->idConcept)?',double distance=2pt':'';
-		print $DOT <<DEOF;
-	$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder",margin="-0.2,0"];
-DEOF
 	}
 	
 	# Then, their relationships
 	print $DOT <<DEOF;
 	
-	node [shape=diamond, texlbl="Relationship"];
+	node [shape=diamond, texlbl="Identifies"];
 	
 DEOF
-	foreach my $entry (keys(%fks)) {
-		foreach my $refEntry (keys(%{$fks{$entry}})) {
-			my $dEntry = $entry.'_'.$refEntry;
-			
-			my $doubleBorder = defined($fks{$entry}{$refEntry})?',double distance=2pt':'';
+	# The FK restrictions from identification relations
+	my $relnode = 1;
+	my $doubleBorder = 'double distance=2pt';
+	foreach my $idEntry (keys(%fks)) {
+		my $dEntry = 'ID_'.$idEntry;
+		print $DOT <<DEOF;
+	
+	${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
+	$idEntry -> ${dEntry}_$relnode  [label="1"];
+DEOF
+		foreach my $entry (keys(%{$fks{$idEntry}})) {
 			print $DOT <<DEOF;
-	
-	$dEntry [style="top color=$refEntry,drop shadow$doubleBorder"];
-	$entry -> $dEntry [label="1"];
-	$dEntry -> $refEntry [label="N",style="$doubleBorder"];
+	${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
 DEOF
+		}
+		$relnode++;
+	}
+	
+	print $DOT <<DEOF;
+	
+	node [shape=diamond];
+	
+DEOF
+	# The FK restrictions from related concepts
+	foreach my $concept (@{$conceptDomain->concepts}) {
+		my $conceptDomainName = $conceptDomain->name;
+		my $entry = $conceptDomainName.'_'.$concept->name;
+		# Let's visit each concept!
+		if(scalar(@{$concept->relatedConcepts})>0) {
+			foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+				my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+				
+				my $refEntryLine = '';
+				
+				my $dEntry = $entry.'_'.$refEntry;
+				my $port = '';
+				my $eport = '';
+				my $wport = '';
+				if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
+					$port = ':n';
+					$eport = ':e';
+					$wport = ':w';
+					$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+				} elsif($relatedConcept->concept eq $concept) {
+					$eport = ':n';
+					$wport = ':s';
+				}
+				
+				my $arity = $relatedConcept->arity;
+				my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
+				
+				my $texlbl = 'Relationship';
+				if(defined($relatedConcept->keyPrefix)) {
+					$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
+				}
+				
+				print $DOT <<DEOF;
+	
+	${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
+	$refEntryLine
+	$refEntry$port -> ${dEntry}_$relnode$wport [label="$arity"];
+	${dEntry}_$relnode$eport -> $entry$port [label="N",style="$doubleBorder"];
+DEOF
+				$relnode++;
+			}
 		}
 	}
 	
@@ -818,11 +893,19 @@ DEOF
 DEOF
 	close($DOT);
 	
+	# Prepare the colors
+	my $figpreamble = join('',map {
+		my $color = $_;
+		my($colorModel,@components) = @{$colors{$color}};
+		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
+	} keys(%colors));
+	
 	# The moment to call dot2tex
 	my @params = (
 		'dot2tex',
 		'--usepdflatex',
 		'--docpreamble=\usepackage{hyperref}',
+		'--figpreamble='.$figpreamble,
 		'--autosize',
 #		'--nominsize',
 		'-c',
@@ -833,35 +916,185 @@ DEOF
 		$dotfile
 	);
 	system(@params);
-	
-	my(undef,$absLaTeXDir,$relLaTeXFile) = File::Spec->splitpath($latexfile);
-	
-	# Let's do the declaration
-	my $conceptDomainFullname = $conceptDomain->fullname;
-	
-	# First, the colors
-	foreach my $color (keys(%colors)) {
-		my($colorModel,@components) = @{$colors{$color}};
-		my $compo = join(',',@components);
-		print $O <<GEOF;
-\\definecolor{$color}{$colorModel}{$compo}
-GEOF
-	}
 
-	#my $gdef = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}}';
-	print $O <<GEOF;
-\\begin{figure*}[!h]
-\\centering
-\\resizebox{.85\\linewidth}{!}{
-\\hypersetup{
-	linkcolor=Black
+	return ($latexfile,$figpreamble);
 }
-%\\input{$latexfile}
-\\import*{$absLaTeXDir/}{$relLaTeXFile}
+
+# genConceptDomainGraph parameters:
+#	model: A DCC::Model instance
+#	figurePrefix: path prefix for the generated figures in .dot and in .latex
+#	templateAbsDocDir: Directory of the template being used
+sub genModelGraph($$$) {
+	my($model,$figurePrefix,$templateAbsDocDir)=@_;
+	
+	my @defaultColorDef = ('rgb',0,1,0);
+	my @blackColor = ('HTML','000000');
+	if(exists($model->annotations->hash->{defaultColor})) {
+		@defaultColorDef = parseColor($model->annotations->hash->{defaultColor});
+	}
+#	node [shape=box,style="rounded corners,drop shadow"];
+
+	my $dotfile = $figurePrefix . '-model.dot';
+	my $latexfile = $figurePrefix . '-model.latex';
+	my $standalonelatexfile = $figurePrefix . '-model-standalone.latex';
+	my $DOT;
+	if(open($DOT,'>:utf8',$dotfile)) {
+		print $DOT <<DEOF;
+digraph G {
+	rankdir=LR;
+	node [shape=box];
+	edge [arrowhead=none];
+	
+DEOF
+	}
+	
+	my %colors = ();
+	# With this, we do not need xcolor
+	#$colors{Black} = \@blackColor;
+	my $relnode = 1;
+	# First, the concepts
+	foreach my $conceptDomain (@{$model->conceptDomains}) {
+		my $conceptDomainName = $conceptDomain->name;
+		my $conceptDomainFullName = $conceptDomain->fullname;
+		print $DOT <<DEOF;
+	subgraph cluster_$conceptDomainName {
+		label="$conceptDomainFullName"
+DEOF
+		my %fks = ();
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
+			
+			print $DOT "\t",$dotline;
+			foreach my $refEntry (keys(%{$p_partialFKS})) {
+				$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
+			}
+			$colors{$color} = $p_colorDef;
+		}
+		
+		# Then, their relationships
+		print $DOT <<DEOF;
+		
+		node [shape=diamond, texlbl="Identifies"];
+		
+DEOF
+		# The FK restrictions from identification relations
+		my $doubleBorder = 'double distance=2pt';
+		foreach my $idEntry (keys(%fks)) {
+			my $dEntry = 'ID_'.$idEntry;
+			print $DOT <<DEOF;
+			
+		${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
+		$idEntry -> ${dEntry}_$relnode  [label="1"];
+DEOF
+			foreach my $entry (keys(%{$fks{$idEntry}})) {
+				print $DOT <<DEOF;
+		${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
+DEOF
+			}
+			$relnode++;
+		}
+		
+		print $DOT <<DEOF;
+		
+		node [shape=diamond];
+		
+DEOF
+		# The FK restrictions from related concepts
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			my $conceptDomainName = $conceptDomain->name;
+			my $entry = $conceptDomainName.'_'.$concept->name;
+			# Let's visit each concept!
+			if(scalar(@{$concept->relatedConcepts})>0) {
+				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+					
+					my $refEntryLine = '';
+					
+					my $dEntry = $entry.'_'.$refEntry;
+#					my $port = '';
+#					my $eport = '';
+#					my $wport = '';
+#					if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
+#						$port = ':n';
+#						$eport = ':e';
+#						$wport = ':w';
+#						$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+#					} elsif($relatedConcept->concept eq $concept) {
+#						$eport = ':n';
+#						$wport = ':s';
+#					}
+					
+					my $arity = $relatedConcept->arity;
+					my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
+					
+					my $texlbl = 'Relationship';
+					if(defined($relatedConcept->keyPrefix)) {
+						$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
+					}
+					
+					print $DOT <<DEOF;
+		
+		${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
+		$refEntry -> ${dEntry}_$relnode [label="$arity"];
+		${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
+DEOF
+					$relnode++;
+				}
+			}
+		}
+		# And now, let's close the subgraph
+		print $DOT <<DEOF;
+	}
+DEOF
+	}
+	
+	# And now, let's close the graph
+	print $DOT <<DEOF;
 }
-\\caption{$conceptDomainFullname Sub-Schema}
-\\end{figure*}
-GEOF
+DEOF
+	close($DOT);
+	
+	# Prepare the colors
+	my $figpreamble = join('',map {
+		my $color = $_;
+		my($colorModel,@components) = @{$colors{$color}};
+		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
+	} keys(%colors));
+	
+	# The moment to call dot2tex
+	my @params = (
+		'dot2tex',
+		'--usepdflatex',
+		'--docpreamble=\usepackage{hyperref}',
+		'--figpreamble='.$figpreamble,
+		'--autosize',
+#		'--nominsize',
+		'-c',
+		'--preproc',
+		'--figonly',
+# This backend kills relationships
+#		'-ftikz',
+		'-o',$latexfile,
+		$dotfile
+	);
+	my @standAloneParams = (
+		'dot2tex',
+		'--usepdflatex',
+		'--docpreamble=\usepackage{hyperref} \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows} \providecommand{\arrayrulecolor}[1] {}'.$figpreamble,
+		'--autosize',
+#		'--nominsize',
+		'-c',
+		'--preproc',
+#		'--prog=circo',
+# This backend kills relationships
+#		'-ftikz',
+		'-o',$standalonelatexfile,
+		$dotfile
+	);
+	system(@params);
+	system(@standAloneParams);
+	
+	return ($latexfile,$figpreamble);
 }
 
 # printConceptDomain parameters:
@@ -889,7 +1122,26 @@ sub printConceptDomain($$$$$) {
 	}
 	
 	# generate dot graph representing the concept domain
-	printConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O);
+	my($conceptDomainLatexFile,$figDomainPreamble) = genConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir);
+	
+	my(undef,$absLaTeXDir,$relLaTeXFile) = File::Spec->splitpath($conceptDomainLatexFile);
+	my $conceptDomainFullname = $conceptDomain->fullname;
+	
+	#my $gdef = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}}';
+	print $O <<GEOF;
+$figDomainPreamble
+\\begin{figure*}[!h]
+\\centering
+\\resizebox{.95\\linewidth}{!}{
+\\hypersetup{
+	linkcolor=Black
+}
+%\\input{$conceptDomainLatexFile}
+\\import*{$absLaTeXDir/}{$relLaTeXFile}
+}
+\\caption{$conceptDomainFullname Sub-Schema}
+\\end{figure*}
+GEOF
 	
 	# Let's iterate over the concepts of this concept domain
 	foreach my $concept (@{$conceptDomain->concepts}) {
@@ -900,12 +1152,12 @@ sub printConceptDomain($$$$$) {
 		my $caption = latex_format($concept->fullname);
 		print $O '\\subsection{'.$caption."}\n";
 		foreach my $documentation (@{$concept->description}) {
-			printDoc($O,$documentation);
+			printDescription($O,$documentation);
 		}
 		my $annotationSet = $concept->annotations;
 		my $annotations = $annotationSet->hash;
 		foreach my $annotKey (@{$annotationSet->order}) {
-			printDoc($O,$annotations->{$annotKey},$annotKey);
+			printDescription($O,$annotations->{$annotKey},$annotKey);
 		}
 		
 		# The table header
@@ -1079,6 +1331,9 @@ if(scalar(@ARGV)>=3) {
 	# Generating the SQL file for BioMart
 	genSQL($model,$outfileSQL);
 	
+	# Generating the graph model
+	my($modelgraphfile,$modelpreamble) = genModelGraph($model,$figurePrefix,$templateAbsDocDir);
+
 	# Generating the document to be included in the template
 	my $TO = undef;
 	
@@ -1089,6 +1344,28 @@ if(scalar(@ARGV)>=3) {
 		binmode( $TO, ":utf8" );
 		$outfileLaTeX = $TO->filename;
 	}
+	
+	# Model graph
+	my $modelName = latex_escape($model->projectName.' '.$model->schemaVer);
+	my(undef,$absModelDir,$relModelFile) = File::Spec->splitpath($modelgraphfile);
+
+	print $TO <<TEOF;
+% This is what must be done to center landscape figures
+\\begin{landscape}
+\\parbox[c][\\textwidth][s]{\\linewidth}{%
+\\vfill
+\\centering
+\\resizebox{\\linewidth}{!}{
+\\hypersetup{
+	linkcolor=Black
+}
+\\import*{$absModelDir/}{$relModelFile}
+}
+\\captionof{figure}{Overview of $modelName data model}
+\\vfill
+}
+\\end{landscape}
+TEOF
 	
 	print $TO '\chapter{DCC Submission Tabular Formats}\label{ch:tabFormat}',"\n";
 	

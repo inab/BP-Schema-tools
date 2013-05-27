@@ -50,6 +50,12 @@
 % PDF is printed
 \usepackage{ocg-p}
 
+% this package allows putting something in a separate, rotated page
+\usepackage{pdflscape}
+
+% package to put single figure captions
+\usepackage{capt-of}
+
 % This package is used by generated graphs from dot declarations
 % as they depend on tikz package
 \usepackage{tikz}
