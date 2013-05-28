@@ -54,6 +54,7 @@
 \usepackage{pdflscape}
 
 % package to put single figure captions
+% needed to inject the full page figure of the model graph
 \usepackage{capt-of}
 
 % This package is used by generated graphs from dot declarations
