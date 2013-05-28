@@ -14,60 +14,7 @@ use Archive::Zip;
 use Archive::Zip::MemberRead;
 
 # Early subpackage constant declarations
-package DCC::Model::Column;
-
-use constant {
-	NAME => 0,
-	DESCRIPTION => 1,
-	ANNOTATIONS => 2,
-	COLUMNTYPE => 3,
-	ISMASKED => 4,
-	REFCONCEPT => 5,
-	REFCOLUMN => 6,
-	RELATED_CONCEPT => 7
-};
-
-
-package DCC::Model::ColumnType;
-
-use constant {
-	TYPE	=>	0,
-	USE	=>	1,
-	RESTRICTION	=>	2,
-	DEFAULT	=>	3,
-	ARRAYSEPS	=>	4,
-	ALLOWEDNULLS	=>	5
-};
-
-use constant {
-	IDREF	=>	0,
-	REQUIRED	=>	1,
-	DESIRABLE	=>	-1,
-	OPTIONAL	=>	-2
-};
-
-use constant STR2TYPE => {
-	'idref' => IDREF,
-	'required' => REQUIRED,
-	'desirable' => DESIRABLE,
-	'optional' => OPTIONAL
-};
-
 package DCC::Model::CV;
-
-# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
-use constant {
-	CVNAME	=>	0,
-	CVKIND	=>	1,
-	CVURI	=>	2,
-	CVANNOT	=>	3,
-	CVDESC	=>	4,
-	CVHASH	=>	5,
-	CVKEYS	=>	6,
-	CVALHASH	=>	7,
-	CVALKEYS	=>	8,
-	CVXMLEL		=>	9
-};
 
 use constant {
 	INLINE	=>	'inline',
@@ -76,31 +23,10 @@ use constant {
 	URIFETCHED	=>	'uris',
 };
 
-package DCC::Model::ConceptType;
-
-# Prototypes
-sub parseConceptTypeLineage($$;$);
-
-
 # Main package
 package DCC::Model;
 #use version 0.77;
 #our $VERSION = qv('0.2.0');
-
-# Used "blesses"
-# DCC::Model::Collection
-# DCC::Model::Index
-# DCC::Model::DescriptionSet
-# DCC::Model::AnnotationSet
-# DCC::Model::CV
-# DCC::Model::ConceptType
-# DCC::Model::ColumnSet
-# DCC::Model::CompoundType
-# DCC::Model::ColumnType
-# DCC::Model::Column
-# DCC::Model::FilenamePattern
-# DCC::Model::ConceptDomain
-# DCC::Model::Concept
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
@@ -611,7 +537,7 @@ sub digestModel($) {
 	$self->{CDOMAINS} = \@conceptDomains;
 	$self->{CDOMAINHASH} = \%conceptDomainHash;
 	foreach my $conceptDomainDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept-domain')) {
-		my $conceptDomain = $self->parseConceptDomain($conceptDomainDecl);
+		my $conceptDomain = DCC::Model::ConceptDomain->parseConceptDomain($conceptDomainDecl,$model);
 		
 		push(@conceptDomains,$conceptDomain);
 		$conceptDomainHash{$conceptDomain->name} = $conceptDomain;
@@ -843,172 +769,14 @@ sub getConceptType($) {
 	return exists($self->{CTYPES}{$name})?$self->{CTYPES}{$name}:undef;
 }
 
-# parseConceptDomain parameters:
-#	conceptDomainDecl: a XML::LibXML::Element 'dcc:concept-domain' element
-# it returns a DCC::Model::ConceptDomain instance, with all the concept domain
-# structures and data
-sub parseConceptDomain($) {
+sub getFilenamePattern($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $conceptDomainDecl = shift;
+	my $name = shift;
 	
-	# concept domain name
-	# full name of the concept domain
-	# Filename Pattern for the filenames
-	# An array with the concepts under this concept domain umbrella
-	my @concepts = ();
-	my %conceptHash = ();
-	my @conceptDomain = (
-		$conceptDomainDecl->getAttribute('domain'),
-		$conceptDomainDecl->getAttribute('fullname'),
-		undef,
-		\@concepts,
-		\%conceptHash
-	);
-	
-	# Does the filename-pattern exist?
-	my $filenameFormatName = $conceptDomainDecl->getAttribute('filename-format');
-	unless(exists($self->{FPATTERN}{$filenameFormatName})) {
-		Carp::croak("Concept domain $conceptDomain[0] uses the unknown filename format $filenameFormatName");
-	}
-	
-	$conceptDomain[2] = $self->{FPATTERN}{$filenameFormatName};
-	
-	# Last, chicken and egg problem, part 1
-	my $retConceptDomain = bless(\@conceptDomain,'DCC::Model::ConceptDomain');
-
-	# And now, next method handles parsing of embedded concepts
-	push(@concepts,$self->parseConceptContainer($conceptDomainDecl,$retConceptDomain));
-	# The concept hash will help on concept identification
-	map { $conceptHash{$_->name} = $_; } @concepts;
-	
-	# Last, chicken and egg problem, part 2
-	$retConceptDomain->filenamePattern->registerConceptDomain($retConceptDomain);
-	
-	return $retConceptDomain;
-}
-
-# parseConceptContainer paramereters:
-#	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
-#		or 'dcc:weak-concepts' instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
-#		has been defined.
-#	idConcept: An optional, identifying DCC::Model::Concept instance of
-#		all the (weak) concepts to be parsed from the container
-# it returns an array of DCC::Model::Concept instances, which are all the
-# concepts and weak concepts inside the input concept container
-sub parseConceptContainer($$;$) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $conceptContainerDecl = shift;
-	my $conceptDomain = shift;
-	my $idConcept = shift;	# This is optional (remember!)
-	
-	my @concepts = ();
-	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept')) {
-		push(@concepts,$self->parseConcept($conceptDecl,$conceptDomain,$idConcept));
-	}
-	
-	return @concepts;
-}
-
-# parseConcept paramereters:
-#	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
-#		has been defined.
-#	idConcept: An optional, identifying DCC::Model::Concept instance of
-#		the concept to be parsed from conceptDecl
-# it returns an array of DCC::Model::Concept instances, the first one
-# corresponds to this concept, and the other ones are the weak-concepts
-sub parseConcept($$;$) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $conceptDecl = shift;
-	my $conceptDomain = shift;
-	my $idConcept = shift;	# This is optional (remember!)
-	my $model = $self;
-
-	my $conceptName = $conceptDecl->getAttribute('name');
-	my $conceptFullname = $conceptDecl->getAttribute('fullname');
-	
-	my @baseConceptTypes = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
-	
-	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypes)==0);
-	my $basetypeName = undef;
-	my $basetype = undef;
-	foreach my $baseConceptType (@baseConceptTypes) {
-		$basetypeName = $baseConceptType->getAttribute('name');
-		$basetype = $model->getConceptType($basetypeName);
-		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
-		last;
-	}
-	
-	
-	# This array will contain the names of the related concepts
-	my @related = ();
-	
-	# We don't have to inherit the related concepts, because weak concepts
-	# are not subclasses!!!!!
-	#########push(@related,@{$idConcept->relatedConcepts})  if(defined($idConcept));
-	
-	# Preparing the columns
-	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$basetype->columnSet,$model);
-	# and adding the ones from the identifying concept
-	# (and later from the related stuff)
-	
-	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
-	
-	# name
-	# fullname
-	# basetype
-	# concept domain
-	# Description Set
-	# Annotation Set
-	# ColumnSet
-	# related conceptNames
-	my @thisConcept = (
-		$conceptName,
-		$conceptFullname,
-		$basetype,
-		$conceptDomain,
-		DCC::Model::DescriptionSet->parseDescriptions($conceptDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($conceptDecl),
-		$columnSet,
-		$idConcept,
-		\@related,
-	);
-	
-	# Saving the related concepts (the ones explicitly declared within this concept)
-	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
-		push(@related,bless([
-				($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
-				$relatedDecl->getAttribute('concept') ,
-				($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
-				undef,
-				undef,
-				($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
-				($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
-				($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef
-			],'DCC::Model::RelatedConcept')
-		);
-	}
-	
-	# And last, the weak concepts
-	my $concept =  bless(\@thisConcept,'DCC::Model::Concept');
-	
-	my @concepts = ($concept);
-	
-	foreach my $conceptContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
-		push(@concepts,$self->parseConceptContainer($conceptContainerDecl,$conceptDomain,$concept));
-	}
-	
-	return @concepts;
+	return exists($self->{FPATTERN}{$name})?$self->{FPATTERN}{$name}:undef;
 }
 
 # It returns an array with DCC::Model::ConceptDomain instances (all the concept domains)
@@ -1356,6 +1124,26 @@ sub addAnnotation($$) {
 
 package DCC::Model::CV::External;
 
+# This is the constructor
+# parseCVExternal parameters:
+#	el: a XML::LibXML::Element 'dcc:cv-uri' node
+#	model: a DCC::Model instance
+sub parseCVExternal($) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $el = shift;
+	
+	# Although it is not going to be materialized here (at least, not yet)
+	# let's check whether it is a valid cv-uri
+	my $cvURI = $el->textContent();
+	
+	# TODO: validate URI
+	my @externalCV = (URI->new($cvURI),$el->getAttribute('format'),$el->hasAttribute('doc')?URI->new($el->getAttribute('doc')):undef);
+	bless(\@externalCV,$class);
+}
+
 # It returns a URI object, pointing to the fetchable controlled vocabulary
 sub uri {
 	return $_[0]->[0];
@@ -1375,6 +1163,20 @@ sub docURI {
 
 
 package DCC::Model::CV;
+
+# The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
+use constant {
+	CVNAME	=>	0,
+	CVKIND	=>	1,
+	CVURI	=>	2,
+	CVANNOT	=>	3,
+	CVDESC	=>	4,
+	CVHASH	=>	5,
+	CVKEYS	=>	6,
+	CVALHASH	=>	7,
+	CVALKEYS	=>	8,
+	CVXMLEL		=>	9
+};
 
 # This is the constructor
 # parseCV parameters:
@@ -1424,13 +1226,7 @@ sub parseCV($$) {
 				$structCV[DCC::Model::CV::CVURI] = [];
 			}
 			
-			# Although it is not going to be materialized here (at least, not yet)
-			# let's check whether it is a valid cv-uri
-			my $cvURI = $el->textContent();
-			
-			# TODO: validate URI
-			my @externalCV = (URI->new($cvURI),$el->getAttribute('format'),$el->hasAttribute('doc')?URI->new($el->getAttribute('doc')):undef);
-			push(@{$structCV[DCC::Model::CV::CVURI]},bless(\@externalCV,'DCC::Model::CV::External'));
+			push(@{$structCV[DCC::Model::CV::CVURI]},DCC::Model::CV::External->parseCVExternal($el));
 			
 			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
 		} elsif($el->localname eq 'cv-file') {
@@ -1575,6 +1371,9 @@ sub isValid($) {
 
 
 package DCC::Model::ConceptType;
+
+# Prototypes of static methods
+sub parseConceptTypeLineage($$;$);
 
 # This is an static method.
 # parseConceptTypeLineage parameters:
@@ -1722,6 +1521,441 @@ sub columnSet {
 # It returns a reference to an array full of DCC::Model::Index instances
 sub indexes {
 	return $_[0]->[5];
+}
+
+1;
+
+
+package DCC::Model::CompoundType;
+
+# TODO: Compound type refactor in the near future, so work for filename patterns
+# can be reused
+
+# This is the constructor.
+# new parameters:
+#	template: The template string, to be processed
+#	seps: The tokens which delimite the template tokens
+#	columnName: The name of the column (for error messages purposes)
+sub new($$$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	# tokens, separators
+	my $template = shift;
+	my $seps = shift;
+	my $columnName = shift;
+	
+	my %sepVal = ();
+	foreach my $sep (split(//,$seps)) {
+		if(exists($sepVal{$sep})) {
+			Carp::croak("Column $columnName has repeated the compound separator $sep!")
+		}
+		
+		$sepVal{$sep}=undef;
+	}
+	
+	my @tokenNames = split(/[$seps]/,$template);
+	
+	# TODO: refactor compound types
+	# compound separators, token names
+	my @compoundDecl = ($template,$seps,\@tokenNames);
+	return bless(\@compoundDecl,$class);
+}
+
+sub template {
+	return $_[0]->[0];
+}
+
+sub seps {
+	return $_[0]->[1];
+}
+
+sub tokens {
+	return $_[0]->[2];
+}
+
+1;
+
+
+package DCC::Model::ColumnType;
+
+use constant {
+	TYPE	=>	0,
+	USE	=>	1,
+	RESTRICTION	=>	2,
+	DEFAULT	=>	3,
+	ARRAYSEPS	=>	4,
+	ALLOWEDNULLS	=>	5
+};
+
+use constant {
+	IDREF	=>	0,
+	REQUIRED	=>	1,
+	DESIRABLE	=>	-1,
+	OPTIONAL	=>	-2
+};
+
+use constant STR2TYPE => {
+	'idref' => IDREF,
+	'required' => REQUIRED,
+	'desirable' => DESIRABLE,
+	'optional' => OPTIONAL
+};
+
+# This is the constructor.
+# parseColumnType parameters:
+#	containerDecl: a XML::LibXML::Element containing 'dcc:column-type' nodes, which
+#		defines a column type. Only the first one is parsed.
+#	model: a DCC::Model instance, used to validate.
+#	columnName: The column name, used for error messages
+# returns a DCC::Model::ColumnType instance, with all the information related to
+# types, restrictions and enumerated values of this ColumnType.
+sub parseColumnType($$$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $containerDecl = shift;
+	my $model = shift;
+	my $columnName = shift;
+	
+	# Item type
+	# column use (idref, required, optional)
+	# content restrictions
+	# default value
+	# array separators
+	# null values
+	my @nullValues = ();
+	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
+	
+	# Let's parse the column type!
+	foreach my $colType ($containerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'column-type')) {
+		#First, the item type
+		my $itemType = $colType->getAttribute('item-type');
+		
+		my $refItemType = $model->getItemType($itemType);
+		Carp::croak("unknown type '$itemType' for column $columnName")  unless(defined($refItemType));
+		
+		$columnType[DCC::Model::ColumnType::TYPE] = $itemType;
+		
+		# Column use
+		my $columnKind = $colType->getAttribute('column-kind');
+		# Idref equals 0; required, 1; desirable, -1; optional, -2
+		if(exists((DCC::Model::ColumnType::STR2TYPE)->{$columnKind})) {
+			$columnType[DCC::Model::ColumnType::USE] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
+		} else {
+			Carp::croak("Column $columnName has a unknown kind: $columnKind");
+		}
+		
+		# Content restrictions (children have precedence over attributes)
+		# First, is it a compound type?
+		unless(defined($refItemType->[DCC::Model::TYPEPATTERN])) {
+			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CompoundType->new($colType->getAttribute('compound-template'),$colType->getAttribute('compound-seps'),$columnName);
+			} else {
+				Carp::croak("Column $columnName was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
+			}
+		} else {
+			# Let's save allowed null values
+			foreach my $null ($colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null')) {
+				my $val = $null->textContent();
+				
+				if($model->isValidNull($val)) {
+					# Let's save the default value
+					push(@nullValues,$val);
+				} else {
+					Carp::croak("Column $columnName uses an unknown default value: $val");
+				}
+			}
+			
+			my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
+			my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
+			if(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
+				if(scalar(@cvChildren)>0) {
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CV->parseCV($cvChildren[0],$model);
+				} else {
+					my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
+					if(defined($namedCV)) {
+						$columnType[DCC::Model::ColumnType::RESTRICTION] = $namedCV;
+					} else {
+						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
+					}
+				}
+			} elsif(scalar(@patChildren)>0) {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::__parse_pattern($patChildren[0]);
+			} elsif($colType->hasAttribute('pattern')) {
+				my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
+				if(defined($PAT)) {
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $PAT;
+				} else {
+					Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
+				}
+			} else {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
+			}
+		}
+		
+		# Default value
+		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
+		# Default values must be rechecked once all the columns are available
+		$columnType[DCC::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
+		
+		# Array separators
+		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = undef;
+		if($colType->hasAttribute('array-seps')) {
+			my $arraySeps = $colType->getAttribute('array-seps');
+			if(length($arraySeps) > 0) {
+				my %sepVal = ();
+				foreach my $sep (split(//,$arraySeps)) {
+					if(exists($sepVal{$sep})) {
+						Carp::croak("Column $columnName has repeated the array separator $sep!")
+					}
+					
+					$sepVal{$sep}=undef;
+				}
+				$columnType[DCC::Model::ColumnType::ARRAYSEPS] = $arraySeps;
+			}
+		}
+		
+		last;
+	}
+	
+	return bless(\@columnType,$class);
+}
+
+# Item type
+sub type {
+	return $_[0]->[DCC::Model::ColumnType::TYPE];
+}
+
+# column use (idref, required, optional)
+# Idref equals 0; required, 1; optional, -1
+sub use {
+	return $_[0]->[DCC::Model::ColumnType::USE];
+}
+
+# content restrictions
+sub restriction {
+	return $_[0]->[DCC::Model::ColumnType::RESTRICTION];
+}
+
+# default value
+sub default {
+	return $_[0]->[DCC::Model::ColumnType::DEFAULT];
+}
+
+# array separators
+sub arraySeps {
+	return $_[0]->[DCC::Model::ColumnType::ARRAYSEPS];
+}
+
+# An array of allowed null values
+sub allowedNulls {
+	return $_[0]->[DCC::Model::ColumnType::ALLOWEDNULLS];
+}
+
+sub setDefault($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $val = shift;
+	
+	$self->[DCC::Model::ColumnType::DEFAULT] = $val;
+}
+
+# clone parameters:
+#	relatedConcept: optional, it signals whether to change cloned columnType
+#		according to relatedConcept hints
+# it returns a DCC::Model::ColumnType instance
+sub clone(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $relatedConcept = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
+	
+	# Cloning this object
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
+	
+	if(defined($relatedConcept)) {
+		if($relatedConcept->isPartial) {
+			$retval->[DCC::Model::ColumnType::USE] = DCC::Model::ColumnType::DESIRABLE;
+		}
+		
+		if($relatedConcept->arity eq 'M') {
+			my $sep = $relatedConcept->mArySeparator;
+			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS]) && index($retval->[DCC::Model::ColumnType::ARRAYSEPS],$sep)!=-1) {
+				Carp::croak("Cloned column has repeated the array separator $sep!");
+			}
+			
+			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS])) {
+				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep . $retval->[DCC::Model::ColumnType::ARRAYSEPS];
+			} else {
+				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep;
+			}
+		}
+	}
+	
+	return $retval;
+}
+
+1;
+
+
+package DCC::Model::Column;
+
+use constant {
+	NAME => 0,
+	DESCRIPTION => 1,
+	ANNOTATIONS => 2,
+	COLUMNTYPE => 3,
+	ISMASKED => 4,
+	REFCONCEPT => 5,
+	REFCOLUMN => 6,
+	RELATED_CONCEPT => 7
+};
+
+# This is the constructor.
+# parseColumn parameters:
+#	colDecl: a XML::LibXML::Element 'dcc:column' node, which defines
+#		a column
+#	model: a DCC::Model instance, used to validate
+# returns a DCC::Model::Column instance, with all the information related to
+# types, restrictions and enumerated values used by this column.
+sub parseColumn($$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $colDecl = shift;
+	my $model = shift;
+	
+	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
+	my @column = (
+		$colDecl->getAttribute('name'),
+		DCC::Model::DescriptionSet->parseDescriptions($colDecl),
+		DCC::Model::AnnotationSet->parseAnnotations($colDecl),
+		DCC::Model::ColumnType->parseColumnType($colDecl,$model,$colDecl->getAttribute('name')),
+		undef,
+		undef,
+		undef,
+		undef
+	);
+	
+	return bless(\@column,$class);
+}
+
+# The column name
+sub name {
+	return $_[0]->[DCC::Model::Column::NAME];
+}
+
+# The description, a DCC::Model::DescriptionSet instance
+sub description {
+	return $_[0]->[DCC::Model::Column::DESCRIPTION];
+}
+
+# Annotations, a DCC::Model::AnnotationSet instance
+sub annotations {
+	return $_[0]->[DCC::Model::Column::ANNOTATIONS];
+}
+
+# It returns a DCC::Model::ColumnType instance
+sub columnType {
+	return $_[0]->[DCC::Model::Column::COLUMNTYPE];
+}
+
+# If this column is masked (because it is a inherited idref on a concept hosted in a hash)
+# it will return true, otherwise undef
+sub isMasked {
+	return $_[0]->[DCC::Model::Column::ISMASKED];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept, this method will return a DCC::Model::Concept instance
+# Otherwise, it will return undef
+sub refConcept {
+	return $_[0]->[DCC::Model::Column::REFCONCEPT];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept, this method will return a DCC::Model::Column instance
+# which correlates to
+# Otherwise, it will return undef
+sub refColumn {
+	return $_[0]->[DCC::Model::Column::REFCOLUMN];
+}
+
+# If this column is part of a foreign key pointing
+# to a concept using related-to, this method will return a DCC::Model::RelatedConcept
+# instance which correlates to
+# Otherwise, it will return undef
+sub relatedConcept {
+	return $_[0]->[DCC::Model::Column::RELATED_CONCEPT];
+}
+
+# clone parameters:
+#	doMask: optional, it signals whether to mark cloned column
+#		as masked, so it should not be considered for value storage in the database.
+# it returns a DCC::Model::Column instance
+sub clone(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $doMask = shift;
+	
+	# Cloning this object
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
+	
+	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
+	
+	return $retval;
+}
+
+# cloneRelated parameters:
+#	refConcept: A DCC::Model::Concept instance, which this column is related to.
+#		The kind of relation could be inheritance, or 1:N
+#	relatedConcept: optional, DCC::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
+#	doMask: optional, it signals whether to mark cloned column
+#		as masked, so it should not be considered for value storage in the database.
+# it returns a DCC::Model::Column instance
+sub cloneRelated($;$$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $refConcept = shift;
+	my $relatedConcept = shift;
+	my $prefix = defined($relatedConcept)?$relatedConcept->keyPrefix:undef;
+	my $doMask = shift;
+	
+	# Cloning this object
+	my $retval = $self->clone($doMask);
+	
+	# Adding the prefix
+	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
+	
+	# And adding the relation info
+	# to this column
+	$retval->[DCC::Model::Column::REFCONCEPT] = $refConcept;
+	$retval->[DCC::Model::Column::REFCOLUMN] = $self;
+	$retval->[DCC::Model::Column::RELATED_CONCEPT] = $relatedConcept;
+	
+	# Does this column become optional due the participation?
+	# Does this column become an array due the arity?
+	if(defined($relatedConcept) && ($relatedConcept->isPartial || $relatedConcept->arity eq 'M')) {
+		# First, let's clone the concept type, to avoid side effects
+		$retval->[DCC::Model::Column::COLUMNTYPE] = $self->columnType->clone($relatedConcept);
+	}
+	
+	return $retval;
 }
 
 1;
@@ -1921,392 +2155,6 @@ sub addColumns($;$) {
 		
 		$p_columnsHash->{$inputColumnName} = $inputColumn;
 	}
-}
-
-1;
-
-
-package DCC::Model::CompoundType;
-# TODO: Compound type refactor in the near future, so work for filename patterns
-# can be reused
-
-sub template {
-	return $_[0]->[0];
-}
-
-sub seps {
-	return $_[0]->[1];
-}
-
-sub tokens {
-	return $_[0]->[2];
-}
-
-1;
-
-
-package DCC::Model::ColumnType;
-
-# This is the constructor.
-# parseColumnType parameters:
-#	containerDecl: a XML::LibXML::Element containing 'dcc:column-type' nodes, which
-#		defines a column type. Only the first one is parsed.
-#	model: a DCC::Model instance, used to validate.
-#	columnName: The column name, used for error messages
-# returns a DCC::Model::ColumnType instance, with all the information related to
-# types, restrictions and enumerated values of this ColumnType.
-sub parseColumnType($$$) {
-	my $class = shift;
-	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
-	
-	my $containerDecl = shift;
-	my $model = shift;
-	my $columnName = shift;
-	
-	# Item type
-	# column use (idref, required, optional)
-	# content restrictions
-	# default value
-	# array separators
-	# null values
-	my @nullValues = ();
-	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
-	
-	# Let's parse the column type!
-	foreach my $colType ($containerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'column-type')) {
-		#First, the item type
-		my $itemType = $colType->getAttribute('item-type');
-		
-		my $refItemType = $model->getItemType($itemType);
-		Carp::croak("unknown type '$itemType' for column $columnName")  unless(defined($refItemType));
-		
-		$columnType[DCC::Model::ColumnType::TYPE] = $itemType;
-		
-		# Column use
-		my $columnKind = $colType->getAttribute('column-kind');
-		# Idref equals 0; required, 1; desirable, -1; optional, -2
-		if(exists((DCC::Model::ColumnType::STR2TYPE)->{$columnKind})) {
-			$columnType[DCC::Model::ColumnType::USE] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
-		} else {
-			Carp::croak("Column $columnName has a unknown kind: $columnKind");
-		}
-		
-		# Content restrictions (children have precedence over attributes)
-		# First, is it a compound type?
-		unless(defined($refItemType->[DCC::Model::TYPEPATTERN])) {
-			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
-				# tokens, separators
-				my $template = $colType->getAttribute('compound-template');
-				my $seps = $colType->getAttribute('compound-seps');
-				
-				my %sepVal = ();
-				foreach my $sep (split(//,$seps)) {
-					if(exists($sepVal{$sep})) {
-						Carp::croak("Column $columnName has repeated the compound separator $sep!")
-					}
-					
-					$sepVal{$sep}=undef;
-				}
-				
-				my @tokenNames = split(/[$seps]/,$template);
-				
-				# TODO: refactor compound types
-				# compound separators, token names
-				my @compoundDecl = ($template,$seps,\@tokenNames);
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = bless(\@compoundDecl,'DCC::Model::CompoundType');
-			} else {
-				Carp::croak("Column $columnName was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
-			}
-		} else {
-			# Let's save allowed null values
-			foreach my $null ($colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null')) {
-				my $val = $null->textContent();
-				
-				if($model->isValidNull($val)) {
-					# Let's save the default value
-					push(@nullValues,$val);
-				} else {
-					Carp::croak("Column $columnName uses an unknown default value: $val");
-				}
-			}
-			
-			my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
-			my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
-			if(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
-				if(scalar(@cvChildren)>0) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CV->parseCV($cvChildren[0],$model);
-				} else {
-					my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
-					if(defined($namedCV)) {
-						$columnType[DCC::Model::ColumnType::RESTRICTION] = $namedCV;
-					} else {
-						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
-					}
-				}
-			} elsif(scalar(@patChildren)>0) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::__parse_pattern($patChildren[0]);
-			} elsif($colType->hasAttribute('pattern')) {
-				my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
-				if(defined($PAT)) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = $PAT;
-				} else {
-					Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
-				}
-			} else {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
-			}
-		}
-		
-		# Default value
-		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
-		# Default values must be rechecked once all the columns are available
-		$columnType[DCC::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
-		
-		# Array separators
-		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = undef;
-		if($colType->hasAttribute('array-seps')) {
-			my $arraySeps = $colType->getAttribute('array-seps');
-			if(length($arraySeps) > 0) {
-				my %sepVal = ();
-				foreach my $sep (split(//,$arraySeps)) {
-					if(exists($sepVal{$sep})) {
-						Carp::croak("Column $columnName has repeated the array separator $sep!")
-					}
-					
-					$sepVal{$sep}=undef;
-				}
-				$columnType[DCC::Model::ColumnType::ARRAYSEPS] = $arraySeps;
-			}
-		}
-		
-		last;
-	}
-	
-	return bless(\@columnType,$class);
-}
-
-# Item type
-sub type {
-	return $_[0]->[DCC::Model::ColumnType::TYPE];
-}
-
-# column use (idref, required, optional)
-# Idref equals 0; required, 1; optional, -1
-sub use {
-	return $_[0]->[DCC::Model::ColumnType::USE];
-}
-
-# content restrictions
-sub restriction {
-	return $_[0]->[DCC::Model::ColumnType::RESTRICTION];
-}
-
-# default value
-sub default {
-	return $_[0]->[DCC::Model::ColumnType::DEFAULT];
-}
-
-# array separators
-sub arraySeps {
-	return $_[0]->[DCC::Model::ColumnType::ARRAYSEPS];
-}
-
-# An array of allowed null values
-sub allowedNulls {
-	return $_[0]->[DCC::Model::ColumnType::ALLOWEDNULLS];
-}
-
-sub setDefault($) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $val = shift;
-	
-	$self->[DCC::Model::ColumnType::DEFAULT] = $val;
-}
-
-# clone parameters:
-#	relatedConcept: optional, it signals whether to change cloned columnType
-#		according to relatedConcept hints
-# it returns a DCC::Model::ColumnType instance
-sub clone(;$) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $relatedConcept = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
-	
-	# Cloning this object
-	my @cloneData = @{$self};
-	my $retval = bless(\@cloneData,ref($self));
-	
-	if(defined($relatedConcept)) {
-		if($relatedConcept->isPartial) {
-			$retval->[DCC::Model::ColumnType::USE] = DCC::Model::ColumnType::DESIRABLE;
-		}
-		
-		if($relatedConcept->arity eq 'M') {
-			my $sep = $relatedConcept->mArySeparator;
-			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS]) && index($retval->[DCC::Model::ColumnType::ARRAYSEPS],$sep)!=-1) {
-				Carp::croak("Cloned column has repeated the array separator $sep!");
-			}
-			
-			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS])) {
-				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep . $retval->[DCC::Model::ColumnType::ARRAYSEPS];
-			} else {
-				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep;
-			}
-		}
-	}
-	
-	return $retval;
-}
-
-1;
-
-
-package DCC::Model::Column;
-
-# This is the constructor.
-# parseColumn parameters:
-#	colDecl: a XML::LibXML::Element 'dcc:column' node, which defines
-#		a column
-#	model: a DCC::Model instance, used to validate
-# returns a DCC::Model::Column instance, with all the information related to
-# types, restrictions and enumerated values used by this column.
-sub parseColumn($$) {
-	my $class = shift;
-	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
-	
-	my $colDecl = shift;
-	my $model = shift;
-	
-	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
-	my @column = (
-		$colDecl->getAttribute('name'),
-		DCC::Model::DescriptionSet->parseDescriptions($colDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($colDecl),
-		DCC::Model::ColumnType->parseColumnType($colDecl,$model,$colDecl->getAttribute('name')),
-		undef,
-		undef,
-		undef,
-		undef
-	);
-	
-	return bless(\@column,$class);
-}
-
-# The column name
-sub name {
-	return $_[0]->[DCC::Model::Column::NAME];
-}
-
-# The description, a DCC::Model::DescriptionSet instance
-sub description {
-	return $_[0]->[DCC::Model::Column::DESCRIPTION];
-}
-
-# Annotations, a DCC::Model::AnnotationSet instance
-sub annotations {
-	return $_[0]->[DCC::Model::Column::ANNOTATIONS];
-}
-
-# It returns a DCC::Model::ColumnType instance
-sub columnType {
-	return $_[0]->[DCC::Model::Column::COLUMNTYPE];
-}
-
-# If this column is masked (because it is a inherited idref on a concept hosted in a hash)
-# it will return true, otherwise undef
-sub isMasked {
-	return $_[0]->[DCC::Model::Column::ISMASKED];
-}
-
-# If this column is part of a foreign key pointing
-# to a concept, this method will return a DCC::Model::Concept instance
-# Otherwise, it will return undef
-sub refConcept {
-	return $_[0]->[DCC::Model::Column::REFCONCEPT];
-}
-
-# If this column is part of a foreign key pointing
-# to a concept, this method will return a DCC::Model::Column instance
-# which correlates to
-# Otherwise, it will return undef
-sub refColumn {
-	return $_[0]->[DCC::Model::Column::REFCOLUMN];
-}
-
-# If this column is part of a foreign key pointing
-# to a concept using related-to, this method will return a DCC::Model::RelatedConcept
-# instance which correlates to
-# Otherwise, it will return undef
-sub relatedConcept {
-	return $_[0]->[DCC::Model::Column::RELATED_CONCEPT];
-}
-
-# clone parameters:
-#	doMask: optional, it signals whether to mark cloned column
-#		as masked, so it should not be considered for value storage in the database.
-# it returns a DCC::Model::Column instance
-sub clone(;$) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $doMask = shift;
-	
-	# Cloning this object
-	my @cloneData = @{$self};
-	my $retval = bless(\@cloneData,ref($self));
-	
-	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
-	
-	return $retval;
-}
-
-# cloneRelated parameters:
-#	refConcept: A DCC::Model::Concept instance, which this column is related to.
-#		The kind of relation could be inheritance, or 1:N
-#	relatedConcept: optional, DCC::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
-#	doMask: optional, it signals whether to mark cloned column
-#		as masked, so it should not be considered for value storage in the database.
-# it returns a DCC::Model::Column instance
-sub cloneRelated($;$$) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $refConcept = shift;
-	my $relatedConcept = shift;
-	my $prefix = defined($relatedConcept)?$relatedConcept->keyPrefix:undef;
-	my $doMask = shift;
-	
-	# Cloning this object
-	my $retval = $self->clone($doMask);
-	
-	# Adding the prefix
-	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
-	
-	# And adding the relation info
-	# to this column
-	$retval->[DCC::Model::Column::REFCONCEPT] = $refConcept;
-	$retval->[DCC::Model::Column::REFCOLUMN] = $self;
-	$retval->[DCC::Model::Column::RELATED_CONCEPT] = $relatedConcept;
-	
-	# Does this column become optional due the participation?
-	# Does this column become an array due the arity?
-	if(defined($relatedConcept) && ($relatedConcept->isPartial || $relatedConcept->arity eq 'M')) {
-		# First, let's clone the concept type, to avoid side effects
-		$retval->[DCC::Model::Column::COLUMNTYPE] = $self->columnType->clone($relatedConcept);
-	}
-	
-	return $retval;
 }
 
 1;
@@ -2557,6 +2405,59 @@ sub registerConceptDomain($) {
 
 
 package DCC::Model::ConceptDomain;
+
+# This is the constructor.
+# parseConceptDomain parameters:
+#	conceptDomainDecl: a XML::LibXML::Element 'dcc:concept-domain' element
+#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
+# it returns a DCC::Model::ConceptDomain instance, with all the concept domain
+# structures and data
+sub parseConceptDomain($$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(ref($class));
+	
+	my $conceptDomainDecl = shift;
+	my $model = shift;
+	
+	# concept domain name
+	# full name of the concept domain
+	# Filename Pattern for the filenames
+	# An array with the concepts under this concept domain umbrella
+	my @concepts = ();
+	my %conceptHash = ();
+	my @conceptDomain = (
+		$conceptDomainDecl->getAttribute('domain'),
+		$conceptDomainDecl->getAttribute('fullname'),
+		undef,
+		\@concepts,
+		\%conceptHash
+	);
+	
+	# Does the filename-pattern exist?
+	my $filenameFormatName = $conceptDomainDecl->getAttribute('filename-format');
+		
+	my $fpattern = $model->getFilenamePattern($filenameFormatName);
+	unless(defined($fpattern)) {
+		Carp::croak("Concept domain $conceptDomain[0] uses the unknown filename format $filenameFormatName");
+	}
+	
+	$conceptDomain[2] = $fpattern;
+	
+	# Last, chicken and egg problem, part 1
+	my $retConceptDomain = bless(\@conceptDomain,$class);
+
+	# And now, next method handles parsing of embedded concepts
+	push(@concepts,DCC::Model::Concept::parseConceptContainer($conceptDomainDecl,$retConceptDomain,$model));
+	# The concept hash will help on concept identification
+	map { $conceptHash{$_->name} = $_; } @concepts;
+	
+	# Last, chicken and egg problem, part 2
+	$retConceptDomain->filenamePattern->registerConceptDomain($retConceptDomain);
+	
+	return $retConceptDomain;
+}
+
 # concept domain name
 sub name {
 	return $_[0]->[0];
@@ -2589,6 +2490,119 @@ sub conceptHash {
 
 
 package DCC::Model::Concept;
+
+# Prototypes of static methods
+sub parseConceptContainer($$$;$);
+
+# parseConceptContainer paramereters:
+#	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
+#		or 'dcc:weak-concepts' instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#		has been defined.
+#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
+#	idConcept: An optional, identifying DCC::Model::Concept instance of
+#		all the (weak) concepts to be parsed from the container
+# it returns an array of DCC::Model::Concept instances, which are all the
+# concepts and weak concepts inside the input concept container
+sub parseConceptContainer($$$;$) {
+	my $conceptContainerDecl = shift;
+	my $conceptDomain = shift;
+	my $model = shift;
+	my $idConcept = shift;	# This is optional (remember!)
+	
+	my @concepts = ();
+	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept')) {
+		my $concept = DCC::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept);
+		push(@concepts,$concept);
+		
+		# There should be only one!
+		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
+			push(@concepts,DCC::Model::Concept::parseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept));
+			last;
+		}
+	}
+	
+	return @concepts;
+}
+
+# This is the constructor
+# parseConcept paramereters:
+#	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
+#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#		has been defined.
+#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
+#	idConcept: An optional, identifying DCC::Model::Concept instance of
+#		the concept to be parsed from conceptDecl
+# it returns an array of DCC::Model::Concept instances, the first one
+# corresponds to this concept, and the other ones are the weak-concepts
+sub parseConcept($$$;$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $conceptDecl = shift;
+	my $conceptDomain = shift;
+	my $model = shift;
+	my $idConcept = shift;	# This is optional (remember!)
+
+	my $conceptName = $conceptDecl->getAttribute('name');
+	my $conceptFullname = $conceptDecl->getAttribute('fullname');
+	
+	my @baseConceptTypes = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
+	
+	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypes)==0);
+	my $basetypeName = undef;
+	my $basetype = undef;
+	foreach my $baseConceptType (@baseConceptTypes) {
+		$basetypeName = $baseConceptType->getAttribute('name');
+		$basetype = $model->getConceptType($basetypeName);
+		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
+		last;
+	}
+	
+	
+	# This array will contain the names of the related concepts
+	my @related = ();
+	
+	# We don't have to inherit the related concepts, because weak concepts
+	# are not subclasses!!!!!
+	#########push(@related,@{$idConcept->relatedConcepts})  if(defined($idConcept));
+	
+	# Preparing the columns
+	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$basetype->columnSet,$model);
+	# and adding the ones from the identifying concept
+	# (and later from the related stuff)
+	
+	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
+	
+	# name
+	# fullname
+	# basetype
+	# concept domain
+	# Description Set
+	# Annotation Set
+	# ColumnSet
+	# related conceptNames
+	my @thisConcept = (
+		$conceptName,
+		$conceptFullname,
+		$basetype,
+		$conceptDomain,
+		DCC::Model::DescriptionSet->parseDescriptions($conceptDecl),
+		DCC::Model::AnnotationSet->parseAnnotations($conceptDecl),
+		$columnSet,
+		$idConcept,
+		\@related,
+	);
+	
+	# Saving the related concepts (the ones explicitly declared within this concept)
+	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
+		push(@related,DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl));
+	}
+	
+	# The weak concepts must be processed outside (this constructor does not mind them)
+	return  bless(\@thisConcept,$class);
+}
 
 # name
 sub name {
@@ -2665,6 +2679,29 @@ sub idColumns(;$) {
 
 
 package DCC::Model::RelatedConcept;
+
+# This is the constructor.
+# parseRelatedConcept parameters:
+#	relatedDecl: A XML::LibXML::Element 'dcc:related-concept' instance
+# It returns a DCC::Model::RelatedConcept instance
+sub parseRelatedConcept($) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $relatedDecl = shift;
+	
+	return bless([
+		($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
+		$relatedDecl->getAttribute('concept') ,
+		($relatedDecl->hasAttribute('prefix'))?$relatedDecl->getAttribute('prefix'):undef ,
+		undef,
+		undef,
+		($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
+		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
+		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef
+	],$class);
+}
 
 sub conceptDomainName {
 	return $_[0]->[0];
