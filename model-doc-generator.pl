@@ -164,6 +164,9 @@ sub genSQL($$) {
 		# Let's iterate over all the concept domains and their concepts
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			# Skipping abstract concept domains
+			next  if($conceptDomain->isAbstract);
+			
 			my $conceptDomainName = $conceptDomain->name;
 			
 			my %pcon = ();
@@ -257,6 +260,8 @@ sub genSQL($$) {
 
 		# And now, the FK restrictions from related concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			next  if($conceptDomain->isAbstract);
+			
 			my $conceptDomainName = $conceptDomain->name;
 			
 			foreach my $concept (@{$conceptDomain->concepts}) {
@@ -267,6 +272,9 @@ sub genSQL($$) {
 				if(scalar(@{$concept->relatedConcepts})>0) {
 					print $SQL "\n-- ",$concept->fullname, " foreign keys from related-to";
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+						# Skipping foreign keys to abstract concepts
+						next  if($relatedConcept->concept->conceptDomain->isAbstract);
+						
 						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
 						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
@@ -744,19 +752,21 @@ sub genConceptGraphNode($\@$) {
 		if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
 			$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 		}
-		if(defined($column->refConcept)) {
+		# Hyperlinking only to concrete concepts
+		my $refConcreteConcept = defined($column->refConcept) && !$column->refConcept->conceptDomain->isAbstract;
+		if($refConcreteConcept) {
 #			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
 			$formattedColumnName = '\textit{'.$formattedColumnName.'}';
 		}
 		
 		if($isId) {
-			$icon = defined($column->refColumn)?'fkpk':'pk';
-		} elsif(defined($column->refColumn)) {
+			$icon = ($refConcreteConcept)?'fkpk':'pk';
+		} elsif($refConcreteConcept) {
 			$icon = 'fk';
 		}
 		
 		my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
-		if(defined($column->refColumn)) {
+		if($refConcreteConcept) {
 			$image = '\hyperref[column:'.join('.',$column->refConcept->conceptDomain->name,$column->refConcept->name,$column->refColumn->name).']{'.$image.'}';
 		}
 		
@@ -849,6 +859,9 @@ DEOF
 		# Let's visit each concept!
 		if(scalar(@{$concept->relatedConcepts})>0) {
 			foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+				# Not showing the graphs to abstract concept domains
+				next  if($relatedConcept->concept->conceptDomain->isAbstract);
+				
 				my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 				
 				my $refEntryLine = '';
@@ -954,6 +967,9 @@ DEOF
 	my $relnode = 1;
 	# First, the concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
+		# Skipping abstract concept domains
+		next  if($conceptDomain->isAbstract);
+		
 		my $conceptDomainName = $conceptDomain->name;
 		my $conceptDomainFullName = $conceptDomain->fullname;
 		print $DOT <<DEOF;
@@ -1006,6 +1022,9 @@ DEOF
 			# Let's visit each concept!
 			if(scalar(@{$concept->relatedConcepts})>0) {
 				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+					# Skipping relationships to abstract concept domains
+					next  if($relatedConcept->concept->conceptDomain->isAbstract);
+					
 					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 					
 					my $refEntryLine = '';
@@ -1211,7 +1230,8 @@ EOF
 			}
 			
 			my $related='';
-			if(defined($column->refColumn)) {
+			# Only references to concepts is non abstract concept domains
+			if(defined($column->refColumn) && !$column->refConcept->conceptDomain->isAbstract) {
 				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
 			}
 			
@@ -1371,6 +1391,9 @@ TEOF
 	
 	# Let's iterate over all the concept domains and their concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
+		# Skipping abstract concept domains on documentation generation
+		next  if($conceptDomain->isAbstract);
+		
 		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO);
 	}
 

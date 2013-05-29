@@ -521,27 +521,44 @@ If if starts as $$, it tells the required or idref column with the value for thi
         </xs:complexType>
     </xs:element>
     
+    <xs:element name="extends" type="bp:conceptRefType">
+        <xs:annotation>
+            <xs:documentation>This concept inherits all the definitions from the concept told here, which must be previously declared</xs:documentation>
+        </xs:annotation>
+    </xs:element>
+    
+    <xs:element name="base-concept-type">
+        <xs:annotation>
+            <xs:documentation></xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:attribute name="name" type="xs:string" use="required">
+                <xs:annotation>
+                    <xs:documentation>The base type(s) this concept is based on. All the declared columns on the type(s) are for this concept, plus the additional ones declared here</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+    
     <xs:element name="concept">
+        <xs:annotation>
+            <xs:documentation>A concept is the equivalent of a class in a programming language, a table in relational model or an entity in the EER.
+                As a concept can be an extension of an existing one, but at the same time, it can take one or more concept types as templates,
+                there are some rules which must be kept.
+                Columns from several concept types can overlap, but idref declarations take precedence from first to last.
+                Columns from an extended concept can overlap, meanwhile there is no overlap at idref declarations level.
+            </xs:documentation>
+        </xs:annotation>
         <xs:complexType>
             <xs:sequence>
                 <xs:choice>
-                    <xs:element name="base-concept-type" minOccurs="1" maxOccurs="unbounded">
-                        <xs:annotation>
-                            <xs:documentation></xs:documentation>
-                        </xs:annotation>
-                        <xs:complexType>
-                            <xs:attribute name="name" type="xs:string" use="required">
-                                <xs:annotation>
-                                    <xs:documentation>The base type(s) this concept is based on. All the declared columns on the type(s) are for this concept, plus the additional ones declared here</xs:documentation>
-                                </xs:annotation>
-                            </xs:attribute>
-                        </xs:complexType>
-                    </xs:element>
-                    <xs:element name="inherits-from" type="bp:conceptRefType">
-                        <xs:annotation>
-                            <xs:documentation>This concept inherits from the concept told here</xs:documentation>
-                        </xs:annotation>
-                    </xs:element>
+                    <xs:sequence>
+                        <xs:element ref="bp:extends" />
+                        <xs:element ref="bp:base-concept-type" minOccurs="0" maxOccurs="unbounded" />
+                    </xs:sequence>
+                    <xs:sequence>
+                        <xs:element ref="bp:base-concept-type" minOccurs="1" maxOccurs="unbounded" />
+                    </xs:sequence>
                 </xs:choice>
                 <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded">
                     <xs:annotation>
@@ -597,6 +614,11 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                 <xs:attribute name="partial-participation" use="optional" type="xs:boolean" default="false">
                                     <xs:annotation>
                                         <xs:documentation>Is this a partial or total participation relationship?</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                                <xs:attribute name="inheritable" use="optional" type="xs:boolean" default="false">
+                                    <xs:annotation>
+                                        <xs:documentation>When there is a relation from this concept to itself, we decide whether the target is updated on inheritance to the new concept</xs:documentation>
                                     </xs:annotation>
                                 </xs:attribute>
                             </xs:extension>
@@ -804,6 +826,11 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                         <xs:attribute name="filename-format" type="xs:string" use="required">
                             <xs:annotation>
                                 <xs:documentation>The name of the filename format to be used for this concept domain</xs:documentation>
+                            </xs:annotation>
+                        </xs:attribute>
+                        <xs:attribute name="is-abstract" type="xs:boolean" use="optional" default="false">
+                            <xs:annotation>
+                                <xs:documentation>Is this an abstract concept domain? Abtract concept domain, for instance, are usually not shown in documentation</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
                     </xs:complexType>

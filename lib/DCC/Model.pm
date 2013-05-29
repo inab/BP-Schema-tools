@@ -1063,17 +1063,25 @@ package DCC::Model::AnnotationSet;
 # This is the constructor.
 # parseAnnotations paremeters:
 #	container: a XML::LibXML::Element container of 'dcc:annotation' elements
+#	seedAnnotationSet: an optional DCC::Model::AnnotationSet used as seed
 # It returns a DCC::Model::AnnotationSet hash reference, containing the contents of all the
 # 'dcc:annotation' XML elements found
-sub parseAnnotations($) {
+sub parseAnnotations($;$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
 	my $container = shift;
+	my $seedAnnotationSet = shift;
 	
 	my %annotationHash = ();
 	my @annotationOrder = ();
+	
+	if(defined($seedAnnotationSet)) {
+		%annotationHash = %{$seedAnnotationSet->hash};
+		@annotationOrder = @{$seedAnnotationSet->order};
+	}
+	
 	my @annotations = (\%annotationHash,\@annotationOrder);
 	foreach my $annotation ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'annotation')) {
 		unless(exists($annotationHash{$annotation->getAttribute('key')})) {
@@ -2032,6 +2040,63 @@ sub parseColumnSet($$$) {
 	return bless(\@columnSet,$class);
 }
 
+# This is a constructor
+# combineColumnSets parameters:
+#	dontCroak: A flag which must be set to true when we want to skip
+#		idref column redefinitions, instead of complaining about
+#	columnSets: An array of DCC::Model::ColumnSet instances
+# It returns a columnSet which is the combination of the input ones. The
+# order of the columns is preserved the most.
+# It is not allowed to override IDREF columns
+sub combineColumnSets($@) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my($dontCroak,$firstColumnSet,@columnSets) = @_;
+	
+	# First column set is the seed
+	my @columnNames = @{$firstColumnSet->columnNames};
+	my @idColumnNames = @{$firstColumnSet->idColumnNames};
+	my %columnDecl = %{$firstColumnSet->columns};
+	
+	# Array with the idref column names
+	# Array with column names (all)
+	# Hash of DCC::Model::Column instances
+	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
+	
+	# And now, the next ones!
+	foreach my $columnSet (@columnSets) {
+		my $p_columns = $columnSet->columns;
+		foreach my $columnName (@{$columnSet->columnNames}) {
+			# We want to keep the original column order as far as possible
+			if(exists($columnDecl{$columnName})) {
+				if($columnDecl{$columnName}->columnType->use eq DCC::Model::ColumnType::IDREF) {
+					next  if($dontCroak);
+					Carp::croak('It is not allowed to redefine column '.$columnName.'. It is an idref one!');
+				}
+			} else {
+				push(@columnNames,$columnName);
+				# Is it a id column?
+				push(@idColumnNames,$columnName)  if($p_columns->{$columnName}->columnType->use eq DCC::Model::ColumnType::IDREF);
+			}
+			$columnDecl{$columnName} = $p_columns->{$columnName};
+		}
+	}
+	
+	return bless(\@columnSet,$class);
+}
+
+# Cloning facility
+sub clone() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# A cheap way to clone itself
+	return ref($self)->combineColumnSets(1,$self);
+}
+
 # Reference to an array with the idref column names
 sub idColumnNames {
 	return $_[0]->[0];
@@ -2431,7 +2496,8 @@ sub parseConceptDomain($$) {
 		$conceptDomainDecl->getAttribute('fullname'),
 		undef,
 		\@concepts,
-		\%conceptHash
+		\%conceptHash,
+		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 1))?1:undef,
 	);
 	
 	# Does the filename-pattern exist?
@@ -2484,6 +2550,11 @@ sub concepts {
 # A hash of DCC::Model::Concept instances
 sub conceptHash {
 	return $_[0]->[4];
+}
+
+# It returns 1 or undef, so it tells whether the whole concept domain is abstract or not
+sub isAbstract {
+	return $_[0]->[5];
 }
 
 1;
@@ -2548,32 +2619,99 @@ sub parseConcept($$$;$) {
 	my $conceptName = $conceptDecl->getAttribute('name');
 	my $conceptFullname = $conceptDecl->getAttribute('fullname');
 	
-	my @baseConceptTypes = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
-	
-	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypes)==0);
-	my $basetypeName = undef;
-	my $basetype = undef;
-	foreach my $baseConceptType (@baseConceptTypes) {
-		$basetypeName = $baseConceptType->getAttribute('name');
-		$basetype = $model->getConceptType($basetypeName);
-		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
+	my $parentConceptDomainName = undef;
+	my $parentConceptName = undef;
+	my $parentConceptDomain = undef;
+	my $parentConcept = undef;
+	# There must be at most one
+	foreach my $baseConcept ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'extends')) {
+		$parentConceptDomainName = $baseConcept->hasAttribute('domain')?$baseConcept->getAttribute('domain'):undef;
+		$parentConceptName = $baseConcept->getAttribute('concept');
+		
+		$parentConceptDomain = $conceptDomain;
+		if(defined($parentConceptDomainName)) {
+			$parentConceptDomain = $model->getConceptDomain($parentConceptDomainName);
+			Carp::croak("Concept domain $parentConceptDomainName with concept $parentConceptName does not exist!")  unless(defined($parentConceptDomain));
+		}
+		
+		Carp::croak("Concept $parentConceptName does not exist in concept domain ".$parentConceptDomain->name)  unless(exists($parentConceptDomain->conceptHash->{$parentConceptName}));
+		$parentConcept = $parentConceptDomain->conceptHash->{$parentConceptName};
 		last;
 	}
 	
+	my @conceptBaseTypes = ();
+	push(@conceptBaseTypes,@{$parentConcept->baseConceptTypes})  if(defined($parentConcept));
+	
+	# Now, let's get the base concept types
+	my @baseConceptTypesDecl = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
+	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypesDecl)==0 && !defined($parentConcept));
+
+	my @basetypes = ();
+	foreach my $baseConceptType (@baseConceptTypesDecl) {
+		my $basetypeName = $baseConceptType->getAttribute('name');
+		my $basetype = $model->getConceptType($basetypeName);
+		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
+		
+		foreach my $conceptBase (@conceptBaseTypes) {
+			if($conceptBase eq $basetype) {
+				$basetype = undef;
+				last;
+			}
+		}
+		
+		# Only saving new basetypes, skipping old ones to avoid strange effects
+		if(defined($basetype)) {
+			push(@basetypes,$basetype);
+			push(@conceptBaseTypes,$basetype);
+		}
+	}
+	# First, let's process the basetypes columnSets
+	my $baseColumnSet = (scalar(@basetypes) > 1)?DCC::Model::ColumnSet->combineColumnSets(1,map { $_->columnSet } @basetypes):((scalar(@basetypes) == 1)?$basetypes[0]->columnSet:undef);
+	
+	# And now, let's process the inherited columnSets, along with the basetypes ones
+	if(defined($baseColumnSet)) {
+		# Let's combine!
+		if(defined($parentConcept)) {
+			# Restrictive mode, with croaks
+			$baseColumnSet = DCC::Model::ColumnSet->combineColumnSets(undef,$parentConcept->columnSet,$baseColumnSet);
+		}
+	} else {
+		# Should we clone this, to avoid potentian side effects?
+		$baseColumnSet = $parentConcept->columnSet;
+	}
+
+	# Preparing the columns
+	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$baseColumnSet,$model);
+	
+	# Adding the ones from the identifying concept
+	# (and later from the related stuff)
+	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
 	
 	# This array will contain the names of the related concepts
 	my @related = ();
 	
-	# We don't have to inherit the related concepts, because weak concepts
-	# are not subclasses!!!!!
-	#########push(@related,@{$idConcept->relatedConcepts})  if(defined($idConcept));
+	# Let's resolve inherited relations topic
+	if(defined($parentConcept)) {
+		# First, cloning
+		@related = map { $->clone() } @{$parentConcept->relatedConcepts};
+		
+		# Second, reparenting the RelatedConcept objects
+		# Third, updating inheritable related concepts
+		my $parentDomainChange = $parentConceptDomain ne $conceptDomain;
+		foreach my $relatedConcept (@related) {
+			$relatedConcept->setConceptDomainName($parentConceptDomainName)  if($parentDomainChange && !defined($relatedConcept->conceptDomainName));
+			
+			if($relatedConcept->isInheritable && $relatedConcept->conceptDomainName eq $parentConceptDomainName && $relatedConcept->conceptName eq $parentConceptName) {
+				$relatedConcept->setConceptName($conceptName);
+			}
+		}
+		
+	}
 	
-	# Preparing the columns
-	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$basetype->columnSet,$model);
-	# and adding the ones from the identifying concept
-	# (and later from the related stuff)
-	
-	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
+	# Saving the related concepts (the ones explicitly declared within this concept)
+	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
+		push(@related,DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl));
+	}
 	
 	# name
 	# fullname
@@ -2586,19 +2724,15 @@ sub parseConcept($$$;$) {
 	my @thisConcept = (
 		$conceptName,
 		$conceptFullname,
-		$basetype,
+		\@conceptBaseTypes,
 		$conceptDomain,
 		DCC::Model::DescriptionSet->parseDescriptions($conceptDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($conceptDecl),
+		DCC::Model::AnnotationSet->parseAnnotations($conceptDecl,defined($parentConcept)?$parentConcept->annotations:undef),
 		$columnSet,
 		$idConcept,
 		\@related,
+		$parentConcept
 	);
-	
-	# Saving the related concepts (the ones explicitly declared within this concept)
-	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
-		push(@related,DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl));
-	}
 	
 	# The weak concepts must be processed outside (this constructor does not mind them)
 	return  bless(\@thisConcept,$class);
@@ -2614,8 +2748,13 @@ sub fullname {
 	return $_[0]->[1];
 }
 
-# The DCC::Model::ConceptType instance basetype
+# The DCC::Model::ConceptType instance basetype is the first element of the array
 sub baseConceptType {
+	return $_[0]->[2][0];
+}
+
+# A reference to the array of DCC::Model::ConceptType instances basetypes
+sub baseConceptTypes {
 	return $_[0]->[2];
 }
 
@@ -2647,6 +2786,11 @@ sub idConcept {
 # related conceptNames, an array of DCC::Model::RelatedConcept (trios concept domain name, concept name, prefix)
 sub relatedConcepts {
 	return $_[0]->[8];
+}
+
+# A DCC::Model::Concept instance, which represents the concept which has been extended
+sub parentConcept {
+	return $_[0]->[9];
 }
 
 # refColumns parameters:
@@ -2699,7 +2843,8 @@ sub parseRelatedConcept($) {
 		undef,
 		($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
 		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
-		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef
+		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef,
+		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->hasAttribute('inheritable') eq 1)?1:undef
 	],$class);
 }
 
@@ -2715,11 +2860,12 @@ sub keyPrefix {
 	return $_[0]->[2];
 }
 
+# It returns a DCC::Model::Concept instance
 sub concept {
 	return $_[0]->[3];
 }
 
-# It returns a column set with the remote columns used for this relation
+# It returns a DCC::Model::ColumnSet with the remote columns used for this relation
 sub columnSet {
 	return $_[0]->[4];
 }
@@ -2739,6 +2885,14 @@ sub isPartial {
 	return $_[0]->[7];
 }
 
+# It returns 1 or undef
+sub isInheritable {
+	return $_[0]->[8];
+}
+
+# setRelatedConcept parameters:
+#	concept: the DCC::Model::Concept instance being referenced
+#	columnSet: the columns inherited from the concept, already with the key prefix
 sub setRelatedConcept($$) {
 	my $self = shift;
 	
@@ -2752,6 +2906,44 @@ sub setRelatedConcept($$) {
 	
 	$self->[3] = $concept;
 	$self->[4] = $columnSet;
+}
+
+# clone creates a new DCC::Model::RelatedConcept
+sub clone() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
+	
+	return $retval;
+}
+
+#	newConceptDomainName: the new concept domain to point to
+sub setConceptDomainName($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $newConceptDomainName = shift;
+	
+	$self->[0] = $newConceptDomainName;
+}
+
+# setConceptName parameters:
+#	newConceptName: the new concept name to point to
+#	newConceptDomainName: the new concept domain to point to
+sub setConceptName($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $newConceptName = shift;
+	my $newConceptDomainName = shift;
+	
+	$self->[0] = $newConceptDomainName;
+	$self->[1] = $newConceptName;
 }
 
 1;
