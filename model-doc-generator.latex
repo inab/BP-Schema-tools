@@ -53,6 +53,9 @@
 % this package allows putting something in a separate, rotated page
 \usepackage{pdflscape}
 
+% We need to switch between portrait and landscape
+\usepackage{ifthen}
+
 % package to put single figure captions
 % needed to inject the full page figure of the model graph
 \usepackage{capt-of}

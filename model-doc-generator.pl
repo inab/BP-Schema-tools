@@ -17,6 +17,10 @@ use FindBin;
 use lib "$FindBin::Bin/lib";
 use DCC::Model;
 
+
+use constant RELEASE => 1;
+
+
 sub latex_escape($);
 sub latex_format($);
 sub genSQL($$);
@@ -165,7 +169,7 @@ sub genSQL($$) {
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			# Skipping abstract concept domains
-			next  if($conceptDomain->isAbstract);
+			next  if(RELEASE && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -260,7 +264,7 @@ sub genSQL($$) {
 
 		# And now, the FK restrictions from related concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
-			next  if($conceptDomain->isAbstract);
+			next  if(RELEASE && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -273,7 +277,7 @@ sub genSQL($$) {
 					print $SQL "\n-- ",$concept->fullname, " foreign keys from related-to";
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping foreign keys to abstract concepts
-						next  if($relatedConcept->concept->conceptDomain->isAbstract);
+						next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
 						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
@@ -753,7 +757,7 @@ sub genConceptGraphNode($\@$) {
 			$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 		}
 		# Hyperlinking only to concrete concepts
-		my $refConcreteConcept = defined($column->refConcept) && !$column->refConcept->conceptDomain->isAbstract;
+		my $refConcreteConcept = defined($column->refConcept) && (!RELEASE || !$column->refConcept->conceptDomain->isAbstract);
 		if($refConcreteConcept) {
 #			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
 			$formattedColumnName = '\textit{'.$formattedColumnName.'}';
@@ -799,6 +803,7 @@ sub genConceptDomainGraph($$$$) {
 
 	my $dotfile = $figurePrefix . '-domain-'. $conceptDomain->name.'.dot';
 	my $latexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'.latex';
+	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'-standalone.latex';
 	my $DOT;
 	if(open($DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
@@ -812,6 +817,7 @@ DEOF
 	
 	my %fks = ();
 	my %colors = ();
+	my @firstRank = ();
 	# First, the concepts
 	foreach my $concept (@{$conceptDomain->concepts}) {
 		my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
@@ -821,7 +827,16 @@ DEOF
 			$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
 		}
 		$colors{$color} = $p_colorDef;
+		
+		if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
+			push(@firstRank,$entry);
+		}
 	}
+	
+	# Let's print the rank
+	print $DOT <<DEOF;
+	{ rank=same; @firstRank }
+DEOF
 	
 	# Then, their relationships
 	print $DOT <<DEOF;
@@ -860,7 +875,7 @@ DEOF
 		if(scalar(@{$concept->relatedConcepts})>0) {
 			foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 				# Not showing the graphs to abstract concept domains
-				next  if($relatedConcept->concept->conceptDomain->isAbstract);
+				next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 				
 				my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 				
@@ -922,13 +937,29 @@ DEOF
 		'--autosize',
 #		'--nominsize',
 		'-c',
+		'--preproc',
 		'--figonly',
 # This backend kills relationships
 #		'-ftikz',
 		'-o',$latexfile,
 		$dotfile
 	);
+	my @standAloneParams = (
+		'dot2tex',
+		'--usepdflatex',
+		'--docpreamble=\usepackage{hyperref} \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows} \providecommand{\arrayrulecolor}[1] {}'.$figpreamble,
+		'--autosize',
+#		'--nominsize',
+		'-c',
+		'--preproc',
+#		'--prog=circo',
+# This backend kills relationships
+#		'-ftikz',
+		'-o',$standalonelatexfile,
+		$dotfile
+	);
 	system(@params);
+	system(@standAloneParams);
 
 	return ($latexfile,$figpreamble);
 }
@@ -968,7 +999,7 @@ DEOF
 	# First, the concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
 		# Skipping abstract concept domains
-		next  if($conceptDomain->isAbstract);
+		next  if(RELEASE && $conceptDomain->isAbstract);
 		
 		my $conceptDomainName = $conceptDomain->name;
 		my $conceptDomainFullName = $conceptDomain->fullname;
@@ -977,6 +1008,7 @@ DEOF
 		label="$conceptDomainFullName"
 DEOF
 		my %fks = ();
+		my @firstRank = ();
 		foreach my $concept (@{$conceptDomain->concepts}) {
 			my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
 			
@@ -985,8 +1017,17 @@ DEOF
 				$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
 			}
 			$colors{$color} = $p_colorDef;
+		
+			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
+				push(@firstRank,$entry);
+			}
 		}
 		
+	
+		# Let's print the rank
+		print $DOT <<DEOF;
+		{ rank=same; @firstRank }
+DEOF
 		# Then, their relationships
 		print $DOT <<DEOF;
 		
@@ -1023,7 +1064,7 @@ DEOF
 			if(scalar(@{$concept->relatedConcepts})>0) {
 				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 					# Skipping relationships to abstract concept domains
-					next  if($relatedConcept->concept->conceptDomain->isAbstract);
+					next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 					
 					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 					
@@ -1231,7 +1272,7 @@ EOF
 			
 			my $related='';
 			# Only references to concepts is non abstract concept domains
-			if(defined($column->refColumn) && !$column->refConcept->conceptDomain->isAbstract) {
+			if(defined($column->refColumn) && (!RELEASE || !$column->refConcept->conceptDomain->isAbstract)) {
 				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
 			}
 			
@@ -1370,21 +1411,46 @@ if(scalar(@ARGV)>=3) {
 	my(undef,$absModelDir,$relModelFile) = File::Spec->splitpath($modelgraphfile);
 
 	print $TO <<TEOF;
+\\newpage
+\\newlength{\\modelheight}
+\\newlength{\\modelwidth}
+\\newsavebox{\\modelbox}
+
+\\savebox{\\modelbox}{%
+\\hypersetup{
+	linkcolor=Black
+}
+\\import*{$absModelDir/}{$relModelFile}
+}
+\\setlength{\\modelheight}{\\ht\\modelbox}
+% Total height
+\\addtolength{\\modelheight}{\\dp\\modelbox}
+\\setlength{\\modelwidth}{\\wd\\modelbox}
+
+\\ifthenelse{\\modelheight<\\modelwidth}{%then
 % This is what must be done to center landscape figures
 \\begin{landscape}
 \\parbox[c][\\textwidth][s]{\\linewidth}{%
 \\vfill
 \\centering
 \\resizebox{\\linewidth}{!}{
-\\hypersetup{
-	linkcolor=Black
-}
-\\import*{$absModelDir/}{$relModelFile}
+\\usebox{\\modelbox}
 }
 \\captionof{figure}{Overview of $modelName data model}
 \\vfill
 }
 \\end{landscape}
+}{%else
+{
+\\vfill
+\\centering
+\\resizebox{\\linewidth}{!}{
+\\usebox{\\modelbox}
+}
+\\captionof{figure}{Overview of $modelName data model}
+\\vfill
+}
+}
 TEOF
 	
 	print $TO '\chapter{DCC Submission Tabular Formats}\label{ch:tabFormat}',"\n";
@@ -1392,7 +1458,7 @@ TEOF
 	# Let's iterate over all the concept domains and their concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
 		# Skipping abstract concept domains on documentation generation
-		next  if($conceptDomain->isAbstract);
+		next  if(RELEASE && $conceptDomain->isAbstract);
 		
 		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO);
 	}

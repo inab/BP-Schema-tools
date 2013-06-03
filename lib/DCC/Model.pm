@@ -988,7 +988,7 @@ sub parseIndex($) {
 	my $ind = shift;
 	
 	# Is index unique?, attributes (attribute name, ascending/descending)
-	my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 1)?1:undef,[]);
+	my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
 
 	foreach my $attr ($ind->childNodes()) {
 		next  unless($attr->nodeType == XML::LibXML::XML_ELEMENT_NODE && $attr->localname eq 'attr');
@@ -2497,7 +2497,7 @@ sub parseConceptDomain($$) {
 		undef,
 		\@concepts,
 		\%conceptHash,
-		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 1))?1:undef,
+		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 'true'))?1:undef,
 	);
 	
 	# Does the filename-pattern exist?
@@ -2514,11 +2514,11 @@ sub parseConceptDomain($$) {
 	my $retConceptDomain = bless(\@conceptDomain,$class);
 
 	# And now, next method handles parsing of embedded concepts
-	push(@concepts,DCC::Model::Concept::parseConceptContainer($conceptDomainDecl,$retConceptDomain,$model));
-	# The concept hash will help on concept identification
-	map { $conceptHash{$_->name} = $_; } @concepts;
+	# It must register the concepts in the concept domain as soon as possible
+	DCC::Model::Concept::parseConceptContainer($conceptDomainDecl,$retConceptDomain,$model);
 	
 	# Last, chicken and egg problem, part 2
+	# This step must be delayed, because we need a enumeration of all the concepts
 	$retConceptDomain->filenamePattern->registerConceptDomain($retConceptDomain);
 	
 	return $retConceptDomain;
@@ -2540,8 +2540,8 @@ sub filenamePattern {
 	return $_[0]->[2];
 }
 
-# A hash with the concepts under this concept domain umbrella
-# A hash of DCC::Model::Concept instances
+# An array with the concepts under this concept domain umbrella
+# An array of DCC::Model::Concept instances
 sub concepts {
 	return $_[0]->[3];
 }
@@ -2555,6 +2555,19 @@ sub conceptHash {
 # It returns 1 or undef, so it tells whether the whole concept domain is abstract or not
 sub isAbstract {
 	return $_[0]->[5];
+}
+
+# registerConcept parameters:
+#	concept: a DCC::Model::Concept instance, which is going to be registered in the concept domain
+sub registerConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $concept = shift;
+	
+	push(@{$self->concepts},$concept);
+	$self->conceptHash->{$concept->name} = $concept;
 }
 
 1;
@@ -2581,19 +2594,16 @@ sub parseConceptContainer($$$;$) {
 	my $model = shift;
 	my $idConcept = shift;	# This is optional (remember!)
 	
-	my @concepts = ();
 	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept')) {
+		# Concepts self register on the concept domain!
 		my $concept = DCC::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept);
-		push(@concepts,$concept);
 		
 		# There should be only one!
 		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
-			push(@concepts,DCC::Model::Concept::parseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept));
+			DCC::Model::Concept::parseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept);
 			last;
 		}
 	}
-	
-	return @concepts;
 }
 
 # This is the constructor
@@ -2623,6 +2633,7 @@ sub parseConcept($$$;$) {
 	my $parentConceptName = undef;
 	my $parentConceptDomain = undef;
 	my $parentConcept = undef;
+	
 	# There must be at most one
 	foreach my $baseConcept ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'extends')) {
 		$parentConceptDomainName = $baseConcept->hasAttribute('domain')?$baseConcept->getAttribute('domain'):undef;
@@ -2632,9 +2643,12 @@ sub parseConcept($$$;$) {
 		if(defined($parentConceptDomainName)) {
 			$parentConceptDomain = $model->getConceptDomain($parentConceptDomainName);
 			Carp::croak("Concept domain $parentConceptDomainName with concept $parentConceptName does not exist!")  unless(defined($parentConceptDomain));
+		} else {
+			# Fallback name
+			$parentConceptDomainName = $parentConceptDomain->name;
 		}
 		
-		Carp::croak("Concept $parentConceptName does not exist in concept domain ".$parentConceptDomain->name)  unless(exists($parentConceptDomain->conceptHash->{$parentConceptName}));
+		Carp::croak("Concept $parentConceptName does not exist in concept domain ".$parentConceptDomainName)  unless(exists($parentConceptDomain->conceptHash->{$parentConceptName}));
 		$parentConcept = $parentConceptDomain->conceptHash->{$parentConceptName};
 		last;
 	}
@@ -2675,11 +2689,14 @@ sub parseConcept($$$;$) {
 			# Restrictive mode, with croaks
 			$baseColumnSet = DCC::Model::ColumnSet->combineColumnSets(undef,$parentConcept->columnSet,$baseColumnSet);
 		}
-	} else {
+	} elsif(defined($parentConcept)) {
 		# Should we clone this, to avoid potentian side effects?
 		$baseColumnSet = $parentConcept->columnSet;
+	} else {
+		# This shouldn't happen!!
+		Carp::croak("No concept types and no parent concept for $conceptFullname ($conceptName)");
 	}
-
+	
 	# Preparing the columns
 	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$baseColumnSet,$model);
 	
@@ -2693,15 +2710,18 @@ sub parseConcept($$$;$) {
 	# Let's resolve inherited relations topic
 	if(defined($parentConcept)) {
 		# First, cloning
-		@related = map { $->clone() } @{$parentConcept->relatedConcepts};
+		@related = map { $_->clone() } @{$parentConcept->relatedConcepts};
 		
 		# Second, reparenting the RelatedConcept objects
 		# Third, updating inheritable related concepts
-		my $parentDomainChange = $parentConceptDomain ne $conceptDomain;
+		my $parentDomainChanges = $parentConceptDomain ne $conceptDomain;
 		foreach my $relatedConcept (@related) {
-			$relatedConcept->setConceptDomainName($parentConceptDomainName)  if($parentDomainChange && !defined($relatedConcept->conceptDomainName));
+			# Setting the name of the concept domain, in the cases where it was relative
+			$relatedConcept->setConceptDomainName($parentConceptDomainName)  if($parentDomainChanges && !defined($relatedConcept->conceptDomainName));
 			
-			if($relatedConcept->isInheritable && $relatedConcept->conceptDomainName eq $parentConceptDomainName && $relatedConcept->conceptName eq $parentConceptName) {
+			# Resetting the name of the related concept
+			my $relatedConceptDomainName = defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$parentConceptDomainName;
+			if($relatedConcept->isInheritable && $relatedConcept->conceptName eq $parentConceptName && $relatedConceptDomainName eq $parentConceptDomainName) {
 				$relatedConcept->setConceptName($conceptName);
 			}
 		}
@@ -2734,8 +2754,13 @@ sub parseConcept($$$;$) {
 		$parentConcept
 	);
 	
+	my $me = bless(\@thisConcept,$class);
+	
+	# Registering on our concept domain
+	$conceptDomain->registerConcept($me);
+	
 	# The weak concepts must be processed outside (this constructor does not mind them)
-	return  bless(\@thisConcept,$class);
+	return  $me;
 }
 
 # name
@@ -2843,8 +2868,8 @@ sub parseRelatedConcept($) {
 		undef,
 		($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
 		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
-		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->hasAttribute('partial-participation') eq 1)?1:undef,
-		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->hasAttribute('inheritable') eq 1)?1:undef
+		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->getAttribute('partial-participation') eq 'true')?1:undef,
+		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef
 	],$class);
 }
 
