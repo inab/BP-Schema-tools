@@ -8,6 +8,7 @@ use File::Copy;
 use File::Spec;
 use IO::File;
 use XML::LibXML;
+use Encode;
 use Digest::SHA1;
 use URI;
 use Archive::Zip;
@@ -19,8 +20,13 @@ package DCC::Model::CV;
 use constant {
 	INLINE	=>	'inline',
 	NULLVALUES	=>	'null-values',
-	CVFORMAT	=>	'cvformat',
+	CVLOCAL	=>	'cvlocal',
 	URIFETCHED	=>	'uris',
+};
+
+use constant {
+	CVFORMAT_CVFORMAT	=>	0,
+	CVFORMAT_OBO	=>	1,
 };
 
 # Main package
@@ -286,7 +292,7 @@ sub reformatModel() {
 	foreach my $CVfile (@{$self->{CVfiles}}) {
 		my $cv = $CVfile->xmlElement();
 		
-		my $origPath = $CVfile->filename();
+		my $origPath = $CVfile->localFilename();
 		
 		my(undef,undef,$newPath) = File::Spec->splitpath($origPath);
 		
@@ -397,7 +403,7 @@ sub saveBPModel($) {
 		
 		# And now, the CV members
 		foreach my $CVfile (@{$self->{CVfiles}}) {
-			$bpModel->addFile($CVfile->filename(),$cvprefix.$CVfile->xmlElement()->textContent(),Archive::Zip::COMPRESSION_LEVEL_BEST_COMPRESSION);
+			$bpModel->addFile($CVfile->localFilename(),$cvprefix.$CVfile->xmlElement()->textContent(),Archive::Zip::COMPRESSION_LEVEL_BEST_COMPRESSION);
 		}
 		
 		# Let's save it
@@ -632,6 +638,7 @@ sub digestCVline($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $cvline = shift;
+	$cvline = Encode::encode_utf8($cvline);
 	$self->{_SHA}->add($cvline);
 	$self->{_CVSHA}->add($cvline);
 }
@@ -652,7 +659,7 @@ sub registerCV($) {
 	# This key is internally used to register all the file CVs
 	$self->{CVfiles} = []  unless(exists($self->{CVfiles}));
 	
-	push(@{$self->{CVfiles}},$CV)  if($CV->kind eq DCC::Model::CV::CVFORMAT);
+	push(@{$self->{CVfiles}},$CV)  if($CV->kind eq DCC::Model::CV::CVLOCAL);
 }
 
 # __parse_pattern parameters:
@@ -1014,19 +1021,31 @@ sub indexAttributes {
 
 package DCC::Model::DescriptionSet;
 
+# This is the empty constructor.
+sub new() {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	return bless([],$class);
+}
+
 # This is the constructor.
 # parseDescriptions parameters:
 #	container: a XML::LibXML::Element container of 'dcc:description' elements
 # returns a DCC::Model::DescriptionSet array reference, containing the contents of all
 # the 'dcc:description' XML elements found
 sub parseDescriptions($) {
-	my $class = shift;
-	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	my $self = shift;
 	
 	my $container = shift;
 	
-	my @descriptions = ();
+	# Dual instance/class method behavior
+	unless(ref($self)) {
+		my $class = $self;
+		$self = $class->new();
+	}
+	
 	foreach my $description ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'description')) {
 		my @dChildren = $description->nonBlankChildNodes();
 		
@@ -1039,10 +1058,10 @@ sub parseDescriptions($) {
 			last;
 		}
 		
-		push(@descriptions,defined($value)?$value:$description->textContent());
+		push(@{$self},defined($value)?$value:$description->textContent());
 	}
 	
-	return bless(\@descriptions,$class);
+	return $self;
 }
 
 # This method adds a new annotation to the annotation set
@@ -1060,6 +1079,27 @@ sub addDescription($) {
 
 package DCC::Model::AnnotationSet;
 
+# This is the empty constructor.
+#	seedAnnotationSet: an optional DCC::Model::AnnotationSet used as seed
+sub new(;$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $seedAnnotationSet = shift;
+	
+	my %annotationHash = ();
+	my @annotationOrder = ();
+	if(defined($seedAnnotationSet)) {
+		%annotationHash = %{$seedAnnotationSet->hash};
+		@annotationOrder = @{$seedAnnotationSet->order};
+	}
+	
+	my @annotations = (\%annotationHash,\@annotationOrder);
+	
+	return bless(\@annotations,$class);
+}
+
 # This is the constructor.
 # parseAnnotations paremeters:
 #	container: a XML::LibXML::Element container of 'dcc:annotation' elements
@@ -1067,25 +1107,23 @@ package DCC::Model::AnnotationSet;
 # It returns a DCC::Model::AnnotationSet hash reference, containing the contents of all the
 # 'dcc:annotation' XML elements found
 sub parseAnnotations($;$) {
-	my $class = shift;
-	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	my $self = shift;
 	
 	my $container = shift;
 	my $seedAnnotationSet = shift;
 	
-	my %annotationHash = ();
-	my @annotationOrder = ();
-	
-	if(defined($seedAnnotationSet)) {
-		%annotationHash = %{$seedAnnotationSet->hash};
-		@annotationOrder = @{$seedAnnotationSet->order};
+	# Dual instance/class method behavior
+	unless(ref($self)) {
+		my $class = $self;
+		$self = $class->new($seedAnnotationSet);
 	}
 	
-	my @annotations = (\%annotationHash,\@annotationOrder);
+	my $p_hash = $self->hash;
+	my $p_order = $self->order;
+	
 	foreach my $annotation ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'annotation')) {
-		unless(exists($annotationHash{$annotation->getAttribute('key')})) {
-			push(@annotationOrder,$annotation->getAttribute('key'));
+		unless(exists($p_hash->{$annotation->getAttribute('key')})) {
+			push(@{$p_order},$annotation->getAttribute('key'));
 		}
 		my @aChildren = $annotation->nonBlankChildNodes();
 		
@@ -1099,10 +1137,10 @@ sub parseAnnotations($;$) {
 			}
 			last;
 		}
-		$annotationHash{$annotation->getAttribute('key')} = defined($value)?$value:$annotation->textContent();
+		$p_hash->{$annotation->getAttribute('key')} = defined($value)?$value:$annotation->textContent();
 	}
 	
-	return bless(\@annotations,$class);
+	return $self;
 }
 
 sub hash {
@@ -1128,6 +1166,177 @@ sub addAnnotation($$) {
 }
 
 1;
+
+package DCC::Model::CV::Term;
+
+use constant {
+	KEY	=>	0,
+	KEYS	=>	1,
+	NAME	=>	2,
+	PARENTS	=>	3,
+	ANCESTORS	=>	4,
+	ISALIAS	=>	5,
+};
+
+# Constructor
+# new parameters:
+#	key: a string, or an array of strings
+#	name: a string
+#	parents: undef or an array of strings
+#	isAlias: undef or true
+sub new($$;$$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $key = shift;
+	my $keys = undef;
+	my $name = shift;
+	# Optional parameters
+	my $parents = shift;
+	my $isAlias = shift;
+	
+	if(ref($key) eq 'ARRAY') {
+		$keys = $key;
+		$key = $keys->[0];
+	} else {
+		$keys = [$key];
+	}
+	
+	# Ancestors will be resolved later
+	my @term=($key,$keys,$name,$parents,undef,$isAlias);
+	
+	return bless(\@term,$class);
+}
+
+# Alternate constructor
+# parseAlias parameters:
+#	termAlias: a XML::LibXML::Element node, 'dcc:term-alias'
+sub parseAlias($) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $termAlias = shift;
+	my $key = $termAlias->getAttribute('name');
+	my $name = '';
+	my @parents = ();
+	foreach my $el ($termAlias->childNodes()) {
+		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
+		
+		if($el->localname eq 'e') {
+			# Saving the "parents" of the alias
+			push(@parents,$el->getAttribute('v'));
+		} elsif($el->localname eq 'description') {
+			$name = $el->textContent();
+		}
+	}
+	
+	return $class->new($key,$name,\@parents,1);
+}
+
+# The main key of the term
+sub key {
+	return $_[0]->[KEY];
+}
+
+# All the keys of the term: the main and the alternate ones
+sub keys {
+	return $_[0]->[KEYS];
+}
+
+# The name of the term
+sub name {
+	return $_[0]->[NAME];
+}
+
+# The parent(s) of the term, (through "is a" relationships), as their keys
+# undef, when they have no parent
+sub parents {
+	return $_[0]->[PARENTS];
+}
+
+# All the ancestors of the term, through transitive "is a",
+# or term aliasing. No order is guaranteed, but there will
+# be no duplicates.
+sub ancestors {
+	return $_[0]->[ANCESTORS];
+}
+
+# If it returns true, it is an alias (the union of several terms,
+# which have been given the role of the parents)
+sub isAlias {
+	return $_[0]->[ISALIAS];
+}
+
+# If it returns true, a call to ancestors method returns the
+# calculated lineage
+sub gotLineage {
+	return defined($_[0]->[ANCESTORS]);
+}
+
+# calculateAncestors parameters:
+#	p_CV: a reference to a hash, which is the pool of
+#		DCC::Model::CV::Term instances where this instance can
+#		find its parents.
+#	p_visited: a reference to an array, which is the pool of
+#		DCC::Model::CV::Term keys which are still being
+#		visited.
+sub calculateAncestors($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# The pool where I should find my parents
+	my $p_CV = shift;
+	my $p_visited = shift;
+	$p_visited = []  unless(defined($p_visited));
+	
+	# The output
+	my $p_ancestors = undef;
+	
+	unless($self->gotLineage()) {
+		my @ancestors= ();
+		my %ancHash = ();
+		
+		if(defined($self->parents)) {
+			# Let's gather the lineages
+			my @visited = (@{$p_visited},$self->key);
+			my %visHash = map { $_ => undef } @visited;
+			foreach my $parentKey (@{$self->parents}) {
+				unless(exists($p_CV->{$parentKey})) {
+					Carp::croak("Parent $parentKey does not exist on the CV for term ".$self->key);
+				}
+				
+				# Sanitizing alternate keys
+				my $parent = $p_CV->{$parentKey};
+				$parentKey = $parent->key;
+				
+				Carp::croak("Detected a lineage term loop: @visited $parentKey\n")  if(exists($visHash{$parentKey}));
+				
+				# Getting the ancestors
+				my $parent_ancestors = $parent->calculateAncestors($p_CV,\@visited);
+				
+				# Saving only the new ones
+				foreach my $parent_ancestor (@{$parent_ancestors},$parentKey) {
+					unless(exists($ancHash{$parent_ancestor})) {
+						push(@ancestors,$parent_ancestor);
+						$ancHash{$parent_ancestor} = undef;
+					}
+				}
+			}
+		}
+		
+		# Last, setting up the information
+		$p_ancestors = \@ancestors;
+		$self->[ANCESTORS] = $p_ancestors;
+	
+	} else {
+		$p_ancestors = $self->[ANCESTORS];
+	}
+	
+	return $p_ancestors;
+}
 
 
 package DCC::Model::CV::External;
@@ -1177,16 +1386,35 @@ use constant {
 	CVNAME	=>	0,
 	CVKIND	=>	1,
 	CVURI	=>	2,
-	CVANNOT	=>	3,
-	CVDESC	=>	4,
-	CVHASH	=>	5,
-	CVKEYS	=>	6,
-	CVALHASH	=>	7,
-	CVALKEYS	=>	8,
-	CVXMLEL		=>	9
+	CVLOCALPATH	=>	3,
+	CVLOCALFORMAT	=>	4,
+	CVANNOT	=>	5,
+	CVDESC	=>	6,
+	CVHASH	=>	7,
+	CVKEYS	=>	8,
+	CVALKEYS	=>	9,
+	CVXMLEL		=>	10
 };
 
-# This is the constructor
+# This is the empty constructor
+sub new() {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
+	my $cvAnnot = DCC::Model::AnnotationSet->new();
+	my $cvDesc = DCC::Model::DescriptionSet->new();
+	my @structCV=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef);
+	
+	$structCV[DCC::Model::CV::CVKEYS] = [];
+	# Hash shared by terms and term-aliases
+	$structCV[DCC::Model::CV::CVHASH] = {};
+	
+	return bless(\@structCV,$class);
+}
+
+# This is the constructor and/or the parser
 # parseCV parameters:
 #	cv: a XML::LibXML::Element 'dcc:cv' node
 #	model: a DCC::Model instance
@@ -1196,104 +1424,79 @@ use constant {
 # sanitize the paths and to digest the read lines.
 # If the CV is in an external URI, this method only checks whether it is available (TBD)
 sub parseCV($$) {
-	my $class = shift;
+	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	# Dual instance/class method
+	unless(ref($self)) {
+		my $class = $self;
+		$self = $class->new();
+	}
 	
 	my $cv = shift;
 	my $model = shift;
 	
-	# The CV symbolic name, the CV type, the CV filename, the annotations, the documentation paragraphs, the CV (hash and array), aliases (hash and array), XML element of cv-file element
-	my $cvAnnot = DCC::Model::AnnotationSet->parseAnnotations($cv);
-	my $cvDesc = DCC::Model::DescriptionSet->parseDescriptions($cv);
-	my @structCV=(undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,{},[],undef);
-	my $createdCV = bless(\@structCV,$class);
+	$self->annotations->parseAnnotations($cv);
+	$self->description->parseDescriptions($cv);
 	
-	$structCV[DCC::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
+	$self->[DCC::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
-	my %cvHash = ();
-	my @cvKeys = ();
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
 		
 		if($el->localname eq 'e') {
-			unless(defined($structCV[DCC::Model::CV::CVHASH])) {
-				$structCV[DCC::Model::CV::CVHASH] = \%cvHash;
-				$structCV[DCC::Model::CV::CVKEYS] = \@cvKeys;
-				$structCV[DCC::Model::CV::CVKIND] = ($cv->localname eq DCC::Model::CV::NULLVALUES) ? DCC::Model::CV::NULLVALUES : DCC::Model::CV::INLINE;
+			unless(defined($self->[DCC::Model::CV::CVKIND])) {
+				$self->[DCC::Model::CV::CVKIND] = ($cv->localname eq DCC::Model::CV::NULLVALUES) ? DCC::Model::CV::NULLVALUES : DCC::Model::CV::INLINE;
 			}
-			my $key = $el->getAttribute('v');
-			if(exists($cvHash{$key})) {
-				Carp::croak('Repeated key '.$key.' on inline controlled vocabulary'.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
-			}
-			$cvHash{$key} = $el->textContent();
-			push(@cvKeys,$key);
+			$self->addTerm(DCC::Model::CV::Term->new($el->getAttribute('v'),$el->textContent()));
 		} elsif($el->localname eq 'cv-uri') {
-			unless(defined($structCV[DCC::Model::CV::CVKIND])) {
-				$structCV[DCC::Model::CV::CVKIND] = DCC::Model::CV::URIFETCHED;
-				$structCV[DCC::Model::CV::CVURI] = [];
+			unless(defined($self->[DCC::Model::CV::CVKIND])) {
+				$self->[DCC::Model::CV::CVKIND] = DCC::Model::CV::URIFETCHED;
+				$self->[DCC::Model::CV::CVURI] = [];
 			}
-			
-			push(@{$structCV[DCC::Model::CV::CVURI]},DCC::Model::CV::External->parseCVExternal($el));
 			
 			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
+			push(@{$self->[DCC::Model::CV::CVURI]},DCC::Model::CV::External->parseCVExternal($el,$self));
+			
 		} elsif($el->localname eq 'cv-file') {
 			my $cvPath = $el->textContent();
 			$cvPath = $model->sanitizeCVpath($cvPath);
 			
-			$structCV[DCC::Model::CV::CVKIND] = DCC::Model::CV::CVFORMAT;
-			$structCV[DCC::Model::CV::CVURI] = $cvPath;
-			$structCV[DCC::Model::CV::CVHASH] = \%cvHash;
-			$structCV[DCC::Model::CV::CVKEYS] = \@cvKeys;
+			my $cvFormat = ($el->hasAttribute('format') && $el->getAttribute('format') eq 'obo')?DCC::Model::CV::CVFORMAT_OBO : DCC::Model::CV::CVFORMAT_CVFORMAT;
+			
+			# Local fetch
+			$self->[DCC::Model::CV::CVKIND] = DCC::Model::CV::CVLOCAL  unless(defined($self->[DCC::Model::CV::CVKIND]));
+			$self->[DCC::Model::CV::CVLOCALPATH] = $cvPath;
+			$self->[DCC::Model::CV::CVLOCALFORMAT] = $cvFormat;
 			# Saving it for a possible storage in a bpmodel
-			$structCV[DCC::Model::CV::CVXMLEL] = $el;
+			$self->[DCC::Model::CV::CVXMLEL] = $el;
 			
-			my $CV = $model->openCVpath($cvPath);
-			while(my $cvline=$CV->getline()) {
-				chomp($cvline);
-				
-				$model->digestCVline($cvline);
-				chomp($cvline);
-				if(substr($cvline,0,1) eq '#') {
-					if(substr($cvline,1,1) eq '#') {
-						# Registering the additional documentation
-						$cvline = substr($cvline,2);
-						my($key,$value) = split(/ /,$cvline,2);
-						
-						# Adding embedded documentation and annotations
-						if($key eq '') {
-							$cvDesc->addDescription($value);
-						} else {
-							$cvAnnot->addAnnotation($key,$value);
-						}
-					} else {
-						next;
-					}
-				} else {
-					my($key,$value) = split(/\t/,$cvline,2);
-					if(exists($cvHash{$key})) {
-						Carp::croak('Repeated key '.$key.' on controlled vocabulary from '.$cvPath.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
-					}
-					$cvHash{$key}=$value;
-					push(@cvKeys,$key);
-				}
+			my $CVH = $model->openCVpath($cvPath);
+			if($cvFormat == DCC::Model::CV::CVFORMAT_CVFORMAT) {
+				$self->__parseCVFORMAT($CVH,$model);
+			} elsif($cvFormat == DCC::Model::CV::CVFORMAT_OBO) {
+				$self->__parseOBO($CVH,$model);
 			}
 			
-			$CV->close();
-			$model->registerCV($createdCV);
+			$CVH->close();
+			# We register the local CVs, even the local dumps of the remote CVs
+			$model->registerCV($self);
 		} elsif($el->localname eq 'term-alias') {
-			my $alias = $class->parseCV($el,$model);
-			my $key = $alias->name;
-			if(exists($structCV[DCC::Model::CV::CVALHASH]->{$key})) {
-				Carp::croak('Repeated term alias '.$key.' on controlled vocabulary'.(defined($structCV[DCC::Model::CV::CVNAME])?(' '.$structCV[DCC::Model::CV::CVNAME]):''));
-			}
-			
-			$structCV[DCC::Model::CV::CVALHASH]->{$key} = $alias;
-			push(@{$structCV[DCC::Model::CV::CVALKEYS]},$key);
+			my $alias = DCC::Model::CV::Term->parseAlias($el);
+			$self->addTerm($alias);
 		}
 	}
 	
-	return $createdCV;
+	# As we should have the full ontology (if it has been materialized), let's get the lineage of each term
+	if(scalar(@{$self->order}) > 0) {
+		my $p_CV = $self->CV;
+		my @terms = (@{$self->order},@{$self->aliasOrder});
+		foreach my $term (@terms) {
+			my $term_ancestors = $p_CV->{$term}->calculateAncestors($p_CV);
+			#print STDERR "DEBUG: $term -> @{$term_ancestors}\n";
+		}
+	}
+	
+	return $self;
 }
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
@@ -1309,9 +1512,19 @@ sub kind {
 	return $_[0]->[DCC::Model::CV::CVKIND];
 }
 
-# Filename or URI holding these values (optional)
-sub filename {
+# Ref to an array of DCC::Model::CV::External, holding these values (it could be undef)
+sub uri {
 	return $_[0]->[DCC::Model::CV::CVURI];
+}
+
+# Filename holding these values (optional)
+sub localFilename {
+	return $_[0]->[DCC::Model::CV::CVLOCALPATH];
+}
+
+# Format of the filename holding these values (optional)
+sub localFormat {
+	return $_[0]->[DCC::Model::CV::CVLOCALFORMAT];
 }
 
 # An instance of a DCC::Model::AnnotationSet, holding the annotations
@@ -1336,11 +1549,6 @@ sub order {
 	return $_[0]->[DCC::Model::CV::CVKEYS];
 }
 
-# The hash holding the aliases (DCC::Model::CV instances) in memory
-sub alias {
-	return $_[0]->[DCC::Model::CV::CVALHASH];
-}
-
 # The order of the alias values (as in the file)
 sub aliasOrder {
 	return $_[0]->[DCC::Model::CV::CVALKEYS];
@@ -1360,10 +1568,10 @@ sub isLocal() {
 	
 	my $cvkey = shift;
 	
-	return defined($self->CV);
+	return scalar(@{$self->order})>0;
 }
 
-# With this method a key is validated
+# With this method a term or a term-alias is validated
 # TODO: fetch on demand the CV is it is not materialized
 sub isValid($) {
 	my $self = shift;
@@ -1375,8 +1583,182 @@ sub isValid($) {
 	return exists($self->CV->{$cvkey});
 }
 
-1;
+# addTerm parameters:
+#	term: a DCC::Model::CV::Term instance, which can be a term or an alias
+sub addTerm($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $term = shift;
 
+	# Let's initialize
+	foreach my $key (@{$term->keys}) {
+		# There are collissions!!!!
+		if($self->isValid($key)) {
+			# The original term
+			my $origTerm = $self->CV->{$key};
+			# Is an irresoluble collission?
+			if($term->isAlias || $origTerm->isAlias || $origTerm->key eq $term->key || ($term->key ne $key && $origTerm->key ne $key)) {
+				Carp::croak('Repeated key '.$key.' on'.(($self->kind eq INLINE)?' inline':'').' controlled vocabulary'.(defined($self->localFilename)?' from '.$self->localFilename:'').(defined($self->name)?(' '.$self->name):''));
+			}
+			
+			# As it is a resoluble one, let's fix it
+			if($origTerm->key eq $key) {
+				# Type 1: a previous term is in the alternate list of the new one
+				# In this case, we remove the previous one
+				foreach my $oldkey (@{$origTerm->keys}) {
+					delete($self->CV->{$oldkey});
+				}
+				my @del_indexes = grep { $self->order->[$_] eq $key } 0..(scalar(@{$self->order})-1);
+				map { splice(@{$self->order}, $_, 1) } @del_indexes;
+			} elsif($term->key eq $key) {
+				# Type 2: new term is an alternate one!
+				# In this case, we consider the new term "old"
+				# so we skip it
+				return;
+			}
+		}
+		$self->CV->{$key}=$term;
+	}
+	# We save here only the main key, not the alternate ones
+	# and not the aliases!!!!!!
+	unless($term->isAlias) {
+		push(@{$self->order},$term->key);
+	} else {
+		push(@{$self->aliasOrder},$term->key);
+	}
+}
+
+# __parseCVFORMAT parameters:
+#	CVH: The file handle to read the controlled vocabulary file
+#	model: a DCC::Model instance, where the digestion of this file is going to be registered.
+sub __parseCVFORMAT($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $CVH = shift;
+	my $model = shift;
+	
+	while(my $cvline=$CVH->getline()) {
+		chomp($cvline);
+		
+		$model->digestCVline($cvline);
+		chomp($cvline);
+		if(substr($cvline,0,1) eq '#') {
+			if(substr($cvline,1,1) eq '#') {
+				# Registering the additional documentation
+				$cvline = substr($cvline,2);
+				my($key,$value) = split(/ /,$cvline,2);
+				
+				# Adding embedded documentation and annotations
+				if($key eq '') {
+					$self->description->addDescription($value);
+				} else {
+					$self->annotations->addAnnotation($key,$value);
+				}
+			} else {
+				next;
+			}
+		} else {
+			my($key,$value) = split(/\t/,$cvline,2);
+			$self->addTerm(DCC::Model::CV::Term->new($key,$value));
+		}
+	}
+}
+
+sub __parseOBO($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $CVH = shift;
+	my $model = shift;
+	my $namespace = shift;
+	
+	my $keys = undef;
+	my $name = undef;
+	my $parents = undef;
+	my $union = undef;
+	my $terms = undef;
+	while(my $cvline=$CVH->getline()) {
+		chomp($cvline);
+		
+		$model->digestCVline($cvline);
+		
+		# Removing the trailing comments
+		$cvline =~ s/\s*!.*$//;
+		
+		# And removing the trailing modifiers, because we don't need that info
+		$cvline =~ s/\s*\{.*\}\s*$//;
+		
+		# Skipping empty lines
+		next  if(length($cvline)==0);
+		
+		# The moment to save a term
+		
+		if(substr($cvline,0,1) eq '[') {
+			$terms = 1;
+			if(defined($keys)) {
+				$self->addTerm(DCC::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef));
+				
+				# Cleaning!
+				$keys = undef;
+			}
+			
+			if($cvline eq '[Term]') {
+				$keys = [];
+				$name = undef;
+				$parents = undef;
+				$union = undef;
+			}
+		} elsif(defined($terms)) {
+			if(defined($keys)) {
+				my($elem,$val) = split(/:\s+/,$cvline,2);
+				if($elem eq 'id') {
+					unshift(@{$keys},$val);
+				} elsif($elem eq 'alt_id') {
+					push(@{$keys},$val);
+				} elsif($elem eq 'name') {
+					$name = $val;
+				} elsif($elem eq 'namespace' && defined($namespace) && $namespace ne $val) {
+					# Skipping the term, because it is not from the specific namespace we are interested in
+					$keys = undef;
+				} elsif($elem eq 'is_obsolete') {
+					# Skipping the term, because it is obsolete
+					$keys = undef;
+				} elsif($elem eq 'is_a') {
+					if(defined($parents)) {
+						push(@{$parents},$val);
+					} else {
+						$parents = [$val];
+					}
+				} elsif($elem eq 'union_of') {
+					# These are used to represent the aliases inside this implementation
+					if(defined($union)) {
+						push(@{$union},$val);
+					} else {
+						$union = [$val];
+					}
+				}
+			}
+		} else {
+			# Global features
+			my($elem,$val) = split(/:\s+/,$cvline,2);
+			
+			# Global remarks are treated as descriptions
+			if($elem eq 'remark') {
+				$self->description->addDescription($val);
+			#} else {
+			#	$self->annotations->addAnnotation($elem,$val);
+			}
+		}
+	}
+	# Last term in a file
+	$self->addTerm(DCC::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef))  if(defined($keys));
+}
+1;
 
 package DCC::Model::ConceptType;
 

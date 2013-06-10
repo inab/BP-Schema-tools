@@ -445,22 +445,26 @@ sub processInlineCVTable($) {
 		$output .= latex_format($documentation)."\n";
 	}
 	# TODO: process the annotations
+	my $inline = $CV->kind ne DCC::Model::CV::URIFETCHED || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline');
 	
 	$output .= "\n";
-	if($CV->isLocal) {
+	# We have the values. Do we have to print them?
+	if($CV->isLocal && $inline) {
 		$output .= '\begin{tabular}{r@{ = }p{0.4\textwidth}}'."\n";
 		#$output .= '\begin{tabular}{r@{ = }l}'."\n";
 
 		my $CVhash = $CV->CV;
 		foreach my $key (@{$CV->order}) {
-			$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}))."\\\\\n";
+			$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}->name))."\\\\\n";
 		}
 		$output .= '\end{tabular}';
-	} else {
+	}
+	
+	if($CV->kind eq DCC::Model::CV::URIFETCHED) {
 		# Is it an external CV
 		$output .= '\textit{(See ';
 		
-		my @extCVs = @{$CV->filename};
+		my @extCVs = @{$CV->uri};
 		my $extpos = 1;
 		foreach my $extCV (@extCVs) {
 			if($extpos > 1) {
@@ -536,14 +540,19 @@ sub printCVTable($$) {
 		
 		print $O "\\$latex\{",latex_format($annotations->{$annotName}),"\}\n"  if(defined($latex));
 	}
-
-	# Table header
-	print $O <<EOF ;
+	
+	my $doPrintCV =  $CV->isLocal && ($CV->kind() ne DCC::Model::CV::URIFETCHED || (exists($CV->annotations->hash->{'showFetched'}) && $CV->annotations->hash->{showFetched} eq 'true'));
+	
+	if($doPrintCV || scalar(@{$CV->aliasOrder}) > 0) {
+		# Table header
+		print $O <<EOF ;
 \\renewcommand{\\cvKey}{$header[0]}
 \\renewcommand{\\cvDesc}{$header[1]}
 EOF
-
-	if($CV->isLocal) {
+	}
+	
+	# We have the values. Do we have to print them?
+	if($doPrintCV) {
 		print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
 		print $O <<'EOF' ;
 \tablefirsthead{\hline
@@ -576,7 +585,7 @@ EOF
 	
 		my $CVhash = $CV->CV;
 		foreach my $cvKey (@{$CV->order}) {
-			print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey})),'\\\\ \hline',"\n";
+			print $O join(' & ',latex_escape($cvKey),latex_escape($CVhash->{$cvKey}->name)),'\\\\ \hline',"\n";
 		}
 		
 		# Table footer
@@ -584,11 +593,13 @@ EOF
 	\\end{xtabular}
 \\end{center}
 EOF
-	} else {
+	}
+	
+	if($CV->kind() eq DCC::Model::CV::URIFETCHED){
 		# Remote CVs
 		# Is it an external CV
 		
-		my @extCVs = @{$CV->filename};
+		my @extCVs = @{$CV->uri};
 		print $O "\n",'\textit{(See '.((scalar(@extCVs)>1)?'them':'it').' at ';
 		my $extpos = 1;
 		foreach my $extCV (@extCVs) {
@@ -645,23 +656,18 @@ EOF
 	\begin{xtabular}{|r|c|p{0.5\textwidth}|}
 EOF
 		
-		my $aliashash = $CV->alias;
+		my $aliashash = $CV->CV;
 		foreach my $aliasKey (@{$CV->aliasOrder}) {
 			my $alias = $aliashash->{$aliasKey};
 			my $termStr = undef;
 			
-			if(scalar(@{$alias->order}) > 1) {
-				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->order}).'\end{tabular}';
+			if(scalar(@{$alias->parents}) > 1) {
+				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->parents}).'\end{tabular}';
 			} else {
-				$termStr = $alias->order->[0];
+				$termStr = $alias->parents->[0];
 			}
 			
-			my $descStr = '';
-			if(scalar(@{$alias->description}) > 1) {
-				$descStr = '{'.join(' \\\\ ',map { latex_escape($_) } @{$alias->description}).'}';
-			} elsif(scalar(@{$alias->description}) == 1) {
-				$descStr = latex_escape($alias->description->[0]);
-			}
+			my $descStr = latex_escape($alias->name);
 			print $O join(' & ', latex_escape($aliasKey), $termStr, $descStr),'\\\\ \hline',"\n";
 		}
 
@@ -1291,7 +1297,7 @@ EOF
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;
-					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.($restriction->isLocal?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 				}
 			}
 			

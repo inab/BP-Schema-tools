@@ -189,6 +189,34 @@
         </xs:complexType>
     </xs:element>
     
+    <xs:element name="cv-file">
+        <xs:annotation>
+            <xs:documentation>A local tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:simpleContent>
+                <xs:extension base="bp:nonEmptyStringType">
+                    <xs:attribute name="format">
+                        <xs:simpleType>
+                            <xs:restriction base="xs:string">
+                                <xs:enumeration value="cvformat">
+                                    <xs:annotation>
+                                        <xs:documentation>The ancient, original, custom controlled vocabulary format (tab separated)</xs:documentation>
+                                    </xs:annotation>
+                                </xs:enumeration>
+                                <xs:enumeration value="obo">
+                                    <xs:annotation>
+                                        <xs:documentation>The OBO flat file format (see http://www.geneontology.org/GO.format.obo-1_2.shtml)</xs:documentation>
+                                    </xs:annotation>
+                                </xs:enumeration>
+                            </xs:restriction>
+                        </xs:simpleType>
+                    </xs:attribute>
+                </xs:extension>
+            </xs:simpleContent>
+        </xs:complexType>
+    </xs:element>
+    
     <!-- First, the reusable complex types -->
     <xs:complexType name="cvType">
         <xs:annotation>
@@ -198,61 +226,60 @@
             <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
             <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
             <xs:choice>
-                <xs:element name="cv-file" type="bp:nonEmptyStringType">
-                    <xs:annotation>
-                        <xs:documentation>A local tabular file with the vocabulary, following the enumerated value/description format</xs:documentation>
-                    </xs:annotation>
-                </xs:element>
-                <xs:element name="cv-uri" minOccurs="1" maxOccurs="unbounded">
-                    <xs:annotation>
-                        <xs:documentation>A external controlled vocabulary</xs:documentation>
-                    </xs:annotation>
-                    <xs:complexType>
-                        <xs:simpleContent>
-                            <xs:extension base="xs:anyURI">
-                                <xs:attribute name="doc" use="optional" type="xs:anyURI">
-                                    <xs:annotation>
-                                        <xs:documentation>Optional online documentation about the controlled vocabulary</xs:documentation>
-                                    </xs:annotation>
-                                </xs:attribute>
-                                <xs:attribute name="format" use="optional">
-                                    <xs:annotation>
-                                        <xs:documentation>The format followed by this controlled vocabulary/ontology</xs:documentation>
-                                    </xs:annotation>
-                                    <xs:simpleType>
-                                        <xs:restriction base="xs:string">
-                                            <xs:enumeration value="obo">
-                                                <xs:annotation>
-                                                    <xs:documentation>Open Bioinformatics and Biomedical Ontologies format</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:enumeration>
-                                            <xs:enumeration value="RDF">
-                                                <xs:annotation>
-                                                    <xs:documentation>Resource Description Framework format (used for instance for GO)</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:enumeration>
-                                            <xs:enumeration value="OWL">
-                                                <xs:annotation>
-                                                    <xs:documentation>Web Ontology Language format</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:enumeration>
-                                            <xs:enumeration value="EnsemblMySQLDump">
-                                                <xs:annotation>
-                                                    <xs:documentation>Ensembl MySQL dump with Ensembl Genes or Transcripts identifiers</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:enumeration>
-                                            <xs:enumeration value="ISO_3166-1">
-                                                <xs:annotation>
-                                                    <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
-                                                </xs:annotation>
-                                            </xs:enumeration>
-                                        </xs:restriction>
-                                    </xs:simpleType>
-                                </xs:attribute>
-                            </xs:extension>
-                        </xs:simpleContent>
-                    </xs:complexType>
-                </xs:element>
+                <xs:element ref="bp:cv-file"/>
+                <xs:sequence>
+                    <xs:element name="cv-uri" minOccurs="1" maxOccurs="unbounded">
+                        <xs:annotation>
+                            <xs:documentation>A external controlled vocabulary</xs:documentation>
+                        </xs:annotation>
+                        <xs:complexType>
+                            <xs:simpleContent>
+                                <xs:extension base="xs:anyURI">
+                                    <xs:attribute name="doc" use="optional" type="xs:anyURI">
+                                        <xs:annotation>
+                                            <xs:documentation>Optional online documentation about the controlled vocabulary</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:attribute>
+                                    <xs:attribute name="format" use="optional">
+                                        <xs:annotation>
+                                            <xs:documentation>The format followed by this controlled vocabulary/ontology</xs:documentation>
+                                        </xs:annotation>
+                                        <xs:simpleType>
+                                            <xs:restriction base="xs:string">
+                                                <xs:enumeration value="obo">
+                                                    <xs:annotation>
+                                                        <xs:documentation>Open Bioinformatics and Biomedical Ontologies format</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
+                                                <xs:enumeration value="RDF">
+                                                    <xs:annotation>
+                                                        <xs:documentation>Resource Description Framework format (used for instance for GO)</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
+                                                <xs:enumeration value="OWL">
+                                                    <xs:annotation>
+                                                        <xs:documentation>Web Ontology Language format</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
+                                                <xs:enumeration value="EnsemblMySQLDump">
+                                                    <xs:annotation>
+                                                        <xs:documentation>Ensembl MySQL dump with Ensembl Genes or Transcripts identifiers</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
+                                                <xs:enumeration value="ISO_3166-1">
+                                                    <xs:annotation>
+                                                        <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
+                                            </xs:restriction>
+                                        </xs:simpleType>
+                                    </xs:attribute>
+                                </xs:extension>
+                            </xs:simpleContent>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element ref="bp:cv-file" minOccurs="0" maxOccurs="1"/>
+                </xs:sequence>
                 <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
             </xs:choice>
             <xs:element name="term-alias" minOccurs="0" maxOccurs="unbounded">
