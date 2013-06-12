@@ -36,6 +36,7 @@ package DCC::Model;
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
+
 # The pattern matching the contents for this type, and whether it is not a numeric type or yes
 use constant {
 	TYPEPATTERN	=>	0,
@@ -1074,6 +1075,18 @@ sub addDescription($) {
 	push(@{$self},$desc);
 }
 
+# The clone method
+sub clone() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my @cloneData = @{$self};
+	my $retval = bless(\@cloneData,ref($self));
+	
+	return $retval;
+}
+
 1;
 
 
@@ -1163,6 +1176,34 @@ sub addAnnotation($$) {
 	my $hash = $self->hash;
 	push(@{$self->order},$key)  unless(exists($hash->{$key}));
 	$hash->{$key} = $value;
+}
+
+# This method adds the annotations from an existing DCC::Model::AnnotationSet instance
+sub addAnnotations($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	my $annotations = shift;
+	
+	my $hash = $self->hash;
+	my $annotationsHash = $annotations->hash;
+	foreach my $key (@{$annotations->order}) {
+		push(@{$self->order},$key)  unless(exists($hash->{$key}));
+		$hash->{$key} = $annotationsHash->{$key};
+	}
+}
+
+# The clone method
+sub clone() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my %hash = %{$self->hash};
+	my @order = @{$self->order};
+	my $retval = bless([\%hash,\@order],ref($self));
+	
+	return $retval;
 }
 
 1;
@@ -2304,6 +2345,10 @@ sub clone(;$) {
 	my @cloneData = @{$self};
 	my $retval = bless(\@cloneData,ref($self));
 	
+	# Cloning the description and the annotations
+	$retval->[DCC::Model::Column::DESCRIPTION] = $self->description->clone;
+	$retval->[DCC::Model::Column::ANNOTATIONS] = $self->annotations->clone;
+	
 	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
 	
 	return $retval;
@@ -2315,8 +2360,9 @@ sub clone(;$) {
 #	relatedConcept: optional, DCC::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
 #	doMask: optional, it signals whether to mark cloned column
 #		as masked, so it should not be considered for value storage in the database.
+#	weakAnnotations: optional, DCC::Model::AnnotationSet
 # it returns a DCC::Model::Column instance
-sub cloneRelated($;$$) {
+sub cloneRelated($;$$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -2325,12 +2371,18 @@ sub cloneRelated($;$$) {
 	my $relatedConcept = shift;
 	my $prefix = defined($relatedConcept)?$relatedConcept->keyPrefix:undef;
 	my $doMask = shift;
+	my $weakAnnotations = shift;
 	
 	# Cloning this object
 	my $retval = $self->clone($doMask);
 	
 	# Adding the prefix
 	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
+	
+	# Adding the annotations from the related concept
+	$retval->annotations->addAnnotations($relatedConcept->annotations)  if(defined($relatedConcept));
+	# And from the weak-concepts annotations
+	$retval->annotations->addAnnotations($weakAnnotations)  if(defined($weakAnnotations));
 	
 	# And adding the relation info
 	# to this column
@@ -2495,21 +2547,23 @@ sub columns {
 }
 
 # idColumns parameters:
-#	idConcept: The concept owning the id columns
+#	idConcept: The DCC::Model::Concept instance owning the id columns
 #	doMask: Are the columns masked for storage?
+#	weakAnnotations: DCC::Model::AnnotationSet from weak-concepts.
 # It returns a DCC::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
-sub idColumns($;$) {
+sub idColumns($;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $idConcept = shift;
 	my $doMask = shift;
+	my $weakAnnotations = shift;
 	
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
-	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($idConcept,undef,$doMask) } @columnNames;
+	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($idConcept,undef,$doMask,$weakAnnotations) } @columnNames;
 	
 	my @columnSet = (
 		\@columnNames,
@@ -2976,9 +3030,11 @@ sub parseConceptContainer($$$;$) {
 	my $model = shift;
 	my $idConcept = shift;	# This is optional (remember!)
 	
+	# Let's get the annotations inside the concept container
+	my $weakAnnotations = DCC::Model::AnnotationSet->parseAnnotations($conceptContainerDecl);
 	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept')) {
 		# Concepts self register on the concept domain!
-		my $concept = DCC::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept);
+		my $concept = DCC::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept,$weakAnnotations);
 		
 		# There should be only one!
 		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
@@ -2996,9 +3052,10 @@ sub parseConceptContainer($$$;$) {
 #	model: a DCC::Model instance used to validate the concepts, columsn, etc...
 #	idConcept: An optional, identifying DCC::Model::Concept instance of
 #		the concept to be parsed from conceptDecl
+#	weakAnnotations: The weak annotations for the columns of the identifying concept
 # it returns an array of DCC::Model::Concept instances, the first one
 # corresponds to this concept, and the other ones are the weak-concepts
-sub parseConcept($$$;$) {
+sub parseConcept($$$;$$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
@@ -3007,6 +3064,7 @@ sub parseConcept($$$;$) {
 	my $conceptDomain = shift;
 	my $model = shift;
 	my $idConcept = shift;	# This is optional (remember!)
+	my $weakAnnotations = shift;	# This is also optional (remember!)
 
 	my $conceptName = $conceptDecl->getAttribute('name');
 	my $conceptFullname = $conceptDecl->getAttribute('fullname');
@@ -3084,7 +3142,7 @@ sub parseConcept($$$;$) {
 	
 	# Adding the ones from the identifying concept
 	# (and later from the related stuff)
-	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection),1)  if(defined($idConcept));
+	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection,$weakAnnotations),1)  if(defined($idConcept));
 	
 	# This array will contain the names of the related concepts
 	my @related = ();
@@ -3216,14 +3274,16 @@ sub refColumns($) {
 
 # idColumns parameters:
 #	doMask: Are the columns masked for storage?
-sub idColumns(;$) {
+#	weakAnnotations: DCC::Model::AnnotationSet from weak-concepts
+sub idColumns(;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $doMask = shift;
+	my $weakAnnotations = shift;
 	
-	return $self->columnSet->idColumns($self,$doMask);
+	return $self->columnSet->idColumns($self,$doMask,$weakAnnotations);
 }
 
 1;
@@ -3251,7 +3311,8 @@ sub parseRelatedConcept($) {
 		($relatedDecl->hasAttribute('arity') && $relatedDecl->getAttribute('arity') eq 'M')?'M':1,
 		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
 		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->getAttribute('partial-participation') eq 'true')?1:undef,
-		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef
+		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef,
+		DCC::Model::AnnotationSet->parseAnnotations($relatedDecl),
 	],$class);
 }
 
@@ -3295,6 +3356,11 @@ sub isPartial {
 # It returns 1 or undef
 sub isInheritable {
 	return $_[0]->[8];
+}
+
+# It returns a DCC::Model::AnnotationSet instance
+sub annotations {
+	return $_[0]->[9];
 }
 
 # setRelatedConcept parameters:

@@ -132,7 +132,7 @@ my %COLKIND2ABBR = (
 #	concept: a DCC::Concept instance
 # It returns an array with the column names from the concept in a fancy
 # order, based on several criteria, like annotations
-sub fancyColumnOrdering($) {
+sub fancyColumnOrdering1($) {
 	my($concept)=@_;
 	
 	my @colorder = ();
@@ -149,6 +149,89 @@ sub fancyColumnOrdering($) {
 	}
 	
 	return (@idcolorder,sort(@colorder));
+}
+
+# parseOrderingHints parameters:
+#	a XML::LibXML::Element, type 'dcc:ordering-hints'
+# It returns the ordering hints (at this moment, undef or the block where it appears)
+sub parseOrderingHints($) {
+	my($ordHints) = @_;
+	
+	my $retvalBlock = undef;
+	if(ref($ordHints) && $ordHints->isa('XML::LibXML::Element')
+		&& $ordHints->namespaceURI eq DCC::Model::dccNamespace
+		&& $ordHints->localname eq 'ordering-hints'
+	) {
+		foreach my $block ($ordHints->getChildrenByTagNameNS(DCC::Model::dccNamespace,'block')) {
+			$retvalBlock = $block->textContent;
+			last;
+		}
+	}
+	
+	return ($retvalBlock);
+}
+
+# fancyColumnOrdering parameters:
+#	concept: a DCC::Concept instance
+# It returns an array with the column names from the concept in a fancy
+# order, based on several criteria, like annotations
+sub fancyColumnOrdering($) {
+	my($concept)=@_;
+	
+	my $columnSet = $concept->columnSet;
+
+	# First, the idref columns, alphabetically ordered
+	my @first = ();
+	my @middle = ();
+	my @last = ();
+	foreach my $columnName (@{$columnSet->idColumnNames}) {
+		my $column = $columnSet->columns->{$columnName};
+		
+		my $p_set = \@middle;
+		if(exists($column->annotations->hash->{ordering})) {
+			my($block) = parseOrderingHints($column->annotations->hash->{ordering});
+			
+			if($block eq 'bottom') {
+				$p_set = \@last;
+			} elsif($block eq 'top') {
+				$p_set = \@first;
+			}
+		}
+		
+		push(@{$p_set},$columnName);
+	}
+	
+	my @idcolorder = (@first,@middle,@last);
+	# Resetting for next use
+	@first = ();
+	@middle = ();
+	@last = ();
+
+	# And then, the others
+	my %idcols = map { $_ => undef } @idcolorder;
+	foreach my $columnName (@{$columnSet->columnNames}) {
+		next  if(exists($idcols{$columnName}));
+		
+		my $column = $columnSet->columns->{$columnName};
+		
+		my $p_set = \@middle;
+		if(exists($column->annotations->hash->{ordering})) {
+			my($block) = parseOrderingHints($column->annotations->hash->{ordering});
+			
+			if($block eq 'bottom') {
+				$p_set = \@last;
+			} elsif($block eq 'top') {
+				$p_set = \@first;
+			}
+		}
+		
+		push(@{$p_set},$columnName);
+	}
+	
+	my @colorder = (@first,@middle,@last);
+	
+	
+	return (@idcolorder,@colorder);
 }
 
 # genSQL parameters:
@@ -686,31 +769,37 @@ EOF
 sub parseColor($) {
 	my($color) = @_;
 	
-	my $colorText = $color->textContent();
 	my $colorModel = undef;
 	my @colorComponents = ();
-	if($colorText =~ /^#([0-9a-fA-F]{3,6})$/) {
-		my $component = $1;
-		# Let's give it an upgrade
-		if(length($component)==3) {
-			$component = (substr($component,0,1) x 2) . (substr($component,1,1) x 2) . (substr($component,2,1) x 2);
+	
+	if(ref($color) && $color->isa('XML::LibXML::Element')
+		&& $color->namespaceURI eq DCC::Model::dccNamespace
+		&& $color->localname eq 'color'
+	) {
+		my $colorText = $color->textContent();
+		if($colorText =~ /^#([0-9a-fA-F]{3,6})$/) {
+			my $component = $1;
+			# Let's give it an upgrade
+			if(length($component)==3) {
+				$component = (substr($component,0,1) x 2) . (substr($component,1,1) x 2) . (substr($component,2,1) x 2);
+			}
+			$colorModel = 'HTML';
+			push(@colorComponents,$component);
+		} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\)$/) {
+			my $r = $1;
+			my $g = $2;
+			my $b = $3;
+			
+			$colorModel = 'RGB';
+			push(@colorComponents,$r,$g,$b);
+		} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%\)$/) {
+			my $r = $1;
+			my $g = $2;
+			my $b = $3;
+			
+			$colorModel = 'rgb';
+			push(@colorComponents,$r/100.0,$g/100.0,$b/100.0);
 		}
-		$colorModel = 'HTML';
-		push(@colorComponents,$component);
-	} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\)$/) {
-		my $r = $1;
-		my $g = $2;
-		my $b = $3;
-		
-		$colorModel = 'RGB';
-		push(@colorComponents,$r,$g,$b);
-	} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%,([0-9]|[1-9][0-9]|100)%\)$/) {
-		my $r = $1;
-		my $g = $2;
-		my $b = $3;
-		
-		$colorModel = 'rgb';
-		push(@colorComponents,$r/100.0,$g/100.0,$b/100.0);
 	}
 	
 	return ($colorModel,@colorComponents);

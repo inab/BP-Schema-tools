@@ -637,7 +637,12 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     </xs:annotation>
                     <xs:complexType>
                         <xs:sequence>
-                            <xs:element ref="bp:concept" minOccurs="1" maxOccurs="unbounded"></xs:element>
+                            <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation>These annotations are inherited by the keys from the identifying concept</xs:documentation>
+                                </xs:annotation>
+                            </xs:element>
+                            <xs:element ref="bp:concept" minOccurs="1" maxOccurs="unbounded"/>
                         </xs:sequence>
                     </xs:complexType>
                 </xs:element>
@@ -648,6 +653,13 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     <xs:complexType>
                         <xs:complexContent>
                             <xs:extension base="bp:conceptRefType">
+                                <xs:sequence>
+                                    <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded">
+                                        <xs:annotation>
+                                            <xs:documentation>These annotations are attached to the foreign columns</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:element>
+                                </xs:sequence>
                                 <xs:attribute name="arity" use="optional" default="1">
                                     <xs:annotation>
                                         <xs:documentation>The arity of this directional relation</xs:documentation>
