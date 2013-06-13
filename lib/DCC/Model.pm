@@ -1379,6 +1379,40 @@ sub calculateAncestors($;$) {
 	return $p_ancestors;
 }
 
+# This method serializes the DCC::Model::CV instance into a OBO structure
+# serialize parameters:
+#	O: the output file handle
+sub OBOserialize($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $O = shift;
+	
+	# We need this
+	print $O "[Term]\n";
+	DCC::Model::CV::printOboKeyVal($O,'id',$self->key);
+	DCC::Model::CV::printOboKeyVal($O,'name',$self->name);
+	
+	# The alterative ids
+	my $first = 1;
+	foreach my $alt_id (@{$self->keys}) {
+		# Skipping the first one, which is the main id
+		if(defined($first)) {
+			$first=undef;
+			next;
+		}
+		DCC::Model::CV::printOboKeyVal($O,'alt_id',$alt_id);
+	}
+	if(defined($self->parents)) {
+		my $propLabel = ($self->isAlias)?'union_of':'is_a';
+		foreach my $parKey (@{$self->parents}) {
+			DCC::Model::CV::printOboKeyVal($O,$propLabel,$parKey);
+		}
+	}
+	print $O "\n";
+}
+
 
 package DCC::Model::CV::External;
 
@@ -1533,7 +1567,6 @@ sub parseCV($$) {
 		my @terms = (@{$self->order},@{$self->aliasOrder});
 		foreach my $term (@terms) {
 			my $term_ancestors = $p_CV->{$term}->calculateAncestors($p_CV);
-			#print STDERR "DEBUG: $term -> @{$term_ancestors}\n";
 		}
 	}
 	
@@ -1788,9 +1821,9 @@ sub __parseOBO($$) {
 			# Global features
 			my($elem,$val) = split(/:\s+/,$cvline,2);
 			
-			# Global remarks are treated as descriptions
+			# Global remarks are treated as descriptions of the controlled vocabulary
 			if($elem eq 'remark') {
-				$self->description->addDescription($val);
+				$self->description->addDescription(fromOBO($val));
 			#} else {
 			#	$self->annotations->addAnnotation($elem,$val);
 			}
@@ -1799,6 +1832,85 @@ sub __parseOBO($$) {
 	# Last term in a file
 	$self->addTerm(DCC::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef))  if(defined($keys));
 }
+
+
+my @OBOTRANS = (
+	["\n"	=>	'\n'],
+	[' '	=>	'\W'],
+	["\t"	=>	'\t'],
+	[':'	=>	'\:'],
+	[','	=>	'\,'],
+	['"'	=>	'\"'],
+	['('	=>	'\('],
+	[')'	=>	'\)'],
+	['['	=>	'\['],
+	[']'	=>	'\]'],
+	['{'	=>	'\{'],
+	['}'	=>	'\}'],
+);
+
+sub fromOBO($) {
+	my $str = shift;
+	
+	my @tok = split(/\\\\/,$str);
+	foreach my $tok (@tok) {
+		foreach my $trans (@OBOTRANS) {
+			$tok =~ s/\Q$trans->[1]\E/$trans->[0]/gs;
+		}
+	}
+	
+	return join('\\',@tok);
+}
+
+sub toOBO($) {
+	my $str = shift;
+	
+	my @tok = split(/\\/,$str);
+	foreach my $tok (@tok) {
+		foreach my $trans (@OBOTRANS) {
+			$tok =~ s/\Q$trans->[0]\E/$trans->[1]/gs;
+		}
+	}
+	
+	return join('\\\\',@tok);
+}
+
+# printOboKeyVal parameters:
+#	O: the output file handle
+#	key: the key name
+#	val: the value
+sub printOboKeyVal($$$) {
+	$_[0]->print($_[1],': ',$_[2],"\n");
+}
+
+# This method serializes the DCC::Model::CV instance into a OBO structure
+# serialize parameters:
+#	O: the output file handle
+sub OBOserialize($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $O = shift;
+	
+	# We need this
+	printOboKeyVal($O,'format-version','1.2');
+	my @timetoks = localtime();
+	printOboKeyVal($O,'date',sprintf('%02d:%02d:%04d %02d:%02d',$timetoks[3],$timetoks[4]+1,$timetoks[5]+1900,$timetoks[2],$timetoks[1]));
+	printOboKeyVal($O,'auto-generated-by','DCC::Model $Id$');
+	
+	# Are there descriptions?
+	foreach my $desc (@{$self->description}) {
+		printOboKeyVal($O,'remark',toOBO($desc));
+	}
+	
+	# And now, print each one of the terms
+	my $CVhash = $self->CV;
+	foreach my $term (@{$self->order},@{$self->aliasOrder}) {
+		$CVhash->{$term}->OBOserialize($O);
+	}
+}
+
 1;
 
 package DCC::Model::ConceptType;
