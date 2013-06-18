@@ -1320,16 +1320,19 @@ sub gotLineage {
 #	p_CV: a reference to a hash, which is the pool of
 #		DCC::Model::CV::Term instances where this instance can
 #		find its parents.
+#	doRecover: If true, it tries to recover from unknown parents,
+#		removing them
 #	p_visited: a reference to an array, which is the pool of
 #		DCC::Model::CV::Term keys which are still being
 #		visited.
-sub calculateAncestors($;$) {
+sub calculateAncestors($;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	# The pool where I should find my parents
 	my $p_CV = shift;
+	my $doRecover = shift;
 	my $p_visited = shift;
 	$p_visited = []  unless(defined($p_visited));
 	
@@ -1339,14 +1342,18 @@ sub calculateAncestors($;$) {
 	unless($self->gotLineage()) {
 		my @ancestors= ();
 		my %ancHash = ();
+		my @curatedParents = ();
 		
+		my $saveCurated = undef;
 		if(defined($self->parents)) {
 			# Let's gather the lineages
 			my @visited = (@{$p_visited},$self->key);
 			my %visHash = map { $_ => undef } @visited;
 			foreach my $parentKey (@{$self->parents}) {
 				unless(exists($p_CV->{$parentKey})) {
-					Carp::croak("Parent $parentKey does not exist on the CV for term ".$self->key);
+					Carp::croak("Parent $parentKey does not exist on the CV for term ".$self->key)  unless($doRecover);
+					$saveCurated = 1;
+					next;
 				}
 				
 				# Sanitizing alternate keys
@@ -1356,7 +1363,7 @@ sub calculateAncestors($;$) {
 				Carp::croak("Detected a lineage term loop: @visited $parentKey\n")  if(exists($visHash{$parentKey}));
 				
 				# Getting the ancestors
-				my $parent_ancestors = $parent->calculateAncestors($p_CV,\@visited);
+				my $parent_ancestors = $parent->calculateAncestors($p_CV,$doRecover,\@visited);
 				
 				# Saving only the new ones
 				foreach my $parent_ancestor (@{$parent_ancestors},$parentKey) {
@@ -1365,12 +1372,15 @@ sub calculateAncestors($;$) {
 						$ancHash{$parent_ancestor} = undef;
 					}
 				}
+				# And the curated parent
+				push(@curatedParents,$parentKey);
 			}
 		}
 		
 		# Last, setting up the information
 		$p_ancestors = \@ancestors;
 		$self->[ANCESTORS] = $p_ancestors;
+		$self->[PARENTS] = \@curatedParents  if(defined($saveCurated));
 	
 	} else {
 		$p_ancestors = $self->[ANCESTORS];
@@ -1562,15 +1572,26 @@ sub parseCV($$) {
 	}
 	
 	# As we should have the full ontology (if it has been materialized), let's get the lineage of each term
+	$self->validateAndEnactAncestors();
+	
+	return $self;
+}
+
+# As we should have the full ontology (if it has been materialized), let's get the lineage of each term
+sub validateAndEnactAncestors(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $doRecover = shift;
+	
 	if(scalar(@{$self->order}) > 0) {
 		my $p_CV = $self->CV;
 		my @terms = (@{$self->order},@{$self->aliasOrder});
 		foreach my $term (@terms) {
-			my $term_ancestors = $p_CV->{$term}->calculateAncestors($p_CV);
+			my $term_ancestors = $p_CV->{$term}->calculateAncestors($p_CV,$doRecover);
 		}
 	}
-	
-	return $self;
 }
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs and the CV
@@ -1674,7 +1695,7 @@ sub addTerm($) {
 			my $origTerm = $self->CV->{$key};
 			# Is an irresoluble collission?
 			if($term->isAlias || $origTerm->isAlias || $origTerm->key eq $term->key || ($term->key ne $key && $origTerm->key ne $key)) {
-				Carp::croak('Repeated key '.$key.' on'.(($self->kind eq INLINE)?' inline':'').' controlled vocabulary'.(defined($self->localFilename)?' from '.$self->localFilename:'').(defined($self->name)?(' '.$self->name):''));
+				Carp::croak('Repeated key '.$key.' on'.((!defined($self->kind) || $self->kind eq INLINE)?' inline':'').' controlled vocabulary'.(defined($self->localFilename)?(' from '.$self->localFilename):'').(defined($self->name)?(' '.$self->name):''));
 			}
 			
 			# As it is a resoluble one, let's fix it
@@ -1886,12 +1907,23 @@ sub printOboKeyVal($$$) {
 # This method serializes the DCC::Model::CV instance into a OBO structure
 # serialize parameters:
 #	O: the output file handle
-sub OBOserialize($) {
+#	comments: the comments to put
+sub OBOserialize($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $O = shift;
+	my $comments = shift;
+	if(defined($comments)) {
+		$comments = [$comments]   if(ref($comments) eq '');
+		
+		foreach my $comment (@{$comments}) {
+			foreach my $commentLine (split(/\n/,$comment)) {
+				print $O '! ',$commentLine,"\n";
+			}
+		}
+	}
 	
 	# We need this
 	printOboKeyVal($O,'format-version','1.2');
