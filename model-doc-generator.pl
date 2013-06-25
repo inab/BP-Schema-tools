@@ -240,8 +240,7 @@ sub fancyColumnOrdering($) {
 sub genSQL($$) {
 	my($model,$outfileSQL) = @_;
 	
-	my $SQL;
-	if(open($SQL,'>:utf8',$outfileSQL)) {
+	if(open(my $SQL,'>:utf8',$outfileSQL)) {
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
@@ -899,8 +898,8 @@ sub genConceptDomainGraph($$$$) {
 	my $dotfile = $figurePrefix . '-domain-'. $conceptDomain->name.'.dot';
 	my $latexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'.latex';
 	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'-standalone.latex';
-	my $DOT;
-	if(open($DOT,'>:utf8',$dotfile)) {
+	my %colors = ();
+	if(open(my $DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
 digraph G {
 	rankdir=LR;
@@ -908,113 +907,112 @@ digraph G {
 	edge [arrowhead=none];
 	
 DEOF
-	}
-	
-	my %fks = ();
-	my %colors = ();
-	my @firstRank = ();
-	# First, the concepts
-	foreach my $concept (@{$conceptDomain->concepts}) {
-		my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
 		
-		print $DOT $dotline;
-		foreach my $refEntry (keys(%{$p_partialFKS})) {
-			$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
+		my %fks = ();
+		my @firstRank = ();
+		# First, the concepts
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
+			
+			print $DOT $dotline;
+			foreach my $refEntry (keys(%{$p_partialFKS})) {
+				$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
+			}
+			$colors{$color} = $p_colorDef;
+			
+			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
+				push(@firstRank,$entry);
+			}
 		}
-		$colors{$color} = $p_colorDef;
 		
-		if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
-			push(@firstRank,$entry);
-		}
-	}
-	
-	# Let's print the rank
-	print $DOT <<DEOF;
+		# Let's print the rank
+		print $DOT <<DEOF;
 	{ rank=same; @firstRank }
 DEOF
-	
-	# Then, their relationships
-	print $DOT <<DEOF;
+		
+		# Then, their relationships
+		print $DOT <<DEOF;
 	
 	node [shape=diamond, texlbl="Identifies"];
 	
 DEOF
-	# The FK restrictions from identification relations
-	my $relnode = 1;
-	my $doubleBorder = 'double distance=2pt';
-	foreach my $idEntry (keys(%fks)) {
-		my $dEntry = 'ID_'.$idEntry;
-		print $DOT <<DEOF;
+		# The FK restrictions from identification relations
+		my $relnode = 1;
+		my $doubleBorder = 'double distance=2pt';
+		foreach my $idEntry (keys(%fks)) {
+			my $dEntry = 'ID_'.$idEntry;
+			print $DOT <<DEOF;
 	
 	${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
 	$idEntry -> ${dEntry}_$relnode  [label="1"];
 DEOF
-		foreach my $entry (keys(%{$fks{$idEntry}})) {
-			print $DOT <<DEOF;
+			foreach my $entry (keys(%{$fks{$idEntry}})) {
+				print $DOT <<DEOF;
 	${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
 DEOF
+			}
+			$relnode++;
 		}
-		$relnode++;
-	}
-	
-	print $DOT <<DEOF;
+		
+		print $DOT <<DEOF;
 	
 	node [shape=diamond];
 	
 DEOF
-	# The FK restrictions from related concepts
-	foreach my $concept (@{$conceptDomain->concepts}) {
-		my $conceptDomainName = $conceptDomain->name;
-		my $entry = $conceptDomainName.'_'.$concept->name;
-		# Let's visit each concept!
-		if(scalar(@{$concept->relatedConcepts})>0) {
-			foreach my $relatedConcept (@{$concept->relatedConcepts}) {
-				# Not showing the graphs to abstract concept domains
-				next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
-				
-				my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
-				
-				my $refEntryLine = '';
-				
-				my $dEntry = $entry.'_'.$refEntry;
-				my $port = '';
-				my $eport = '';
-				my $wport = '';
-				if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
-					$port = ':n';
-					$eport = ':e';
-					$wport = ':w';
-					$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
-				} elsif($relatedConcept->concept eq $concept) {
-					$eport = ':n';
-					$wport = ':s';
-				}
-				
-				my $arity = $relatedConcept->arity;
-				my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
-				
-				my $texlbl = 'Relationship';
-				if(defined($relatedConcept->keyPrefix)) {
-					$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
-				}
-				
-				print $DOT <<DEOF;
+		# The FK restrictions from related concepts
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			my $conceptDomainName = $conceptDomain->name;
+			my $entry = $conceptDomainName.'_'.$concept->name;
+			# Let's visit each concept!
+			if(scalar(@{$concept->relatedConcepts})>0) {
+				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+					# Not showing the graphs to abstract concept domains
+					next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+					
+					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+					
+					my $refEntryLine = '';
+					
+					my $dEntry = $entry.'_'.$refEntry;
+					my $port = '';
+					my $eport = '';
+					my $wport = '';
+					if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
+						$port = ':n';
+						$eport = ':e';
+						$wport = ':w';
+						$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+					} elsif($relatedConcept->concept eq $concept) {
+						$eport = ':n';
+						$wport = ':s';
+					}
+					
+					my $arity = $relatedConcept->arity;
+					my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
+					
+					my $texlbl = 'Relationship';
+					if(defined($relatedConcept->keyPrefix)) {
+						$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
+					}
+					
+					print $DOT <<DEOF;
 	
 	${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
 	$refEntryLine
 	$refEntry$port -> ${dEntry}_$relnode$wport [label="$arity"];
 	${dEntry}_$relnode$eport -> $entry$port [label="N",style="$doubleBorder"];
 DEOF
-				$relnode++;
+					$relnode++;
+				}
 			}
 		}
-	}
-	
-	# And now, let's close the graph
-	print $DOT <<DEOF;
+		
+		# And now, let's close the graph
+		print $DOT <<DEOF;
 }
 DEOF
-	close($DOT);
+		close($DOT);
+	}
 	
 	# Prepare the colors
 	my $figpreamble = join('',map {
@@ -1076,8 +1074,8 @@ sub genModelGraph($$$) {
 	my $dotfile = $figurePrefix . '-model.dot';
 	my $latexfile = $figurePrefix . '-model.latex';
 	my $standalonelatexfile = $figurePrefix . '-model-standalone.latex';
-	my $DOT;
-	if(open($DOT,'>:utf8',$dotfile)) {
+	my %colors = ();
+	if(open(my $DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
 digraph G {
 	rankdir=LR;
@@ -1085,129 +1083,128 @@ digraph G {
 	edge [arrowhead=none];
 	
 DEOF
-	}
-	
-	my %colors = ();
-	# With this, we do not need xcolor
-	#$colors{Black} = \@blackColor;
-	my $relnode = 1;
-	# First, the concepts
-	foreach my $conceptDomain (@{$model->conceptDomains}) {
-		# Skipping abstract concept domains
-		next  if(RELEASE && $conceptDomain->isAbstract);
 		
-		my $conceptDomainName = $conceptDomain->name;
-		my $conceptDomainFullName = $conceptDomain->fullname;
-		print $DOT <<DEOF;
+		# With this, we do not need xcolor
+		#$colors{Black} = \@blackColor;
+		my $relnode = 1;
+		# First, the concepts
+		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			# Skipping abstract concept domains
+			next  if(RELEASE && $conceptDomain->isAbstract);
+			
+			my $conceptDomainName = $conceptDomain->name;
+			my $conceptDomainFullName = $conceptDomain->fullname;
+			print $DOT <<DEOF;
 	subgraph cluster_$conceptDomainName {
 		label="$conceptDomainFullName"
 DEOF
-		my %fks = ();
-		my @firstRank = ();
-		foreach my $concept (@{$conceptDomain->concepts}) {
-			my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
+			my %fks = ();
+			my @firstRank = ();
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
+				
+				print $DOT "\t",$dotline;
+				foreach my $refEntry (keys(%{$p_partialFKS})) {
+					$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
+				}
+				$colors{$color} = $p_colorDef;
 			
-			print $DOT "\t",$dotline;
-			foreach my $refEntry (keys(%{$p_partialFKS})) {
-				$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
+				if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
+					push(@firstRank,$entry);
+				}
 			}
-			$colors{$color} = $p_colorDef;
+			
 		
-			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
-				push(@firstRank,$entry);
-			}
-		}
-		
-	
-		# Let's print the rank
-		print $DOT <<DEOF;
+			# Let's print the rank
+			print $DOT <<DEOF;
 		{ rank=same; @firstRank }
 DEOF
-		# Then, their relationships
-		print $DOT <<DEOF;
+			# Then, their relationships
+			print $DOT <<DEOF;
 		
 		node [shape=diamond, texlbl="Identifies"];
 		
 DEOF
-		# The FK restrictions from identification relations
-		my $doubleBorder = 'double distance=2pt';
-		foreach my $idEntry (keys(%fks)) {
-			my $dEntry = 'ID_'.$idEntry;
-			print $DOT <<DEOF;
+			# The FK restrictions from identification relations
+			my $doubleBorder = 'double distance=2pt';
+			foreach my $idEntry (keys(%fks)) {
+				my $dEntry = 'ID_'.$idEntry;
+				print $DOT <<DEOF;
 			
 		${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
 		$idEntry -> ${dEntry}_$relnode  [label="1"];
 DEOF
-			foreach my $entry (keys(%{$fks{$idEntry}})) {
-				print $DOT <<DEOF;
+				foreach my $entry (keys(%{$fks{$idEntry}})) {
+					print $DOT <<DEOF;
 		${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
 DEOF
+				}
+				$relnode++;
 			}
-			$relnode++;
-		}
-		
-		print $DOT <<DEOF;
+			
+			print $DOT <<DEOF;
 		
 		node [shape=diamond];
 		
 DEOF
-		# The FK restrictions from related concepts
-		foreach my $concept (@{$conceptDomain->concepts}) {
-			my $conceptDomainName = $conceptDomain->name;
-			my $entry = $conceptDomainName.'_'.$concept->name;
-			# Let's visit each concept!
-			if(scalar(@{$concept->relatedConcepts})>0) {
-				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
-					# Skipping relationships to abstract concept domains
-					next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
-					
-					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
-					
-					my $refEntryLine = '';
-					
-					my $dEntry = $entry.'_'.$refEntry;
-#					my $port = '';
-#					my $eport = '';
-#					my $wport = '';
-#					if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
-#						$port = ':n';
-#						$eport = ':e';
-#						$wport = ':w';
-#						$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
-#					} elsif($relatedConcept->concept eq $concept) {
-#						$eport = ':n';
-#						$wport = ':s';
-#					}
-					
-					my $arity = $relatedConcept->arity;
-					my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
-					
-					my $texlbl = 'Relationship';
-					if(defined($relatedConcept->keyPrefix)) {
-						$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
-					}
-					
-					print $DOT <<DEOF;
+			# The FK restrictions from related concepts
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				my $conceptDomainName = $conceptDomain->name;
+				my $entry = $conceptDomainName.'_'.$concept->name;
+				# Let's visit each concept!
+				if(scalar(@{$concept->relatedConcepts})>0) {
+					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
+						# Skipping relationships to abstract concept domains
+						next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+						
+						my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+						
+						my $refEntryLine = '';
+						
+						my $dEntry = $entry.'_'.$refEntry;
+#						my $port = '';
+#						my $eport = '';
+#						my $wport = '';
+#						if(defined($relatedConcept->conceptDomainName) && $relatedConcept->conceptDomainName ne $conceptDomainName) {
+#							$port = ':n';
+#							$eport = ':e';
+#							$wport = ':w';
+#							$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'.latex_escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+#						} elsif($relatedConcept->concept eq $concept) {
+#							$eport = ':n';
+#							$wport = ':s';
+#						}
+						
+						my $arity = $relatedConcept->arity;
+						my $doubleBorder = $relatedConcept->isPartial()?'':'double distance=2pt';
+						
+						my $texlbl = 'Relationship';
+						if(defined($relatedConcept->keyPrefix)) {
+							$texlbl = '\parbox{3cm}{\centering '.$texlbl.' \linebreak \textit{\small('.latex_escape($relatedConcept->keyPrefix).')}}';
+						}
+						
+						print $DOT <<DEOF;
 		
 		${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
 		$refEntry -> ${dEntry}_$relnode [label="$arity"];
 		${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
 DEOF
-					$relnode++;
+						$relnode++;
+					}
 				}
 			}
-		}
-		# And now, let's close the subgraph
-		print $DOT <<DEOF;
+			# And now, let's close the subgraph
+			print $DOT <<DEOF;
 	}
 DEOF
-	}
-	
-	# And now, let's close the graph
-	print $DOT <<DEOF;
+		}
+		
+		# And now, let's close the graph
+		print $DOT <<DEOF;
 }
 DEOF
-	close($DOT);
+		close($DOT);
+	}
 	
 	# Prepare the colors
 	my $figpreamble = join('',map {

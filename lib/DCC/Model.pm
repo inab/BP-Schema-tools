@@ -151,8 +151,7 @@ sub new($;$) {
 	
 	# Schema SHA1
 	my $SCHpath = $self->librarySchemaPath();
-	my $SCH = undef;
-	if(open($SCH,'<:utf8',$SCHpath)) {
+	if(open(my $SCH,'<:utf8',$SCHpath)) {
 		my $SCSHA = Digest::SHA1->new;
 		
 		$SCSHA->addfile($SCH);
@@ -227,9 +226,7 @@ sub openModel() {
 		
 		return $temp;
 	} else {
-		my $X;
-		
-		open($X,'<:utf8',$self->{_modelAbsPath});
+		open(my $X,'<:utf8',$self->{_modelAbsPath});
 		
 		return $X;
 	}
