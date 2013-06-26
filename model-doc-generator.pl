@@ -19,6 +19,7 @@ use DCC::Model;
 
 
 use constant RELEASE => 1;
+use constant TERMSLIMIT => 200;
 
 
 sub latex_escape($);
@@ -803,6 +804,8 @@ sub printCVTable($$) {
 	}
 	print $O "\\section{",latex_escape($caption),"} \\label{cvsec:$cvname}\n";
 	
+	print $O "\\textit{This controlled vocabulary has ".scalar(@{$CV->order})." terms and ".scalar(@{$CV->aliasOrder})." aliases}\\\\[2ex]\n"  if($CV->isLocal);
+	
 	my @header = ();
 	
 	# The header names used by the LaTeX table
@@ -833,9 +836,9 @@ sub printCVTable($$) {
 		print $O "\\$latex\{",latex_format($annotations->{$annotName}),"\}\n"  if(defined($latex));
 	}
 	
-	my $doPrintCV =  $CV->isLocal && ($CV->kind() ne DCC::Model::CV::URIFETCHED || (exists($CV->annotations->hash->{'showFetched'}) && $CV->annotations->hash->{showFetched} eq 'true'));
+	my $doPrintCV =  $CV->isLocal && (scalar(@{$CV->order}) <= TERMSLIMIT || (exists($CV->annotations->hash->{'showFetched'}) && $CV->annotations->hash->{showFetched} eq 'true'));
 	
-	if($doPrintCV || scalar(@{$CV->aliasOrder}) > 0) {
+	if($doPrintCV || (scalar(@{$CV->aliasOrder}) > 0 && scalar(@{$CV->aliasOrder}) <= TERMSLIMIT)) {
 		# Table header
 		print $O <<EOF ;
 \\renewcommand{\\cvKey}{$header[0]}
@@ -915,7 +918,7 @@ EOF
 	}
 	
 	# And now, the aliases
-	if(scalar(@{$CV->aliasOrder}) > 0) {
+	if(scalar(@{$CV->aliasOrder}) > 0 && scalar(@{$CV->aliasOrder}) <= TERMSLIMIT) {
 		print $O "\\topcaption{",latex_format($caption)," aliases} \\label{cv:$cvname:alias}\n";
 		print $O <<'EOF' ;
 \tablefirsthead{\hline
@@ -1589,7 +1592,8 @@ EOF
 			my $restriction = $columnType->restriction;
 			if(ref($restriction) eq 'DCC::Model::CV') {
 				# Is it an anonymous CV?
-				if(!defined($restriction->name) || (exists($restriction->annotations->hash->{'disposition'}) && $restriction->annotations->hash->{disposition} eq 'inline')) {
+				my $numterms = scalar(@{$restriction->order});
+				if($numterms < 20 && (!defined($restriction->name) || (exists($restriction->annotations->hash->{'disposition'}) && $restriction->annotations->hash->{disposition} eq 'inline'))) {
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;
