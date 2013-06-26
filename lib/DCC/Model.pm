@@ -45,6 +45,7 @@ use constant {
 
 use constant ItemTypes => {
 	'string'	=> [1,1],	# With this we avoid costly checks
+	'text'		=> [1,1],	# With this we avoid costly checks
 	'integer'	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef],
 	'decimal'	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef],
 	'boolean'	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1],
@@ -2307,7 +2308,10 @@ sub use {
 	return $_[0]->[DCC::Model::ColumnType::USE];
 }
 
-# content restrictions
+# content restrictions. Either
+# DCC::Model::CompoundType
+# DCC::Model::CV
+# Pattern
 sub restriction {
 	return $_[0]->[DCC::Model::ColumnType::RESTRICTION];
 }

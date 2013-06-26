@@ -23,7 +23,8 @@ use constant RELEASE => 1;
 
 sub latex_escape($);
 sub latex_format($);
-sub genSQL($$);
+sub sql_escape($);
+sub genSQL($$$);
 
 # Original code obtained from:
 # http://ommammatips.blogspot.com.es/2011/01/perl-function-for-latex-escape.html
@@ -112,14 +113,19 @@ sub latex_format($) {
 }
 
 my %ABSTYPE2SQL = (
-	'string' => 'VARCHAR(4096)',
+	'string' => 'VARCHAR(1024)',
+	'text' => 'TEXT',
 	'integer' => 'INTEGER',
 	'decimal' => 'DOUBLE PRECISION',
 	'boolean' => 'BOOL',
 	'timestamp' => 'DATETIME',
 	'duration' => 'VARCHAR(128)',
-	'compound' => 'VARCHAR(4096)',
+	'compound' => 'TEXT',
 );
+
+my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
+
+$ABSTYPE2SQLKEY{'string'} = 'VARCHAR(128)';
 
 my %COLKIND2ABBR = (
 	DCC::Model::ColumnType::IDREF	=>	'I',
@@ -234,19 +240,34 @@ sub fancyColumnOrdering($) {
 	return (@idcolorder,@colorder);
 }
 
+sub sql_escape($) {
+	my $par = shift;
+	$par =~ s/'/''/g;
+	return '\''.$par.'\'';
+}
+
 # genSQL parameters:
 #	model: a DCC::Model instance, with the parsed model.
 #	the path to the SQL output file
-sub genSQL($$) {
-	my($model,$outfileSQL) = @_;
+#	the path to the SQL script which joins 
+sub genSQL($$$) {
+	my($model,$outfileSQL,$outfileTranslateSQL) = @_;
+	
+	# Needed later for CV dumping et al
+	my @cvorder = ();
+	my %cvdump = ();
+	my $chunklines = 4096;
+	my $descType = $ABSTYPE2SQL{'string'};
+	my $aliasType = $ABSTYPE2SQL{'boolean'};
 	
 	if(open(my $SQL,'>:utf8',$outfileSQL)) {
+		print $SQL '-- File '.basename($outfileSQL)."\n";
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
 		# Needed later for foreign keys
 		my @fks = ();
-
+		
 		# Let's iterate over all the concept domains and their concepts
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
@@ -289,12 +310,33 @@ sub genSQL($$) {
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
-					my $type = $ABSTYPE2SQL{$columnType->type};
-					print $SQL "\n\t",$column->name,' ',$type;
+					my $SQLtype = ($columnType->use == DCC::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
+					# Registering CVs
+					if(defined($columnType->restriction) && $columnType->restriction->isa('DCC::Model::CV')) {
+						# At the end is a key outside here, so assuring it is using the right size
+						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
+						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
+						my $CV = $columnType->restriction;
+						
+						my $cvname = $CV->name;
+						$cvname = $basename.'_'.$column->name  unless(defined($cvname));
+						
+						# Second position is the SQL type
+						# Third position holds the columns which depend on this CV
+						unless(exists($cvdump{$cvname})) {
+							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC],$SQLtype,[]];
+							push(@cvorder,$cvname);
+						}
+						
+						# Saving the column and table name for further use
+						push(@{$cvdump{$cvname}[3]},[$column->name,$basename]);
+					}
+					
+					print $SQL "\n\t",$column->name,' ',$SQLtype;
 					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
 					if(defined($columnType->default) && ref($columnType->default) eq '') {
 						my $default = $columnType->default;
-						$default = "'$default'"  if($p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC]);
+						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC]);
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
@@ -330,17 +372,181 @@ sub genSQL($$) {
 			#	}
 			#}
 		}
+		
+		# Now, the CVs and the columns using them
+		if(open(my $TSQL,'>:utf8',$outfileTranslateSQL)) {
+			print $TSQL '-- File '.basename($outfileTranslateSQL)."\n";
+			print $TSQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
+			print $TSQL '-- '.localtime()."\n";
 			
+			foreach my $cvname (@cvorder) {
+				my($CV,$doEscape,$SQLtype,$p_columnRefs) = @{$cvdump{$cvname}};
+				
+				# First, the tables
+				print $SQL <<CVEOF;
+			
+-- $cvname controlled vocabulary tables and data
+CREATE TABLE ${cvname}_CV (
+	idkey $SQLtype NOT NULL,
+	descr $descType NOT NULL,
+	isalias $aliasType NOT NULL,
+	PRIMARY KEY (idkey)
+);
+
+CREATE TABLE ${cvname}_CVkeys (
+	cvkey $SQLtype NOT NULL,
+	idkey $SQLtype NOT NULL,
+	PRIMARY KEY (cvkey),
+	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey)
+);
+
+CREATE TABLE ${cvname}_CVparents (
+	idkey $SQLtype NOT NULL,
+	cvkey $SQLtype NOT NULL,
+	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys(cvkey)
+);
+
+CREATE TABLE ${cvname}_CVancestors (
+	idkey $SQLtype NOT NULL,
+	cvkey $SQLtype NOT NULL,
+	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys(cvkey)
+);
+
+CVEOF
+
+				# Second, the data
+				my $first = 0;
+				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
+					my $term = $CV->CV->{$key};
+					if($first==0) {
+						print $SQL <<CVEOF;
+INSERT INTO ${cvname}_CV VALUES
+CVEOF
+					}
+					print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?sql_escape($term->key):$term->key,sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
+					
+					$first++;
+					if($first>=$chunklines) {
+						print $SQL "\n;\n\n";
+						$first=0;
+					}
+				}
+				print $SQL "\n;\n\n"  if($first>0);
+				
+				$first = 0;
+				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
+					my $term = $CV->CV->{$key};
+					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					
+					foreach my $akey (@{$term->keys}) {
+						if($first==0) {
+							print $SQL <<CVEOF;
+INSERT INTO ${cvname}_CVkeys VALUES
+CVEOF
+						}
+						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?sql_escape($akey):$akey,$ekey),')';
+						
+						$first++;
+						if($first>=$chunklines) {
+							print $SQL "\n;\n\n";
+							$first=0;
+						}
+					}
+				}
+				print $SQL "\n;\n\n"  if($first>0);
+				
+				$first = 0;
+				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
+					my $term = $CV->CV->{$key};
+					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					
+					next  unless(defined($term->parents) && scalar(@{$term->parents})>0);
+					
+					foreach my $pkey (@{$term->parents}) {
+						if($first==0) {
+							print $SQL <<CVEOF;
+INSERT INTO ${cvname}_CVparents VALUES
+CVEOF
+						}
+						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?sql_escape($pkey):$pkey),')';
+						
+						$first++;
+						if($first>=$chunklines) {
+							print $SQL "\n;\n\n";
+							$first=0;
+						}
+					}
+				}
+				print $SQL "\n;\n\n"  if($first>0);
+				
+				$first = 0;
+				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
+					my $term = $CV->CV->{$key};
+					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					
+					next  unless(defined($term->ancestors) && scalar(@{$term->ancestors})>0);
+					
+					foreach my $pkey (@{$term->ancestors}) {
+						if($first==0) {
+							print $SQL <<CVEOF;
+INSERT INTO ${cvname}_CVancestors VALUES
+CVEOF
+						}
+						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?sql_escape($pkey):$pkey),')';
+						
+						$first++;
+						if($first>=$chunklines) {
+							print $SQL "\n;\n\n";
+							$first=0;
+						}
+					}
+				}
+				print $SQL "\n;\n\n"  if($first>0);
+				
+				# Third, the references
+				# And the translation script
+				foreach my $p_columnRef (@{$p_columnRefs}) {
+					my($columnName,$tableName)=@{$p_columnRef};
+#CREATE INDEX ${tableName}_${columnName}_CVindex ON $tableName ($columnName);
+#
+					print $SQL <<CVEOF;
+ALTER TABLE $tableName ADD FOREIGN KEY ($columnName)
+REFERENCES ${cvname}_CVkeys(cvkey);
+
+CVEOF
+					print $TSQL <<TCVEOF;
+ALTER TABLE $tableName ADD COLUMN ${columnName}_term $descType;
+
+UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
+SET
+	${tableName}.${columnName}_term = ${cvname}_CV.descr
+WHERE
+	${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
+	AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
+;
+TCVEOF
+				}
+			}
+			close($TSQL);
+		} else {
+			Carp::croak("Unable to create output file $outfileTranslateSQL");
+		}
+		
 		# Now, the FK restrictions from identification relations
 		foreach my $p_fks (@fks) {
 			my($basename,$concept,$p_fkconcept) = @{$p_fks};
 			
 			print $SQL "\n-- ",$concept->fullname, " foreign keys from inheritance";
+			my $cycle = 1;
 			foreach my $relatedBasename (keys(%{$p_fkconcept})) {
 				my $p_columns = $p_fkconcept->{$relatedBasename}[1];
 				
+				#print $SQL "\nCREATE INDEX ${basename}_ID${cycle}_${relatedBasename} ON $basename (",join(',',map { $_->name } @{$p_columns}),");\n";
 				print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @{$p_columns}),")";
 				print $SQL "\nREFERENCES $relatedBasename(".join(',',map { $_->refColumn->name } @{$p_columns}).");\n";
+				$cycle++;
 			}
 		}
 
@@ -357,14 +563,17 @@ sub genSQL($$) {
 				# Let's visit each concept!
 				if(scalar(@{$concept->relatedConcepts})>0) {
 					print $SQL "\n-- ",$concept->fullname, " foreign keys from related-to";
+					my $cycle = 1;
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping foreign keys to abstract concepts
 						next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
 						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
+						#print $SQL "\nCREATE INDEX ${basename}_FK${cycle}_${refBasename} ON $basename (",join(',',map { $_->name } @refColumns),");\n";
 						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
 						print $SQL "\nREFERENCES $refBasename(".join(',',map { $_->refColumn->name } @refColumns).");\n";
+						$cycle++;
 					}
 				}
 			}
@@ -374,6 +583,7 @@ sub genSQL($$) {
 	} else {
 		Carp::croak("Unable to create output file $outfileSQL");
 	}
+	
 }
 
 use constant {
@@ -1424,6 +1634,12 @@ EOF
 	
 }
 
+my $onlySQL = undef;
+if(scalar(@ARGV)>0 && $ARGV[0] eq '--sql') {
+	shift(@ARGV);
+	$onlySQL = 1;
+}
+
 if(scalar(@ARGV)>=3) {
 	my($modelFile,$templateDocDir,$out)=@ARGV;
 	
@@ -1455,6 +1671,7 @@ if(scalar(@ARGV)>=3) {
 	# In case $out is a directory, then fill-in the other variables
 	my $outfilePDF = undef;
 	my $outfileSQL = undef;
+	my $outfileTranslateSQL = undef;
 	my $outfileBPMODEL = undef;
 	my $outfileLaTeX = undef;
 	my $figurePrefix = undef;
@@ -1468,11 +1685,13 @@ if(scalar(@ARGV)>=3) {
 		my $outfileRoot = File::Spec->catfile($out,join('-',$model->projectName,'data_model',$model->versionString,$thisdate));
 		$outfilePDF = $outfileRoot . '.pdf';
 		$outfileSQL = $outfileRoot . '.sql';
+		$outfileTranslateSQL = $outfileRoot . '_CVtrans.sql';
 		$outfileBPMODEL = $outfileRoot . '.bpmodel';
 		$figurePrefix = File::Spec->file_name_is_absolute($outfileRoot)?$outfileRoot:File::Spec->rel2abs($outfileRoot);
 	} else {
 		$outfilePDF = $out;
 		$outfileSQL = $out.'.sql';
+		$outfileTranslateSQL = $out.'_CVtrans.sql';
 		$outfileLaTeX = $out.'.latex';
 		$outfileBPMODEL = $out . '.bpmodel';
 		$figurePrefix = $out;
@@ -1482,7 +1701,10 @@ if(scalar(@ARGV)>=3) {
 	$model->saveBPModel($outfileBPMODEL)  if(defined($outfileBPMODEL));
 	
 	# Generating the SQL file for BioMart
-	genSQL($model,$outfileSQL);
+	genSQL($model,$outfileSQL,$outfileTranslateSQL);
+	
+	# We finish here if only 
+	exit 0  if($onlySQL);
 	
 	# Generating the graph model
 	my($modelgraphfile,$modelpreamble) = genModelGraph($model,$figurePrefix,$templateAbsDocDir);
@@ -1569,6 +1791,6 @@ TEOF
 	# Now, let's generate the documentation!
 	assemblePDF($templateAbsDocDir,$model,$outfileBPMODEL,$outfileLaTeX,$outfilePDF);
 } else {
-	print STDERR "This program takes as input the model (in XML or BPModel formats), the documentation template directory and the output file\n";
+	print STDERR "This program takes as input: optional --sql flag, the model (in XML or BPModel formats), the documentation template directory and the output file\n";
 	exit 1;
 }

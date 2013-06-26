@@ -362,6 +362,11 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                             <xs:documentation>String data</xs:documentation>
                                         </xs:annotation>
                                     </xs:enumeration>
+                                    <xs:enumeration value="text">
+                                        <xs:annotation>
+                                            <xs:documentation>Long string data</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:enumeration>
                                     <xs:enumeration value="integer">
                                         <xs:annotation>
                                             <xs:documentation>Integer numbers</xs:documentation>

@@ -7,8 +7,6 @@ use IO::File;	# For getline
 
 package TabParser;
 
-use base 'Exporter';
-
 use constant {
 	TAG_COMMENT	=>	'comment',	# Symbol use for comments in the tabular file
 	TAG_SEP		=>	'sep',		# Regular expression separator used for the columns in the tabular file
@@ -30,8 +28,6 @@ my %DEFCONFIG = (
 );
 
 sub parseTab($;\%);
-
-our @EXPORT_OK = qw(parseTab);
 
 # Function to map the filters
 sub mapFilters($\@){
