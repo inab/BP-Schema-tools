@@ -21,6 +21,7 @@ use DCC::Model;
 
 use constant RELEASE => 1;
 use constant TERMSLIMIT => 200;
+#use constant TERMSLIMIT => 10000;
 
 
 sub latex_escape($);
@@ -881,34 +882,30 @@ EOF
 	
 	# We have the values. Do we have to print them?
 	if($doPrintCV) {
-		print $O "\\topcaption{",latex_format($caption),"} \\label{cv:$cvname}\n";
-		print $O <<'EOF' ;
-\tablefirsthead{\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline\hline }
-
-\tablehead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline }
-
-\tablelasthead{\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline }
-
-\tabletail{\hline
-\multicolumn{2}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
-\hline}
-
-\tablelasttail{\hline\hline}
-
-\begin{center}
+		my $latexcaption = latex_format($caption);
+		print $O <<'EOF';
+{
 	\arrayrulecolor{DarkOrange}
-	\begin{supertabular}{|r|p{0.5\textwidth}|}
+	\begin{longtable}[c]{|r|p{0.5\textwidth}|}
+EOF
+		print $O '\caption{'.$latexcaption.'} \label{cv:'.$cvname.'} \\\\'."\n";
+		print $O <<'EOF';
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline\hline
+\endfirsthead
+\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline
+\endhead
+\hline
+\multicolumn{2}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline
+\endfoot
+\endlastfoot
 EOF
 	
 		my $CVhash = $CV->CV;
@@ -917,9 +914,9 @@ EOF
 		}
 		
 		# Table footer
-		print $O <<EOF ;
-	\\end{supertabular}
-\\end{center}
+		print $O <<'EOF';
+	\end{longtable}
+}
 EOF
 	}
 	
@@ -952,36 +949,31 @@ EOF
 	
 	# And now, the aliases
 	if(scalar(@{$CV->aliasOrder}) > 0 && scalar(@{$CV->aliasOrder}) <= TERMSLIMIT) {
-		print $O "\\topcaption{",latex_format($caption)," aliases} \\label{cv:$cvname:alias}\n";
-		print $O <<'EOF' ;
-\tablefirsthead{\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline\hline }
-
-\tablehead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline }
-
-\tablelasthead{\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
-\hline }
-
-\tabletail{\hline \multicolumn{3}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
-\hline}
-
-\tablelasttail{\hline\hline}
-
-\begin{center}
+		my $latexcaption = latex_format($caption);
+		print $O <<'EOF';
+{
 	\arrayrulecolor{DarkOrange}
-	\begin{stabular}{|r|c|p{0.5\textwidth}|}
+	\begin{longtable}[c]{|r|p{0.3\textwidth}|p{0.5\textwidth}|}
+EOF
+		print $O '\caption{'.$latexcaption.' aliases} \label{cv:'.$cvname.':alias} \\\\'."\n";
+		print $O <<'EOF';
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline\hline
+\endfirsthead
+\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Alias}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvKey}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{\cvDesc}}} \\
+\hline
+\endhead
+\hline \multicolumn{3}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline
+\endfoot
+\endlastfoot
 EOF
 		
 		my $aliashash = $CV->CV;
@@ -991,7 +983,7 @@ EOF
 			
 			if(scalar(@{$alias->parents}) > 1) {
 #				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->parents}).'\end{tabular}';
-				$termStr = join(' , ',map { latex_escape($_) } @{$alias->parents});
+				$termStr = join(', ',map { latex_escape($_) } @{$alias->parents});
 			} else {
 				$termStr = $alias->parents->[0];
 			}
@@ -1001,9 +993,9 @@ EOF
 		}
 
 		# Table footer
-		print $O <<EOF ;
-		\\end{stabular}
-\\end{center}
+		print $O <<'EOF';
+	\end{longtable}
+}
 EOF
 	}
 }
@@ -1561,40 +1553,33 @@ GEOF
 		
 		# The table header
 		my $entry = $conceptDomain->name.'_'.$concept->name;
-		print $O "\\topcaption{$caption} \\label{tab:$entry}\n";
-		print $O <<'EOF' ;
-\tablefirsthead{\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
-\hline\hline }
-
-\tablehead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
-\hline }
-
-\tablelasthead{\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- concluded from previous page}} \\
-\hline
-\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
-\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
-\hline }
-
-\tabletail{\hline
-\multicolumn{4}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
-\hline}
-
-\tablelasttail{\hline\hline}
-
-\begin{center}
+		print $O <<'EOF';
+{
 	\arrayrulecolor{DarkOrange}
-	\begin{supertabular}{|l|c|c|p{0.5\textwidth}|}
+	\begin{longtable}[c]{|l|c|c|p{0.5\textwidth}|}
+EOF
+		print $O '\caption{'.$caption.'} \label{tab:'.$entry.'} \\\\'."\n";
+		print $O <<'EOF';
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+\hline\hline
+\endfirsthead
+\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+\hline
+\endhead
+\hline
+\multicolumn{4}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+\hline
+\endfoot
+\endlastfoot
 EOF
 		
 		# Determining the order of the columns
@@ -1655,9 +1640,9 @@ EOF
 			print $O join(' & ','\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED}.'}',join("\n\n",$description,$related,$values)),'\\\\ \hline',"\n";
 		}
 		# End of the table!
-		print $O <<EOF ;
-	\\end{supertabular}
-\\end{center}
+		print $O <<'EOF';
+	\end{longtable}
+}
 EOF
 	}
 	

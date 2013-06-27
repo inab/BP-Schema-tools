@@ -14,20 +14,12 @@
   \defaultfontfeatures{Mapping=tex-text} % To support LaTeX quoting style
 %  \setromanfont{Hoefler Text}
 \else
-  \usepackage[utf8]{inputenc}
   \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
 \fi
 
 % Table environment for tables which span (and must be broken) over several pages
-\usepackage{supertabular}
-\newcommand{\tablelasthead}[1]{}
-%\usepackage{longtable}
-%\newcommand{\topcaption}[1]{}
-%\newcommand{\tablefirsthead}[1]{}
-%\newcommand{\tablehead}[1]{}
-%\newcommand{\tablelasthead}[1]{}
-%\newcommand{\tabletail}[1]{}
-%\newcommand{\tablelasttail}[1]{}
+\usepackage{longtable}
 
 % Including PDFs and other kind of graphics
 \usepackage{graphicx}
