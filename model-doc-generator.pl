@@ -7,6 +7,7 @@
 
 use strict;
 use Carp;
+use Cwd;
 use TeX::Encode;
 use Encode;
 use File::Copy;
@@ -601,8 +602,9 @@ use constant {
 #	bpmodelFile: The model in bpmodel format
 #	bodyFile: The temporal file where the generated documentation has been written.
 #	outputFile: The output PDF file.
-sub assemblePDF($$$$$) {
-	my($templateDir,$model,$bpmodelFile,$bodyFile,$outputFile) = @_;
+#	outputSH: Shell script to rebuild documentation
+sub assemblePDF($$$$$$) {
+	my($templateDir,$model,$bpmodelFile,$bodyFile,$outputFile,$outputSH) = @_;
 	
 	my $masterTemplate = File::Spec->catfile($FindBin::Bin,basename($0,'.pl').'.latex');
 	unless(-f $masterTemplate && -r $masterTemplate) {
@@ -648,7 +650,11 @@ sub assemblePDF($$$$$) {
 	}
 	
 	# Storing the document generation parameters
-	my @params = map { my $str=encode('latex',$annotations->{$_}); $str =~ s/\{\}//g; ['ANNOT'.$_,$str] } keys(%{$annotations});
+	my @params = map {
+		my $str = encode('latex',$annotations->{$_});
+		$str =~ s/\{\}//g;
+		['ANNOT'.$_,$str]
+	} keys(%{$annotations});
 	push(@params,['projectName',$model->projectName],['schemaVer',$model->versionString],['modelSHA',$model->modelSHA1],['CVSHA',$model->CVSHA1],['schemaSHA',$model->schemaSHA1]);
 	
 	# Final slashes in directories are VERY important for subimports!!!!!!!! (i.e. LaTeX is dumb)
@@ -677,6 +683,33 @@ sub assemblePDF($$$$$) {
 	);
 	
 	print STDERR "[DOCGEN] => ",join(' ','pdflatex',@pdflatexParams),"\n";
+	
+	if(defined($outputSH)) {
+		if(open(my $SH,'>',$outputSH)) {
+			my $commandLine = join(' ',map {
+				my $res = $_;
+				if($res =~ /['" ()\$\\]/) {
+					$res =~ s/'/'"'"'/g;
+					$res = "'".$res."'";
+				}
+				$res
+			} @pdflatexParams);
+			my $workingDir = cwd();
+			if($workingDir =~ /['" ()\$\\]/) {
+				$workingDir =~ s/'/'"'"'/g;
+				$workingDir = "'".$workingDir."'";
+			}
+			print $SH <<EOFSH;
+#!/bin/sh
+
+cd $workingDir
+pdflatex $commandLine
+EOFSH
+			close($SH);
+		} else {
+			warn "ERROR: Unable to create shell script $outputSH\n";
+		}
+	}
 	
 	# exit 0;
 	
@@ -948,7 +981,7 @@ EOF
 
 \begin{center}
 	\arrayrulecolor{DarkOrange}
-	\begin{xtabular}{|r|c|p{0.5\textwidth}|}
+	\begin{stabular}{|r|c|p{0.5\textwidth}|}
 EOF
 		
 		my $aliashash = $CV->CV;
@@ -957,7 +990,8 @@ EOF
 			my $termStr = undef;
 			
 			if(scalar(@{$alias->parents}) > 1) {
-				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->parents}).'\end{tabular}';
+#				$termStr = '\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @{$alias->parents}).'\end{tabular}';
+				$termStr = join(' , ',map { latex_escape($_) } @{$alias->parents});
 			} else {
 				$termStr = $alias->parents->[0];
 			}
@@ -968,7 +1002,7 @@ EOF
 
 		# Table footer
 		print $O <<EOF ;
-		\\end{xtabular}
+		\\end{stabular}
 \\end{center}
 EOF
 	}
@@ -1678,6 +1712,7 @@ if(scalar(@ARGV)>=3) {
 	my $outfileTranslateSQL = undef;
 	my $outfileBPMODEL = undef;
 	my $outfileLaTeX = undef;
+	my $outfileSH = undef;
 	my $figurePrefix = undef;
 	if(-d $out) {
 		my (undef,undef,undef,$day,$month,$year) = localtime();
@@ -1697,6 +1732,7 @@ if(scalar(@ARGV)>=3) {
 		$outfileSQL = $out.'.sql';
 		$outfileTranslateSQL = $out.'_CVtrans.sql';
 		$outfileLaTeX = $out.'.latex';
+		$outfileSH = $outfileLaTeX.'.sh';
 		$outfileBPMODEL = $out . '.bpmodel';
 		$figurePrefix = $out;
 	}
@@ -1793,7 +1829,7 @@ TEOF
 	$TO->flush();
 	
 	# Now, let's generate the documentation!
-	assemblePDF($templateAbsDocDir,$model,$outfileBPMODEL,$outfileLaTeX,$outfilePDF);
+	assemblePDF($templateAbsDocDir,$model,$outfileBPMODEL,$outfileLaTeX,$outfilePDF,$outfileSH);
 } else {
 	print STDERR "This program takes as input: optional --sql flag, the model (in XML or BPModel formats), the documentation template directory and the output file\n";
 	exit 1;
