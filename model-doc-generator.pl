@@ -908,7 +908,7 @@ EOF
 
 \begin{center}
 	\arrayrulecolor{DarkOrange}
-	\begin{xtabular}{|r|p{0.5\textwidth}|}
+	\begin{supertabular}{|r|p{0.5\textwidth}|}
 EOF
 	
 		my $CVhash = $CV->CV;
@@ -918,7 +918,7 @@ EOF
 		
 		# Table footer
 		print $O <<EOF ;
-	\\end{xtabular}
+	\\end{supertabular}
 \\end{center}
 EOF
 	}
@@ -1594,7 +1594,7 @@ GEOF
 
 \begin{center}
 	\arrayrulecolor{DarkOrange}
-	\begin{xtabular}{|l|c|c|p{0.5\textwidth}|}
+	\begin{supertabular}{|l|c|c|p{0.5\textwidth}|}
 EOF
 		
 		# Determining the order of the columns
@@ -1656,7 +1656,7 @@ EOF
 		}
 		# End of the table!
 		print $O <<EOF ;
-	\\end{xtabular}
+	\\end{supertabular}
 \\end{center}
 EOF
 	}
