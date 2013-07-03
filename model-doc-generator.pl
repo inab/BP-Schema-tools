@@ -839,7 +839,7 @@ sub printCVTable($$) {
 	}
 	print $O "\\section{",latex_escape($caption),"} \\label{cvsec:$cvname}\n";
 	
-	print $O "\\textit{This controlled vocabulary has ".scalar(@{$CV->order})." terms and ".scalar(@{$CV->aliasOrder})." aliases}\\\\[2ex]\n"  if($CV->isLocal);
+	print $O "\\textit{This controlled vocabulary has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
 	
 	my @header = ();
 	

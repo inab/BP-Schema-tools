@@ -658,7 +658,7 @@ sub registerCV($) {
 	# This key is internally used to register all the file CVs
 	$self->{CVfiles} = []  unless(exists($self->{CVfiles}));
 	
-	push(@{$self->{CVfiles}},$CV)  if($CV->kind eq DCC::Model::CV::CVLOCAL);
+	push(@{$self->{CVfiles}},$CV)  if(defined($CV->localFilename));
 }
 
 # __parse_pattern parameters:
