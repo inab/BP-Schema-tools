@@ -5,7 +5,7 @@
 }
 
 \begin{center}
-\includegraphics[scale=0.75]{logoblueprint.png}\\[6cm]
+\includegraphics[width=0.75\textwidth]{logoblueprint-vector.pdf}\\[6cm]
 {\Large\textbf{\projectName{} proposed data submission schemas}}\\
 {\large Draft v\schemaVer{}}\\[4ex]
 

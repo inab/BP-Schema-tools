@@ -18,7 +18,7 @@ use FindBin;
 use lib "$FindBin::Bin/lib";
 use DCC::Model;
 
-
+use constant PDFLATEX => 'xelatex';
 use constant RELEASE => 1;
 use constant TERMSLIMIT => 200;
 #use constant TERMSLIMIT => 10000;
@@ -526,6 +526,7 @@ UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
 SET
 	${tableName}.${columnName}_term = ${cvname}_CV.descr
 WHERE
+	${tableName}.${columnName}_term IS NULL AND
 	${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
 	AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
 ;
@@ -683,7 +684,7 @@ sub assemblePDF($$$$$$) {
 		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$masterTemplate.'}'
 	);
 	
-	print STDERR "[DOCGEN] => ",join(' ','pdflatex',@pdflatexParams),"\n";
+	print STDERR "[DOCGEN] => ",join(' ',PDFLATEX,@pdflatexParams),"\n";
 	
 	if(defined($outputSH)) {
 		if(open(my $SH,'>',$outputSH)) {
@@ -704,7 +705,7 @@ sub assemblePDF($$$$$$) {
 #!/bin/sh
 
 cd $workingDir
-pdflatex $commandLine
+${\PDFLATEX} $commandLine
 EOFSH
 			close($SH);
 		} else {
@@ -716,13 +717,13 @@ EOFSH
 	
 	my $follow = 1;
 	foreach my $it (1..5) {
-		if(system('pdflatex','-draftmode',@pdflatexParams)!=0) {
+		if(system(PDFLATEX,'-draftmode',@pdflatexParams)!=0) {
 			$follow = undef;
 			last;
 		}
 	}
 	if(defined($follow)) {
-		system('pdflatex',@pdflatexParams);
+		system(PDFLATEX,@pdflatexParams);
 	}
 }
 

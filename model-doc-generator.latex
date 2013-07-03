@@ -8,14 +8,21 @@
 
 % UTF8 support
 \usepackage{ifxetex}
+\usepackage{ifluatex}
 \ifxetex
   \usepackage{fontspec}
   \usepackage{xunicode}
   \defaultfontfeatures{Mapping=tex-text} % To support LaTeX quoting style
 %  \setromanfont{Hoefler Text}
 \else
-  \usepackage[T1]{fontenc}
-  \usepackage[utf8]{inputenc}
+  \ifluatex
+    \usepackage{fontspec}
+    \usepackage{xunicode}
+    \usepackage{pdftexcmds}
+  \else
+    \usepackage[T1]{fontenc}
+    \usepackage[utf8]{inputenc}
+  \fi
 \fi
 
 % Table environment for tables which span (and must be broken) over several pages
@@ -44,7 +51,7 @@
 %\usepackage{attachfile}
 
 % Embedding files to the generated PDF
-\usepackage{embedfile}
+\usepackage{navigator}
 
 % This package is used to hide blocks when
 % PDF is printed
@@ -55,6 +62,10 @@
 
 % We need to switch between portrait and landscape
 \usepackage{ifthen}
+
+% package to redirect hyperlinks to the beginning of figures or tables
+% instead of the captions
+\usepackage[all]{hypcap}
 
 % package to put single figure captions
 % needed to inject the full page figure of the model graph
@@ -117,7 +128,6 @@ frontmatter.latex}
 
 \subimport*{\INCLUDEbodydir}{\INCLUDEbodyname}
 
-%\embedfile[filespec={\projectName-model.bpmodel},desc={\projectName{} DCC BPModel}]{\BPMODELpath}
-\embedfile[desc={\projectName{} DCC BPModel}]{\BPMODELpath}
+\embeddedfile[{\projectName\ DCC BPModel}]{BPMODEL}{\BPMODELpath}
 
 \end{document}
