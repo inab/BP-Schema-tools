@@ -28,6 +28,9 @@
 % Table environment for tables which span (and must be broken) over several pages
 \usepackage{longtable}
 
+% Fixed width tables
+\usepackage{tabularx}
+
 % Including PDFs and other kind of graphics
 \usepackage{graphicx}
 
@@ -76,6 +79,9 @@
 \usepackage{tikz}
 \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows}
 %\usepackage[pgf,debug]{dot2texi}
+
+% Change content size when width is bigger than ...
+\usepackage{adjustbox}
 
 % The subimport corresponding to the customizations
 %\subimport*{\INCLUDEtemplatedir}{packages.latex}

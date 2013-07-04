@@ -20,8 +20,8 @@ use DCC::Model;
 
 use constant PDFLATEX => 'xelatex';
 use constant RELEASE => 1;
-use constant TERMSLIMIT => 200;
-#use constant TERMSLIMIT => 10000;
+#use constant TERMSLIMIT => 200;
+use constant TERMSLIMIT => 10000;
 
 
 sub latex_escape($);
@@ -36,7 +36,10 @@ sub latex_escape_internal($) {
 	
 	# Must be done after escape of \ since this command adds latex escapes
 	# Replace characters that can be escaped
-	$paragraph =~ s/([\$\#&%_])/\\$1/g;
+	$paragraph =~ s/([\$\#&%])/\\$1/g;
+	
+	# This one helps in hyphenation
+	$paragraph =~ s/_/\\-\\_\\-/g;
 	
 	# "Less than" and "greater than"
 	$paragraph =~ s/>/\\textgreater/g;
@@ -98,19 +101,24 @@ sub latex_format($) {
 	
 	# HTML content
 	$paragraph =~ s/\<br *\/?\>/\n\n/g;
-	$paragraph =~ s/\<i\>([^<]+)\<\/i\>/\\textit{$1}/msg;
-	$paragraph =~ s/\<b\>([^<]+)\<\/b\>/\\textbf{$1}/msg;
-	$paragraph =~ s/\<tt\>([^<]+)\<\/tt\>/\\texttt{$1}/msg;
-	$paragraph =~ s/\<u\>([^<]+)\<\/u\>/\\textunderscore{$1}/msg;
-	$paragraph =~ s/\<a\s+href=["']([^>'"]+)['"]\>([^<]+)\<\/a\>/\\href{$1}{$2}/msg;
+	# (?:(?!PATTERN).)*
+	$paragraph =~ s/\<i\>((?:(?!\<\/i\>).)*)\<\/i\>/\\textit{$1}/msg;
+	$paragraph =~ s/\<b\>((?:(?!\<\/b\>).)*)\<\/b\>/\\textbf{$1}/msg;
+	$paragraph =~ s/\<tt\>((?:(?!\<\/tt\>).)*)\<\/tt\>/\\texttt{$1}/msg;
+	$paragraph =~ s/\<u\>((?:(?!\<\/u\>).)*)\<\/u\>/\\textunderscore{$1}/msg;
+	$paragraph =~ s/\<a\s+href=["']([^>'"]+)['"]\>((?:(?!\<\/a\>).)*)\<\/a\>/\\href{$1}{$2}/msg;
 	
 	# XHTML content
 	$paragraph =~ s/\<[^:]+:br *\/\>/\n\n/g;
-	$paragraph =~ s/\<[^:]+:i\>([^<]+)\<\/[^:]+:i\>/\\textit{$1}/msg;
-	$paragraph =~ s/\<[^:]+:b\>([^<]+)\<\/[^:]+:b\>/\\textbf{$1}/msg;
-	$paragraph =~ s/\<[^:]+:tt\>([^<]+)\<\/[^:]+:tt\>/\\texttt{$1}/msg;
-	$paragraph =~ s/\<[^:]+:u\>([^<]+)\<\/[^:]+:u\>/\\textunderscore{$1}/msg;
-	$paragraph =~ s/\<[^:]+:a\s+href=["']([^>'"]+)['"]\>([^<]+)\<\/[^:]+:a\>/\\href{$1}{$2}/msg;
+	$paragraph =~ s/\<[^:]+:i\>((?:(?!\<\/[^:]+:i\>).)*)\<\/[^:]+:i\>/\\textit{$1}/msg;
+	$paragraph =~ s/\<[^:]+:b\>((?:(?!\<\/[^:]+:b\>).)*)\<\/[^:]+:b\>/\\textbf{$1}/msg;
+	$paragraph =~ s/\<[^:]+:tt\>((?:(?!\<\/[^:]+:tt\>).)*)\<\/[^:]+:tt\>/\\texttt{$1}/msg;
+	$paragraph =~ s/\<[^:]+:u\>((?:(?!\<\/[^:]+:u\>).)*)\<\/[^:]+:u\>/\\textunderscore{$1}/msg;
+	$paragraph =~ s/\<[^:]+:a\s+href=["']([^>'"]+)['"]\>((?:(?!\<\/[^:]+:a\>).)*)\<\/[^:]+:a\>/\\href{$1}{$2}/msg;
+	
+	# Encoded entities &lt; and &gt;
+	$paragraph =~ s/&lt;/\</g;
+	$paragraph =~ s/&gt;/\>/g;
 	
 	return latex_escape_internal($paragraph);
 }
@@ -778,14 +786,14 @@ sub processInlineCVTable($) {
 	$output .= "\n";
 	# We have the values. Do we have to print them?
 	if($CV->isLocal && $inline) {
-		$output .= '\begin{tabular}{r@{ = }p{0.4\textwidth}}'."\n";
+		$output .= '\begin{tabularx}{0.5\columnwidth}{>{\textbf\bgroup\texttt\bgroup}r<{\egroup\egroup}@{ $\mapsto$ }>{\raggedright\arraybackslash}X}'."\n";
 		#$output .= '\begin{tabular}{r@{ = }l}'."\n";
 
 		my $CVhash = $CV->CV;
 		foreach my $key (@{$CV->order}) {
-			$output .= join(' & ','\textbf{'.latex_escape($key).'}',latex_escape($CVhash->{$key}->name))."\\\\\n";
+			$output .= join(' & ',latex_escape($key),latex_escape($CVhash->{$key}->name))."\\\\\n";
 		}
-		$output .= '\end{tabular}';
+		$output .= '\end{tabularx}';
 	}
 	
 	if($CV->kind eq DCC::Model::CV::URIFETCHED) {
@@ -887,7 +895,7 @@ EOF
 		print $O <<'EOF';
 {
 	\arrayrulecolor{DarkOrange}
-	\begin{longtable}[c]{|r|p{0.5\textwidth}|}
+	\begin{longtable}[c]{|>{\tt}r|p{0.5\textwidth}|}
 EOF
 		print $O '\caption{'.$latexcaption.'} \label{cv:'.$cvname.'} \\\\'."\n";
 		print $O <<'EOF';
@@ -954,7 +962,7 @@ EOF
 		print $O <<'EOF';
 {
 	\arrayrulecolor{DarkOrange}
-	\begin{longtable}[c]{|r|p{0.3\textwidth}|p{0.5\textwidth}|}
+	\begin{longtable}[c]{|>{\tt}r|p{0.3\textwidth}|p{0.5\textwidth}|}
 EOF
 		print $O '\caption{'.$latexcaption.' aliases} \label{cv:'.$cvname.':alias} \\\\'."\n";
 		print $O <<'EOF';
@@ -1521,18 +1529,22 @@ sub printConceptDomain($$$$$) {
 	
 	#my $gdef = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}}';
 	print $O <<GEOF;
+\\par
 $figDomainPreamble
-\\begin{figure*}[!h]
+{%
+%\\begin{figure*}[!h]
 \\centering
-\\resizebox{.95\\linewidth}{!}{
+%\\resizebox{.95\\linewidth}{!}{
+\\maxsizebox{.95\\textwidth}{.4\\textheight}{
 \\hypersetup{
 	linkcolor=Black
 }
 %\\input{$conceptDomainLatexFile}
 \\import*{$absLaTeXDir/}{$relLaTeXFile}
 }
-\\caption{$conceptDomainFullname Sub-Schema}
-\\end{figure*}
+\\captionof{figure}{$conceptDomainFullname Sub-Schema}
+%\\end{figure*}
+}
 GEOF
 	
 	# Let's iterate over the concepts of this concept domain
@@ -1554,12 +1566,39 @@ GEOF
 		
 		# The table header
 		my $entry = $conceptDomain->name.'_'.$concept->name;
+#	\begin{tabularx}{\linewidth}{|>{\setlength{\hsize}{.5\hsize}\raggedright\arraybackslash}X|c|c|p{0.5\textwidth}|}
 		print $O <<'EOF';
 {
 	\arrayrulecolor{DarkOrange}
-	\begin{longtable}[c]{|l|c|c|p{0.5\textwidth}|}
 EOF
-		print $O '\caption{'.$caption.'} \label{tab:'.$entry.'} \\\\'."\n";
+#		print $O '\topcaption{'.$caption.'\label{tab:'.$entry.'}}'."\n";
+#		print $O <<'EOF';
+#\tablefirsthead{%
+#\hline
+#\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+#\hline\hline}
+#\tablehead{%
+#\multicolumn{4}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+#\hline
+#\multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Type}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Need}}} &
+#\multicolumn{1}{c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Description / Values}}} \\
+#\hline}
+#\tabletail{%
+#\hline
+#\multicolumn{4}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
+#\hline}
+#
+#	\begin{supertabular}{|l|c|c|p{0.5\textwidth}|}
+#EOF
+		print $O <<'EOF';
+	\begin{longtable}[c]{|>{\maxsizebox{3.5cm}{!}\bgroup}l<{\egroup}|>{\texttt\bgroup}c<{\egroup}|>{\texttt\bgroup}c<{\egroup}|>{\raggedright\arraybackslash}p{0.5\textwidth}|}
+EOF
+		print $O '\caption{'.$caption.'\label{tab:'.$entry.'}} \\\\'."\n";
 		print $O <<'EOF';
 \hline
 \multicolumn{1}{|c|}{\cellcolor{DarkOrange}\textcolor{white}{\textbf{Name}}} &
@@ -1580,6 +1619,7 @@ EOF
 \multicolumn{4}{|r|}{\textcolor{gray}{\textit{Continued on next page}}} \\
 \hline
 \endfoot
+\hline
 \endlastfoot
 EOF
 		
@@ -1624,21 +1664,25 @@ EOF
 			# What it goes to the column type column
 			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
 			
-			push(@colTypeLines,'\textit{'.latex_escape($restriction->template).'}')  if(ref($restriction) eq 'DCC::Model::CompoundType');
+			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'DCC::Model::CompoundType');
 			
-			push(@colTypeLines,'\textcolor{gray}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}')  if(defined($columnType->arraySeps));
+			push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
 			
 			# Stringify it!
-			my $colTypeStr = '\\texttt{'.(
-				(scalar(@colTypeLines)>1)?
+			my $colTypeStr = (scalar(@colTypeLines)>1)?
 #					'\begin{tabular}{l}'.join(' \\\\ ',map { latex_escape($_) } @colTypeLines).'\end{tabular}'
 #					'\begin{minipage}[t]{8em}'.join(' \\\\ ',@colTypeLines).'\end{minipage}'
 					'\pbox[t]{10cm}{\relax\ifvmode\centering\fi'."\n".join(' \\\\ ',@colTypeLines).'}'
 					:
 					$colTypeLines[0]
-				).'}';
+			;
 			
-			print $O join(' & ','\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),$colTypeStr,'\\texttt{'.$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED}.'}',join("\n\n",$description,$related,$values)),'\\\\ \hline',"\n";
+			print $O join(' & ',
+				'\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),
+				$colTypeStr,
+				$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED},
+				join("\n\n",$description,$related,$values)
+			),'\\\\ \hline',"\n";
 		}
 		# End of the table!
 		print $O <<'EOF';
