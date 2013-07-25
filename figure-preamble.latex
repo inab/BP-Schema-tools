@@ -1,0 +1,18 @@
+\usepackage{hyperref}
+\usetikzlibrary{shapes,automata,backgrounds,arrows,shadows}
+\providecommand{\arrayrulecolor}[1] {}
+\usepackage{ifxetex}
+\usepackage{ifluatex}
+\ifxetex
+  \usepackage{fontspec}
+  \usepackage{xunicode}
+  \defaultfontfeatures{Mapping=tex-text}
+\else
+  \ifluatex
+    \usepackage{fontspec}
+    \usepackage{xunicode}
+  \else
+    \usepackage[T1]{fontenc}
+    \usepackage[utf8]{inputenc}
+  \fi
+\fi

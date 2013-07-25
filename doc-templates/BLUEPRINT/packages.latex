@@ -9,22 +9,6 @@
 
 %\usepackage{setspace}
 
-% The fonts used in the document
-\ifxetex
-  \setmainfont{Iwona}
-%  \setmonofont[Scale=0.95]{Inconsolata}
-  \setmonofont[Scale=0.88]{Consolas}
-\else
-  \ifluatex
-    \setmainfont{Iwona}
-%    \setmonofont[Scale=0.95]{Inconsolata}
-    \setmonofont[Scale=0.88]{Consolas}
-  \else
-    \usepackage{iwona}
-    \usepackage[scaled=0.8]{beramono}
-  \fi
-\fi
-
 % To have table counters per section
 \usepackage{chngcntr}
 \counterwithin{table}{section}

@@ -13,7 +13,6 @@
   \usepackage{fontspec}
   \usepackage{xunicode}
   \defaultfontfeatures{Mapping=tex-text} % To support LaTeX quoting style
-%  \setromanfont{Hoefler Text}
 \else
   \ifluatex
     \usepackage{fontspec}
@@ -84,10 +83,13 @@
 \usepackage{adjustbox}
 
 % The subimport corresponding to the customizations
-%\subimport*{\INCLUDEtemplatedir}{packages.latex}
+%\subimport*{\INCLUDEtemplatedir}{\INCLUDEpackagesFile}
 % Must be done in this way in order to have working usepackage
 \input{\INCLUDEtemplatedir%
-packages.latex}
+\INCLUDEpackagesFile}
+
+\input{\INCLUDEtemplatedir%
+\INCLUDEfontsFile}
 
 \begin{document}
 
@@ -98,8 +100,8 @@ packages.latex}
 
 % The subimport corresponding to the cover
 %\input{\INCLUDEtemplatedir%
-%cover.latex}
-\subimport*{\INCLUDEtemplatedir}{cover.latex}
+%\INCLUDEcoverFile}
+\subimport*{\INCLUDEtemplatedir}{\INCLUDEcoverFile}
 
 \begin{ocg}[printocg=never]{Attached content}{aoc}{1}
 \thispagestyle{empty}
@@ -126,7 +128,7 @@ FoxIt Reader\textsuperscript{\textregistered\textcopyright}, Okular (from KDE) o
 % (table of contents, list of tables, figures, etc...)
 % Must be done in this way in order to have a right table of contents
 \input{\INCLUDEtemplatedir%
-frontmatter.latex}
+\INCLUDEfrontmatterFile}
 
 \mainmatter
 

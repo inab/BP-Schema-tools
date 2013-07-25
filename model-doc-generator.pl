@@ -601,9 +601,11 @@ TCVEOF
 use constant {
 	REL_TEMPLATES_DIR	=>	'doc-templates',
 	PACKAGES_TEMPLATE_FILE	=>	'packages.latex',
+	FONTS_TEMPLATE_FILE	=>	'fonts.latex',
 	COVER_TEMPLATE_FILE	=>	'cover.latex',
 	FRONTMATTER_TEMPLATE_FILE	=>	'frontmatter.latex',
-	ICONS_DIR	=>	'icons'
+	ICONS_DIR	=>	'icons',
+	FIGURE_PREAMBLE_FILE	=>	'figure-preamble.latex'
 };
 
 # assemblePDF parameters:
@@ -621,7 +623,7 @@ sub assemblePDF($$$$$$) {
 		die "ERROR: Unable to find master template LaTeX file $masterTemplate\n";
 	}
 	
-	foreach my $relfile (PACKAGES_TEMPLATE_FILE,COVER_TEMPLATE_FILE,FRONTMATTER_TEMPLATE_FILE) {
+	foreach my $relfile (PACKAGES_TEMPLATE_FILE,FONTS_TEMPLATE_FILE,COVER_TEMPLATE_FILE,FRONTMATTER_TEMPLATE_FILE) {
 		my $templateFile = File::Spec->catfile($templateDir,$relfile);
 		
 		unless(-f $templateFile && -r $templateFile) {
@@ -671,6 +673,12 @@ sub assemblePDF($$$$$$) {
 	push(@params,['INCLUDEtemplatedir',$templateDir.'/']);
 	push(@params,['INCLUDEoverviewdir',$overviewDir.'/'],['INCLUDEoverviewname',$overviewName]);
 	push(@params,['INCLUDEbodydir',$bodyDir.'/'],['INCLUDEbodyname',$bodyName]);
+	push(@params,
+		['INCLUDEpackagesFile',PACKAGES_TEMPLATE_FILE],
+		['INCLUDEfontsFile',FONTS_TEMPLATE_FILE],
+		['INCLUDEcoverFile',COVER_TEMPLATE_FILE],
+		['INCLUDEfrontmatterFile',FRONTMATTER_TEMPLATE_FILE]
+	);
 	
 	my(undef,undef,$bpmodelFilename) = File::Spec->splitpath($bpmodelFile);
 	push(@params,['BPMODELfilename',latex_escape($bpmodelFilename)]);
@@ -1052,6 +1060,29 @@ sub parseColor($) {
 	return ($colorModel,@colorComponents);
 }
 
+# This method reads LaTeX files into strings, removing comment lines
+# So it could harm any side-effect related to newlines and zero-length comments
+sub readLaTeXTemplate($$) {
+	my($templateAbsDocDir,$templateFile) = @_;
+	
+	my $template = '';
+	if(open(my $LT,'<',File::Spec->catfile($templateAbsDocDir,$templateFile))) {
+		while(my $line=<$LT>) {
+			chomp($line);
+			# Removing comments
+			my $ipos = index($line,'%');
+			$line = substr($line,0,$ipos)  if($ipos!=-1);
+			$template .= $line."\n"  if(length($line) > 0);
+		}
+		
+		close($LT);
+	} else {
+		die "ERROR: Unable to read template LaTeX file $templateFile\n";
+	}
+	
+	return $template;
+}
+
 # genConceptGraphNode parameters:
 #	concept: a DCC::Model::Concept instance
 #	p_defaultColorDef: a reference to the default color
@@ -1134,8 +1165,9 @@ DEOF
 #	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
-sub genConceptDomainGraph($$$$) {
-	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir)=@_;
+#	p_colors: Hash of colors for each concept (to be filled)
+sub genConceptDomainGraph($$$$\%) {
+	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$p_colors)=@_;
 	
 	my @defaultColorDef = ('rgb',0,1,0);
 	if(exists($model->annotations->hash->{defaultColor})) {
@@ -1146,7 +1178,6 @@ sub genConceptDomainGraph($$$$) {
 	my $dotfile = $figurePrefix . '-domain-'. $conceptDomain->name.'.dot';
 	my $latexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'.latex';
 	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'-standalone.latex';
-	my %colors = ();
 	if(open(my $DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
 digraph G {
@@ -1166,7 +1197,7 @@ DEOF
 			foreach my $refEntry (keys(%{$p_partialFKS})) {
 				$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
 			}
-			$colors{$color} = $p_colorDef;
+			$p_colors->{$color} = $p_colorDef;
 			
 			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
 				push(@firstRank,$entry);
@@ -1265,15 +1296,19 @@ DEOF
 	# Prepare the colors
 	my $figpreamble = join('',map {
 		my $color = $_;
-		my($colorModel,@components) = @{$colors{$color}};
+		my($colorModel,@components) = @{$p_colors->{$color}};
 		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
-	} keys(%colors));
+	} keys(%{$p_colors}));
 	
 	# The moment to call dot2tex
+	my $docpreamble = readLaTeXTemplate($FindBin::Bin,FIGURE_PREAMBLE_FILE);
+	$docpreamble =~ tr/\n/ /;
+	my $fontpreamble = readLaTeXTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
+	$fontpreamble =~ tr/\n/ /;
 	my @params = (
 		'dot2tex',
 		'--usepdflatex',
-		'--docpreamble=\usepackage{hyperref}',
+		'--docpreamble='.$docpreamble.' '.$fontpreamble,
 		'--figpreamble='.$figpreamble,
 		'--autosize',
 #		'--nominsize',
@@ -1288,7 +1323,7 @@ DEOF
 	my @standAloneParams = (
 		'dot2tex',
 		'--usepdflatex',
-		'--docpreamble=\usepackage{hyperref} \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows} \providecommand{\arrayrulecolor}[1] {}'.$figpreamble,
+		'--docpreamble='.$docpreamble.' '.$fontpreamble.' '.$figpreamble,
 		'--autosize',
 #		'--nominsize',
 		'-c',
@@ -1305,12 +1340,13 @@ DEOF
 	return ($latexfile,$figpreamble);
 }
 
-# genConceptDomainGraph parameters:
+# genModelGraph parameters:
 #	model: A DCC::Model instance
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
-sub genModelGraph($$$) {
-	my($model,$figurePrefix,$templateAbsDocDir)=@_;
+#	p_colors: Hash of colors for each concept (to be filled)
+sub genModelGraph($$$\%) {
+	my($model,$figurePrefix,$templateAbsDocDir,$p_colors)=@_;
 	
 	my @defaultColorDef = ('rgb',0,1,0);
 	my @blackColor = ('HTML','000000');
@@ -1322,7 +1358,6 @@ sub genModelGraph($$$) {
 	my $dotfile = $figurePrefix . '-model.dot';
 	my $latexfile = $figurePrefix . '-model.latex';
 	my $standalonelatexfile = $figurePrefix . '-model-standalone.latex';
-	my %colors = ();
 	if(open(my $DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
 digraph G {
@@ -1355,7 +1390,7 @@ DEOF
 				foreach my $refEntry (keys(%{$p_partialFKS})) {
 					$fks{$refEntry}{$entry} = $p_partialFKS->{$refEntry};
 				}
-				$colors{$color} = $p_colorDef;
+				$p_colors->{$color} = $p_colorDef;
 			
 				if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
 					push(@firstRank,$entry);
@@ -1457,15 +1492,19 @@ DEOF
 	# Prepare the colors
 	my $figpreamble = join('',map {
 		my $color = $_;
-		my($colorModel,@components) = @{$colors{$color}};
+		my($colorModel,@components) = @{$p_colors->{$color}};
 		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
-	} keys(%colors));
+	} keys(%{$p_colors}));
 	
 	# The moment to call dot2tex
+	my $docpreamble = readLaTeXTemplate($FindBin::Bin,FIGURE_PREAMBLE_FILE);
+	$docpreamble =~ tr/\n/ /;
+	my $fontpreamble = readLaTeXTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
+	$fontpreamble =~ tr/\n/ /;
 	my @params = (
 		'dot2tex',
 		'--usepdflatex',
-		'--docpreamble=\usepackage{hyperref}',
+		'--docpreamble='.$docpreamble.' '.$fontpreamble,
 		'--figpreamble='.$figpreamble,
 		'--autosize',
 #		'--nominsize',
@@ -1480,7 +1519,7 @@ DEOF
 	my @standAloneParams = (
 		'dot2tex',
 		'--usepdflatex',
-		'--docpreamble=\usepackage{hyperref} \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows} \providecommand{\arrayrulecolor}[1] {}'.$figpreamble,
+		'--docpreamble='.$docpreamble.' '.$fontpreamble.' '.$figpreamble,
 		'--autosize',
 #		'--nominsize',
 		'-c',
@@ -1503,8 +1542,9 @@ DEOF
 #	figurePrefix: The prefix path for the generated figures (.dot, .latex, etc...)
 #	templateAbsDocDir: Directory of the template being used
 #	O: The filehandle where to print the documentation about the concept domain
-sub printConceptDomain($$$$$) {
-	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O)=@_;
+#	p_colors: The colors to be taken into account when the graphs are generated
+sub printConceptDomain($$$$$\%) {
+	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O,$p_colors)=@_;
 	
 	# The title
 	# TODO: consider using encode('latex',...) for the content
@@ -1522,7 +1562,7 @@ sub printConceptDomain($$$$$) {
 	}
 	
 	# generate dot graph representing the concept domain
-	my($conceptDomainLatexFile,$figDomainPreamble) = genConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir);
+	my($conceptDomainLatexFile,$figDomainPreamble) = genConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,%{$p_colors});
 	
 	my(undef,$absLaTeXDir,$relLaTeXFile) = File::Spec->splitpath($conceptDomainLatexFile);
 	my $conceptDomainFullname = $conceptDomain->fullname;
@@ -1777,7 +1817,8 @@ if(scalar(@ARGV)>=3) {
 	exit 0  if($onlySQL);
 	
 	# Generating the graph model
-	my($modelgraphfile,$modelpreamble) = genModelGraph($model,$figurePrefix,$templateAbsDocDir);
+	my %colors = ();
+	my($modelgraphfile,$modelpreamble) = genModelGraph($model,$figurePrefix,$templateAbsDocDir,%colors);
 
 	# Generating the document to be included in the template
 	my $TO = undef;
@@ -1786,7 +1827,7 @@ if(scalar(@ARGV)>=3) {
 		open($TO,'>:utf8',$outfileLaTeX) || die "ERROR: Unable to create output LaTeX file";
 	} else {
 		$TO = File::Temp->new();
-		binmode( $TO, ":utf8" );
+		binmode($TO,':utf8');
 		$outfileLaTeX = $TO->filename;
 	}
 	
@@ -1844,7 +1885,7 @@ TEOF
 		# Skipping abstract concept domains on documentation generation
 		next  if(RELEASE && $conceptDomain->isAbstract);
 		
-		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO);
+		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO,%colors);
 	}
 
 	print $TO "\\appendix\n";
