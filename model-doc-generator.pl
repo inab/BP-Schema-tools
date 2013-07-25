@@ -330,7 +330,9 @@ sub genSQL($$$) {
 						my $CV = $columnType->restriction;
 						
 						my $cvname = $CV->name;
-						$cvname = $basename.'_'.$column->name  unless(defined($cvname));
+						#$cvname = $basename.'_'.$column->name  unless(defined($cvname));
+						# Perl reference trick to get a number
+						$cvname = 'anon_'.($CV+0)  unless(defined($cvname));
 						
 						# Second position is the SQL type
 						# Third position holds the columns which depend on this CV
