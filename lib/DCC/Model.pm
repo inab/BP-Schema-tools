@@ -3358,14 +3358,20 @@ sub fullname {
 	return $_[0]->[1];
 }
 
-# The DCC::Model::ConceptType instance basetype is the first element of the array
-sub baseConceptType {
-	return $_[0]->[2][0];
-}
-
 # A reference to the array of DCC::Model::ConceptType instances basetypes
 sub baseConceptTypes {
 	return $_[0]->[2];
+}
+
+# The DCC::Model::ConceptType instance basetype is the first element of the array
+# It returns undef if there is no one
+sub baseConceptType {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_arr = $self->baseConceptTypes;
+	return (scalar(@{$p_arr})>0)?$p_arr->[0]:undef;
 }
 
 # The DCC::Model::ConceptDomain instance where this concept is defined
