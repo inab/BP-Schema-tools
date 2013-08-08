@@ -511,6 +511,21 @@ sub digestModel($) {
 	}
 	
 	# And we start with the concept types
+	my %compoundTypes = ();
+	$self->{COMPOUNDTYPES} = \%compoundTypes;
+	foreach my $compoundTypesDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'compound-types')) {
+		foreach my $compoundTypeDecl ($compoundTypesDecl->childNodes()) {
+			next  unless($compoundTypeDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $compoundTypeDecl->localname eq 'compound-type');
+			
+			# We need to give the model because a compound type could use in one of its facets a previously declared compound type
+			my $compoundType = DCC::Model::CompoundType->parseCompoundType($compoundTypeDecl,$model);
+			$compoundTypes{$compoundType->name} = $compoundType;
+		}
+		
+		last;
+	}
+
+	# And we start with the concept types
 	my %conceptTypes = ();
 	$self->{CTYPES} = \%conceptTypes;
 	foreach my $conceptTypesDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept-types')) {
@@ -763,6 +778,16 @@ sub getNamedPattern($) {
 	my $name = shift;
 	
 	return exists($self->{PATTERNS}{$name})?$self->{PATTERNS}{$name}:undef;
+}
+
+sub getCompoundType($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $name = shift;
+	
+	return exists($self->{COMPOUNDTYPES}{$name})?$self->{COMPOUNDTYPES}{$name}:undef;
 }
 
 sub getConceptType($) {
@@ -2101,51 +2126,75 @@ sub indexes {
 
 package DCC::Model::CompoundType;
 
-# TODO: Compound type refactor in the near future, so work for filename patterns
-# can be reused
-
 # This is the constructor.
-# new parameters:
-#	template: The template string, to be processed
-#	seps: The tokens which delimite the template tokens
-#	columnName: The name of the column (for error messages purposes)
-sub new($$$) {
+# parseCompoundType parameters:
+#	compoundTypeElem: a XML::LibXML::Element 'dcc:compound-type' node
+#	model: a DCC::Model instance where the concept type was defined
+# returns an array of 'DCC::Model::ConceptType' instances, which are the concept type
+# and its descendants.
+sub parseCompoundType($$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
-	# tokens, separators
-	my $template = shift;
-	my $seps = shift;
+	my $compoundTypeElem = shift;
+	my $model = shift;
 	my $columnName = shift;
 	
-	my %sepVal = ();
-	foreach my $sep (split(//,$seps)) {
-		if(exists($sepVal{$sep})) {
-			Carp::croak("Column $columnName has repeated the compound separator $sep!")
-		}
-		
-		$sepVal{$sep}=undef;
+	# compound-type name (could be anonymous)
+	# columnSet
+	# separators
+	# template
+	my @compoundType = (undef,undef,undef,undef);
+	
+	# If it has name, then it has to have either a collection name or a key name
+	# either inline or inherited from the ancestors
+	$compoundType[0] = $compoundTypeElem->getAttribute('name')  if($compoundTypeElem->hasAttribute('name'));
+	
+	# Let's parse the columns
+	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($compoundTypeElem,undef,$model);
+	$compoundType[1] = $columnSet;
+	
+	my @seps = ();
+	foreach my $sepDecl ($compoundTypeElem->getChildrenByTagNameNS(DCC::Model::dccNamespace,'sep')) {
+		push(@seps,$sepDecl->textContent());
+	}
+	$compoundType[2] = \@seps;
+	
+	# Now, let's create a string template
+	my $template = $columnSet->columnNames->[0];
+	foreach my $pos (0..$#seps) {
+		$template .= $seps[$pos];
+		$template .= $columnSet->columnNames->[$pos+1];
 	}
 	
-	my @tokenNames = split(/[$seps]/,$template);
+	$compoundType[3] = $template;
 	
-	# TODO: refactor compound types
-	# compound separators, token names
-	my @compoundDecl = ($template,$seps,\@tokenNames);
-	return bless(\@compoundDecl,$class);
+	# The returning values array
+	return bless(\@compoundType,$class);
 }
 
-sub template {
+# compound type name (could be anonymous), so it would return undef
+sub name {
 	return $_[0]->[0];
 }
 
-sub seps {
+# columnSet
+# It returns a DCC::Model::ColumnSet instance, with all the column declarations inside this compound type
+sub columnSet {
 	return $_[0]->[1];
 }
 
-sub tokens {
+sub seps {
 	return $_[0]->[2];
+}
+
+sub template {
+	return $_[0]->[3];
+}
+
+sub tokens {
+	return $_[0]->[1]->columnNames;
 }
 
 1;
@@ -2222,51 +2271,55 @@ sub parseColumnType($$$) {
 		}
 		
 		# Content restrictions (children have precedence over attributes)
-		# First, is it a compound type?
-		unless(defined($refItemType->[DCC::Model::TYPEPATTERN])) {
-			if($colType->hasAttribute('compound-template') && $colType->hasAttribute('compound-seps')) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CompoundType->new($colType->getAttribute('compound-template'),$colType->getAttribute('compound-seps'),$columnName);
+		# Let's save allowed null values
+		foreach my $null ($colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null')) {
+			my $val = $null->textContent();
+			
+			if($model->isValidNull($val)) {
+				# Let's save the default value
+				push(@nullValues,$val);
 			} else {
-				Carp::croak("Column $columnName was declared as compound type, but some of the needed attributes (compound-template, compound-seps) is not declared");
+				Carp::croak("Column $columnName uses an unknown default value: $val");
+			}
+		}
+		
+		# First, is it a compound type?
+		my @compChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'compound-type');
+		my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
+		my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
+		if(scalar(@compChildren)>0 || (scalar(@compChildren)==0 && $colType->hasAttribute('compound-type'))) {
+			if(scalar(@compChildren)>0) {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CompoundType->parseCompoundType($compChildren[0],$model);
+			} else {
+				my $compoundType = $model->getCompoundType($colType->getAttribute('compound-type'));
+				if(defined($compoundType)) {
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $compoundType;
+				} else {
+					Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
+				}
+			}
+		} elsif(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
+			if(scalar(@cvChildren)>0) {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CV->parseCV($cvChildren[0],$model);
+			} else {
+				my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
+				if(defined($namedCV)) {
+					$columnType[DCC::Model::ColumnType::RESTRICTION] = $namedCV;
+				} else {
+					Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
+				}
+			}
+		} elsif(scalar(@patChildren)>0) {
+			$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::__parse_pattern($patChildren[0]);
+		} elsif($colType->hasAttribute('pattern')) {
+			my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
+			if(defined($PAT)) {
+				$columnType[DCC::Model::ColumnType::RESTRICTION] = $PAT;
+			} else {
+				Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
 			}
 		} else {
-			# Let's save allowed null values
-			foreach my $null ($colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null')) {
-				my $val = $null->textContent();
-				
-				if($model->isValidNull($val)) {
-					# Let's save the default value
-					push(@nullValues,$val);
-				} else {
-					Carp::croak("Column $columnName uses an unknown default value: $val");
-				}
-			}
-			
-			my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
-			my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
-			if(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
-				if(scalar(@cvChildren)>0) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CV->parseCV($cvChildren[0],$model);
-				} else {
-					my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
-					if(defined($namedCV)) {
-						$columnType[DCC::Model::ColumnType::RESTRICTION] = $namedCV;
-					} else {
-						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
-					}
-				}
-			} elsif(scalar(@patChildren)>0) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::__parse_pattern($patChildren[0]);
-			} elsif($colType->hasAttribute('pattern')) {
-				my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
-				if(defined($PAT)) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = $PAT;
-				} else {
-					Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
-				}
-			} else {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
-			}
+			$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
 		}
 		
 		# Default value
@@ -2803,6 +2856,28 @@ sub addColumns($;$) {
 	}
 }
 
+# resolveDefaultCalculatedValues parameters:
+#	(none)
+# the method resolves the references of default values to other columns
+sub resolveDefaultCalculatedValues() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_columns = $self->columns;
+	foreach my $column (values(%{$p_columns})) {
+		if(defined($column->columnType->default) && ref($column->columnType->default) eq 'SCALAR') {
+			my $defCalColumnName = ${$column->columnType->default};
+			
+			if(exists($p_columns->{$defCalColumnName})) {
+				$column->columnType->setCalculatedDefault($p_columns->{$defCalColumnName});
+			} else {
+				Carp::croak('Unknown column '.$defCalColumnName.' use for default value of column '.$column->name);
+			}
+		}
+	}
+}
+
 1;
 
 
@@ -3096,7 +3171,7 @@ sub parseConceptDomain($$) {
 
 	# And now, next method handles parsing of embedded concepts
 	# It must register the concepts in the concept domain as soon as possible
-	DCC::Model::Concept::parseConceptContainer($conceptDomainDecl,$retConceptDomain,$model);
+	DCC::Model::Concept::ParseConceptContainer($conceptDomainDecl,$retConceptDomain,$model);
 	
 	# Last, chicken and egg problem, part 2
 	# This step must be delayed, because we need a enumeration of all the concepts
@@ -3157,9 +3232,10 @@ sub registerConcept($) {
 package DCC::Model::Concept;
 
 # Prototypes of static methods
-sub parseConceptContainer($$$;$);
+sub ParseConceptContainer($$$;$);
 
-# parseConceptContainer paramereters:
+# Static method
+# ParseConceptContainer parameters:
 #	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
 #		or 'dcc:weak-concepts' instance
 #	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
@@ -3169,7 +3245,7 @@ sub parseConceptContainer($$$;$);
 #		all the (weak) concepts to be parsed from the container
 # it returns an array of DCC::Model::Concept instances, which are all the
 # concepts and weak concepts inside the input concept container
-sub parseConceptContainer($$$;$) {
+sub ParseConceptContainer($$$;$) {
 	my $conceptContainerDecl = shift;
 	my $conceptDomain = shift;
 	my $model = shift;
@@ -3183,7 +3259,7 @@ sub parseConceptContainer($$$;$) {
 		
 		# There should be only one!
 		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
-			DCC::Model::Concept::parseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept);
+			DCC::Model::Concept::ParseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept);
 			last;
 		}
 	}
@@ -3317,6 +3393,9 @@ sub parseConcept($$$;$$) {
 	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
 		push(@related,DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl));
 	}
+	
+	# Let's resolve the default values which depend on the context (i.e. the value of other columns)
+	$columnSet->resolveDefaultCalculatedValues();
 	
 	# name
 	# fullname

@@ -1548,6 +1548,9 @@ DEOF
 sub printConceptDomain($$$$$\%) {
 	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$O,$p_colors)=@_;
 	
+	
+	my $latexDefaultValue = exists($model->nullCV->annotations->hash->{default})?'\textbf{\textit{\color{black}'.latex_escape($model->nullCV->annotations->hash->{default}).'}}':'the default value';
+	
 	# The title
 	# TODO: consider using encode('latex',...) for the content
 	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
@@ -1670,17 +1673,19 @@ EOF
 		
 		# Now, let's print the documentation of each column
 		foreach my $column (@{$columnSet->columns}{@colorder}) {
+			my @descriptionItems = ();
 			# Preparing the documentation
 			my $description='';
 			foreach my $documentation (@{$column->description}) {
 				$description = "\n\n" if(length($description)>0);
 				$description .= latex_format($documentation);
 			}
+			push(@descriptionItems,$description);
 			
-			my $related='';
 			# Only references to concepts is non abstract concept domains
 			if(defined($column->refColumn) && (!RELEASE || !$column->refConcept->conceptDomain->isAbstract)) {
-				$related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
+				my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
+				push(@descriptionItems,$related);
 			}
 			
 			# The comment about the values
@@ -1689,8 +1694,15 @@ EOF
 				$values = '\\textit{'.latex_format($column->annotations->hash->{values}).'}';
 			}
 			
-			# Now the possible CV
 			my $columnType = $column->columnType;
+			
+			# The default value
+			if(defined($columnType->default)) {
+				my $related = '\textcolor{gray}{If it is set to '.$latexDefaultValue.', the default value for this column is '.(ref($columnType->default)?'from ':'').'\textbf{\texttt{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.$conceptDomain->name.'.'.$concept->name.'.'.$columnType->default->name.']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'}}}';
+				push(@descriptionItems,$related);
+			}
+			
+			# Now the possible CV
 			my $restriction = $columnType->restriction;
 			if(ref($restriction) eq 'DCC::Model::CV') {
 				# Is it an anonymous CV?
@@ -1702,6 +1714,7 @@ EOF
 					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 				}
 			}
+			push(@descriptionItems,$values)  if(length($values)>0);
 			
 			# What it goes to the column type column
 			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
@@ -1709,6 +1722,8 @@ EOF
 			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'DCC::Model::CompoundType');
 			
 			push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
+			
+			#push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(default \textbf{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.$conceptDomain->name.'.'.$concept->name.'.'.$columnType->default->name.']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'})}}')  if(defined($columnType->default));
 			
 			# Stringify it!
 			my $colTypeStr = (scalar(@colTypeLines)>1)?
@@ -1723,7 +1738,7 @@ EOF
 				'\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),
 				$colTypeStr,
 				$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED},
-				join("\n\n",$description,$related,$values)
+				join("\n\n",@descriptionItems)
 			),'\\\\ \hline',"\n";
 		}
 		# End of the table!

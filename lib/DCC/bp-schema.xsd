@@ -10,7 +10,28 @@
         </xs:restriction>
     </xs:simpleType>
     
+    <xs:simpleType name="columnNameType">
+        <xs:annotation>
+            <xs:documentation>column names can have only alphanumeric (and underscore) characters</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_]*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="conceptTypeNameType">
+        <xs:annotation>
+            <xs:documentation>column names can have only alphanumeric (and underscore) characters</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_-]*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
     <xs:simpleType name="symbolType">
+        <xs:annotation>
+            <xs:documentation>symbols can have only alphanumeric characters</xs:documentation>
+        </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:pattern value="[a-zA-Z][a-zA-Z0-9]*" />
         </xs:restriction>
@@ -25,6 +46,15 @@
     <xs:simpleType name="fileNameType">
         <xs:annotation>
             <xs:documentation>The filename pattern, which validates the right patterns</xs:documentation>
+            <xs:documentation>The format of the filenames for files containing knwoledge from a concept domain.
+                Inside these patterns, when something starts with $ (dollar), it is the name of an
+                annotation or a context-dependent value (like $$domain or $$concept). $$domain is the concept domain name,
+                and $$concept is the concept name.
+                When something starts with @ (at), it is the name of a previously declared controlled vocabulary.
+                When something starts with \ (backslash), it is the name of a previously declared pattern to validate against.
+                When something starts with % (percentage), it is the name of a type, used for item-type attribute in column type definition.
+                For instance: $$domain-$$concept--@B1-\ISODATE--%string.txt
+            </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:minLength value="1" />
@@ -32,18 +62,27 @@
         </xs:restriction>
     </xs:simpleType>
     
-    <!--
-        TODO: compound types are going to be refactored in the near future
     <xs:simpleType name="compoundTypePatternType">
         <xs:annotation>
             <xs:documentation>The compound type pattern pattern, which validates the right patterns</xs:documentation>
+            <xs:documentation>The format of the compound type patterns is a generalization of filename patterns.
+                The compound types can be understood as structures or hashes of facets,
+                with references to restrictions attached to those facets. Facets are described as
+                [decorator][facetName]:[restrictionId]
+                Inside these patterns, when a decorator is $ (dollar), restrictionId is the name of an
+                annotation or a context-dependent value (like $$bla:domain or $$bla:concept). $$domain is the concept domain name,
+                and $$concept is the concept name.
+                If decorator is @ (at), restrictionId is the name of a previously declared controlled vocabulary.
+                If decorator is \ (backslash), restrictionId is the name of a previously declared pattern to validate against.
+                If decorator is % (percentage), restrictionId is the name of a type, used for item-type attribute in column type definition.
+                For instance: @id:EGA;%url:string
+            </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:minLength value="1" />
             <xs:pattern value="[^\\$%@]*(([\\%@]|${1,2})([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)[^\\$%@]*)*" />
         </xs:restriction>
     </xs:simpleType>
-    -->
     
     <xs:simpleType name="colorType">
         <xs:annotation>
@@ -74,13 +113,13 @@
     </xs:simpleType>
 
     <xs:complexType name="conceptRefType">
-        <xs:attribute name="domain" type="bp:nonEmptyStringType" use="optional">
+        <xs:attribute name="domain" type="bp:symbolType" use="optional">
             <xs:annotation>
                 <xs:documentation>The domain where the concept is defined. By default, it is the same domain
                     as the one where the concept containing this related-to or inherits-from element is defined.</xs:documentation>
             </xs:annotation>
         </xs:attribute>
-        <xs:attribute name="concept" type="bp:nonEmptyStringType" use="required">
+        <xs:attribute name="concept" type="bp:symbolType" use="required">
             <xs:annotation>
                 <xs:documentation>The concept this one is related to or inherits from</xs:documentation>
             </xs:annotation>
@@ -113,7 +152,7 @@
                     </xs:annotation>
                     <xs:complexType>
                         <xs:sequence>
-                            <xs:element name="column" type="bp:nonEmptyStringType" minOccurs="1" maxOccurs="unbounded"/>
+                            <xs:element name="column" type="bp:columnNameType" minOccurs="1" maxOccurs="unbounded"/>
                         </xs:sequence>
                         <xs:attribute name="category">
                             <xs:simpleType>
@@ -349,6 +388,11 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                         <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
                                     </xs:annotation>
                                 </xs:element>
+                                <xs:element name="compound-type" type="bp:anonymousCompoundType">
+                                    <xs:annotation>
+                                        <xs:documentation>An anonymous compound type</xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
                             </xs:choice>
                         </xs:sequence>
                         <xs:attribute name="item-type" use="required">
@@ -400,29 +444,18 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="pattern" type="bp:nonEmptyStringType" use="optional">
+                        <xs:attribute name="pattern" type="bp:symbolType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="compound-template" use="optional">
+                        <xs:attribute name="compound-type" type="bp:conceptTypeNameType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>When this column holds a compound type, the template of the pieces, separated by the separators.
                                     For instance, if the compound separator is ';', then 'GENE;URL' is telling that the first piece is GENE, and the second is URL</xs:documentation>
                             </xs:annotation>
-                            <!-- Hack to be removed when compound-template is redesigned -->
-                            <xs:simpleType>
-                                <xs:restriction base="xs:string">
-                                    <xs:minLength value="3" />
-                                </xs:restriction>
-                            </xs:simpleType>
                         </xs:attribute>
-                        <xs:attribute name="compound-seps" type="bp:nonEmptyStringType" use="optional">
-                            <xs:annotation>
-                                <xs:documentation>This attribute must be set when the column is a compound type, it is a string whose characters are separators for the faceted values in the compound type.</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
-                        <xs:attribute name="cv" type="bp:nonEmptyStringType" use="optional">
+                        <xs:attribute name="cv" type="bp:symbolType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>The symbolic name of the controlled vocabulary used to validate the values for this column</xs:documentation>
                             </xs:annotation>
@@ -470,14 +503,14 @@ If if starts as $$, it tells the required or idref column with the value for thi
                             </xs:annotation>
                             <xs:simpleType>
                                 <xs:restriction base="xs:string">
-                                    <xs:pattern value="($$)?[^$].*"></xs:pattern>
+                                    <xs:pattern value="$$[a-zA-Z_][a-zA-Z0-9_]*|[^$].*"></xs:pattern>
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
-            <xs:attribute name="name" use="required" type="bp:nonEmptyStringType">
+            <xs:attribute name="name" use="required" type="bp:columnNameType">
                 <xs:annotation>
                     <xs:documentation>The name of this column data</xs:documentation>
                 </xs:annotation>
@@ -494,7 +527,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
             <xs:sequence>
                 <xs:element name="attr" minOccurs="1" maxOccurs="unbounded">
                     <xs:complexType>
-                        <xs:attribute name="name" type="bp:nonEmptyStringType" use="required">
+                        <xs:attribute name="name" type="bp:columnNameType" use="required">
                             <xs:annotation>
                                 <xs:documentation>An attribute whose values are used to build the key</xs:documentation>
                             </xs:annotation>
@@ -537,6 +570,29 @@ If if starts as $$, it tells the required or idref column with the value for thi
         
     </xs:element>
     
+    <xs:complexType name="anonymousCompoundType">
+        <xs:sequence>
+            <xs:element ref="bp:column" />
+            <xs:sequence minOccurs="0" maxOccurs="unbounded">
+                <xs:element name="sep" type="bp:nonEmptyStringType" />
+                <xs:element ref="bp:column" />
+            </xs:sequence>
+        </xs:sequence>
+    </xs:complexType>
+    
+    <xs:complexType name="namedCompoundType">
+        <xs:complexContent>
+            <xs:extension base="bp:anonymousCompoundType">
+                <xs:attribute name="name" use="optional" type="bp:conceptTypeNameType">
+                    <xs:annotation>
+                        <xs:documentation>The short name for this compound type.
+                            If it doesn't appear, then it is an anonymous compound type</xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+    
     <xs:element name="concept-type">
         <xs:annotation>
             <xs:documentation>Each concept type is associated to a collection, and as such, the concepts could have common attributes</xs:documentation>
@@ -556,13 +612,13 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
-            <xs:attribute name="name" use="optional" type="bp:nonEmptyStringType">
+            <xs:attribute name="name" use="optional" type="bp:conceptTypeNameType">
                 <xs:annotation>
                     <xs:documentation>The short name for this concept type.
                         If it doesn't appear, then it is an abstract concept type</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="collection" type="bp:nonEmptyStringType" use="optional">
+            <xs:attribute name="collection" type="bp:symbolType" use="optional">
                 <xs:annotation>
                     <xs:documentation>The collection which is going to hold the documents corresponding to concepts whose concept-type is this.
                         A main concept from a concept domain must have this attribute.
@@ -571,9 +627,9 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         Those weak concepts inherit the "collection" or "key" attribute from the identifying concept</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
-            <xs:attribute name="key" type="bp:nonEmptyStringType" use="optional">
+            <xs:attribute name="key" type="bp:columnNameType" use="optional">
                 <xs:annotation>
-                    <xs:documentation>The hash key which is going to hold the values following this concept set schema.
+                    <xs:documentation>The attribute/column name/hash key which is going to hold the values following this concept set schema.
                         The concepts using a concept-type with a "key" attribute must be a subconcept, because they are stored with this key on documents following the parent concept, and so cannot be a main concept from a concept domain.
                         If neither "collection" nor "key" attributes appear, the concepts using this concept type must be weak concepts.
                         Those weak concepts inherit the "collection" or "key" attribute from the identifying concept.
@@ -600,7 +656,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
             <xs:documentation></xs:documentation>
         </xs:annotation>
         <xs:complexType>
-            <xs:attribute name="name" type="bp:nonEmptyStringType" use="required">
+            <xs:attribute name="name" type="bp:conceptTypeNameType" use="required">
                 <xs:annotation>
                     <xs:documentation>The base type(s) this concept is based on. All the declared columns on the type(s) are for this concept, plus the additional ones declared here</xs:documentation>
                 </xs:annotation>
@@ -686,7 +742,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                         </xs:restriction>
                                     </xs:simpleType>
                                 </xs:attribute>
-                                <xs:attribute name="prefix" type="bp:nonEmptyStringType" use="optional">
+                                <xs:attribute name="prefix" type="bp:columnNameType" use="optional">
                                     <xs:annotation>
                                         <xs:documentation>The optional prefix to prepend to the column names when the idref columns are transferred</xs:documentation>
                                     </xs:annotation>
@@ -706,7 +762,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     </xs:complexType>
                 </xs:element>
             </xs:sequence>
-            <xs:attribute name="name" use="required" type="bp:nonEmptyStringType">
+            <xs:attribute name="name" use="required" type="bp:symbolType">
                 <xs:annotation>
                     <xs:documentation>The unique short name of this concept, within the domain (so it can be reused in different domains)</xs:documentation>
                 </xs:annotation>
@@ -741,7 +797,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                     <xs:sequence>
                                         <xs:element ref="bp:index" minOccurs="0" maxOccurs="unbounded"/>
                                     </xs:sequence>
-                                    <xs:attribute name="name" type="bp:nonEmptyStringType" use="required">
+                                    <xs:attribute name="name" type="bp:symbolType" use="required">
                                         <xs:annotation>
                                             <xs:documentation>The collection symbolic short name</xs:documentation>
                                         </xs:annotation>
@@ -794,7 +850,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                 <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="collection" type="bp:nonEmptyStringType" use="required">
+                        <xs:attribute name="collection" type="bp:symbolType" use="required">
                             <xs:annotation>
                                 <xs:documentation>The collection which is going to hold the CVs.</xs:documentation>
                             </xs:annotation>
@@ -845,6 +901,20 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
+                <xs:element name="compound-types">
+                    <xs:annotation>
+                        <xs:documentation>The different compound types of columns (to be revised/expanded)</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="compound-type" type="bp:namedCompoundType" minOccurs="0" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                    <xs:key name="compound-type-key">
+                        <xs:selector xpath=".//bp:compound-type"/>
+                        <xs:field xpath="@name"/>
+                    </xs:key>
+                </xs:element>
                 <xs:element name="concept-types">
                     <xs:annotation>
                         <xs:documentation>The different types of concepts (to be revised/expanded)</xs:documentation>
@@ -874,7 +944,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     <xs:complexType>
                         <xs:simpleContent>
                             <xs:extension base="bp:fileNameType">
-                                <xs:attribute name="name" use="required" type="bp:nonEmptyStringType">
+                                <xs:attribute name="name" use="required" type="bp:conceptTypeNameType">
                                     <xs:annotation>
                                         <xs:documentation>The name of this filename format</xs:documentation>
                                     </xs:annotation>
@@ -891,7 +961,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:sequence>
                             <xs:element ref="bp:concept" minOccurs="1" maxOccurs="unbounded"/>
                         </xs:sequence>
-                        <xs:attribute name="domain" type="bp:nonEmptyStringType" use="required">
+                        <xs:attribute name="domain" type="bp:symbolType" use="required">
                                 <xs:annotation>
                                     <xs:documentation>The unique short name, or key, of this concept domain.
 This key must appear in the filenames of the files containing concepts about the concept domain.
@@ -903,7 +973,7 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                                 <xs:documentation>A meaningful name for this domain ('Clinical Data', 'Gene Expression')</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="filename-format" type="bp:nonEmptyStringType" use="required">
+                        <xs:attribute name="filename-format" type="bp:conceptTypeNameType" use="required">
                             <xs:annotation>
                                 <xs:documentation>The name of the filename format to be used for this concept domain</xs:documentation>
                             </xs:annotation>
@@ -981,6 +1051,16 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath=".//bp:concept/bp:base-concept-type"/>
             <xs:field xpath="@name"/>
         </xs:keyref>
+        <xs:keyref refer="bp:compound-type-key" name="compound-type-key-ref">
+            <xs:selector xpath=".//bp:column-type"></xs:selector>
+            <xs:field xpath="@compound-type"></xs:field>
+        </xs:keyref>
+        <xs:keyref refer="bp:pattern-name-key" name="pattern-name-key-ref">
+            <xs:selector xpath=".//bp:column-type"></xs:selector>
+            <xs:field xpath="@pattern"></xs:field>
+        </xs:keyref>
+        
+        
         <!-- The key referred by this FK needed an XPath expression more complex than what XML Schema can understand
         <xs:keyref refer="bp:concept-key" name="related-to-fk">
             <xs:selector xpath=".//bp:concept/bp:related-to"></xs:selector>

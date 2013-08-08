@@ -118,8 +118,9 @@ This PDF contains a file attachment named `\BPMODELfilename', which is the versi
 \textit{(external controlled vocabulary SHA1 \CVSHA{})}}
 \end{center}
 
-The attachments can be extracted using tools like newer enough versions of Adobe Reader\textsuperscript{\textregistered\textcopyright},
-FoxIt Reader\textsuperscript{\textregistered\textcopyright}, Okular (from KDE) or pdfdetach (from poppler-utils)
+The attachments can be extracted using tools like newer enough versions of \href{http://get.adobe.com/reader/}{Adobe Reader}\textsuperscript{\textregistered\textcopyright},
+\href{http://www.foxitsoftware.com/downloads/}{FoxIt Reader}\textsuperscript{\textregistered\textcopyright}, \href{http://okular.kde.org/}{Okular} (integrated into KDE),
+\href{http://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/}{pdftk} (from PDFLabs) or pdfdetach (inside poppler-utils from \href{http://poppler.freedesktop.org/}{Poppler})
 \end{ocg}
 
 \frontmatter
