@@ -17,6 +17,7 @@ use Carp;
 use FindBin;
 use lib "$FindBin::Bin/lib";
 use DCC::Model;
+use DCC::Loader::CorrelatableConcept;
 
 use File::Temp;
 use Sys::CPU;
@@ -32,10 +33,6 @@ sub keyMatches($$);
 my $MONGOHOST = '127.0.0.1';
 my $MONGOPORT = 27017;
 my $MONGODB = 'mongotest';
-my $SORT = 'sort';
-my $GREP = 'grep';
-my $NUMCPUS = Sys::CPU::cpu_count();
-#my $PHYSMEM = Sys::MemInfo::totalmem();
 
 my $BMAX=20000;
 
@@ -124,6 +121,13 @@ sub sortCompressed($\%) {
 	return ($tmpout,\@coldesc,\@keypos);
 }
 
+# mapValues parameters:
+#	line:
+#	p_keypos: Array with the column numbers of the keys
+#	p_coldesc: Array with a coarse description of the columns (names + types)
+# It returns:
+#	entry: A reference to a hash with the entry -> keys are column names and their values, the values
+#	keyvals: A reference to an array, with the string value assigned to the columns
 sub mapValues($$$) {
 	my($line,$p_keypos,$p_coldesc)=@_;
 	# The cells
@@ -166,6 +170,38 @@ sub tiempo($$) {
 	return $next;
 }
 
+# It takes as input arrayrefs of [filename, DCC::Model::Concept]
+# The order of the concepts is crucial!!!
+sub batchCorrelatedInsert($@) {
+	my($coll,@corrConcepts)=@_;
+	
+	# Second, let's prepare the input data
+	my @correlatedConcepts = ();
+	my $prev = time();
+	foreach my $corrConcept (@corrConcepts) {
+		$corrConcept->prepare();
+		push(@correlatedConcepts,$corrConcept);
+		
+		$prev = tiempo('SORT-',$prev);
+	}
+	
+	# Third, let's read it in a correlated way, and let's insert it in batches!
+	# As headers and comments have been previously parsed
+	# and yanked when the contents were parsed, we don't
+	# have to bother about them
+	
+	
+	my($p_entry,$p_keyvals) = (undef,undef);
+	my $H = $correlatedConcepts[$#correlatedConcepts][0];
+	my $line = <$H>;
+	unless(eof($H)) {
+		chomp($line);
+		
+		
+		@{$correlatedConcepts[$#correlatedConcepts]}[1,2] = 
+	}
+}
+
 if(scalar(@ARGV)>=3) {
 	my $modelFile = shift(@ARGV);
 	my $primaryFile = shift(@ARGV);
@@ -196,6 +232,7 @@ if(scalar(@ARGV)>=3) {
 	unless(defined($primaryConceptType) && $primaryConceptType->isCollection && defined($primaryConceptType->collection)) {
 		Carp::croak("ERROR: Concept $primaryConceptName has no destination collection!");
 	}
+	# The destination collection
 	my $destColl = $primaryConceptType->collection->path;
 
 	unless(exists($conceptDomain->conceptHash->{$secondaryConceptName})) {
@@ -211,6 +248,12 @@ if(scalar(@ARGV)>=3) {
 	my $db = $connection->get_database($MONGODB);
 	my $coll = $db->get_collection($destColl);
 	
+	# This is hard-coded, but it will be dynamic
+	my $secondaryCorrConcept = DCC::Loader::CorrelatableConcept->new($secondaryFile,$secondaryConcept);
+	my $primaryCorrConcept = DCC::Loader::CorrelatableConcept->new($primaryFile,$primaryConcept,$secondaryCorrConcept);
+	
+	batchCorrelatedInsert($coll,$primaryCorrConcept,$secondaryCorrConcept);
+	
 	# Second, let's prepare the input data
 	my $prev = time();
 	my($primarySorted,$p_coldesc,$p_keypos) = sortCompressed($primaryFile,%P_DESC);
@@ -219,11 +262,8 @@ if(scalar(@ARGV)>=3) {
 	$prev = tiempo('SORT-S',$prev);
 	
 	# Third, let's read it in a correlated way, and let's insert it in batches!
-	my $P;
-	
-	if(open($P,'-|','gunzip','-c',$primarySorted->filename())) {
-		my $S;
-		if(open($S,'-|','gunzip','-c',$secondarySorted->filename())) {
+	if(open(my $P,'-|','gunzip','-c',$primarySorted->filename())) {
+		if(open(my $S,'-|','gunzip','-c',$secondarySorted->filename())) {
 			# As headers and comments have been previously parsed
 			# and yanked when the contents were parsed, we don't
 			# have to bother about them
@@ -309,3 +349,5 @@ if(scalar(@ARGV)>=3) {
 } else{
 	print STDERR "ERROR: This program takes as input a model and two files. The files are the primary data, and the secondary data";
 }
+
+

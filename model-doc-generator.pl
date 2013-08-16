@@ -19,10 +19,11 @@ use lib "$FindBin::Bin/lib";
 use DCC::Model;
 
 use constant PDFLATEX => 'xelatex';
-use constant RELEASE => 1;
 #use constant TERMSLIMIT => 200;
 use constant TERMSLIMIT => 10000;
 
+# Global variable (using my because our could have too much scope)
+my $RELEASE = 1;
 
 sub latex_escape($);
 sub latex_format($);
@@ -283,7 +284,7 @@ sub genSQL($$$) {
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			# Skipping abstract concept domains
-			next  if(RELEASE && $conceptDomain->isAbstract);
+			next  if($RELEASE && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -337,7 +338,7 @@ sub genSQL($$$) {
 						# Second position is the SQL type
 						# Third position holds the columns which depend on this CV
 						unless(exists($cvdump{$cvname})) {
-							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC],$SQLtype,[]];
+							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
 							push(@cvorder,$cvname);
 						}
 						
@@ -349,7 +350,7 @@ sub genSQL($$$) {
 					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
 					if(defined($columnType->default) && ref($columnType->default) eq '') {
 						my $default = $columnType->default;
-						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[DCC::Model::ISNOTNUMERIC]);
+						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC]);
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
@@ -566,7 +567,7 @@ TCVEOF
 
 		# And now, the FK restrictions from related concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
-			next  if(RELEASE && $conceptDomain->isAbstract);
+			next  if($RELEASE && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -580,7 +581,7 @@ TCVEOF
 					my $cycle = 1;
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping foreign keys to abstract concepts
-						next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
 						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
@@ -1098,7 +1099,6 @@ sub genConceptGraphNode($\@$) {
 	my $entry = $conceptDomain->name.'_'.$concept->name;
 	my $color = $entry;
 	
-	my @colorDef = ();
 	my $p_colorDef = $p_defaultColorDef;
 	if(exists($concept->annotations->hash->{color})) {
 		my @colorDef = parseColor($concept->annotations->hash->{color});
@@ -1132,7 +1132,7 @@ sub genConceptGraphNode($\@$) {
 			$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 		}
 		# Hyperlinking only to concrete concepts
-		my $refConcreteConcept = defined($column->refConcept) && (!RELEASE || !$column->refConcept->conceptDomain->isAbstract);
+		my $refConcreteConcept = defined($column->refConcept) && (!$RELEASE || !$column->refConcept->conceptDomain->isAbstract);
 		if($refConcreteConcept) {
 #			if(defined($column->refConcept) && defined($concept->idConcept) && $column->refConcept eq $concept->idConcept) {
 			$formattedColumnName = '\textit{'.$formattedColumnName.'}';
@@ -1172,14 +1172,18 @@ sub genConceptDomainGraph($$$$\%) {
 	my($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$p_colors)=@_;
 	
 	my @defaultColorDef = ('rgb',0,1,0);
-	if(exists($model->annotations->hash->{defaultColor})) {
+	if(exists($conceptDomain->annotations->hash->{defaultColor})) {
+		@defaultColorDef = parseColor($conceptDomain->annotations->hash->{defaultColor});
+	} elsif(exists($model->annotations->hash->{defaultColor})) {
 		@defaultColorDef = parseColor($model->annotations->hash->{defaultColor});
 	}
+
 #	node [shape=box,style="rounded corners,drop shadow"];
 
-	my $dotfile = $figurePrefix . '-domain-'. $conceptDomain->name.'.dot';
-	my $latexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'.latex';
-	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomain->name .'-standalone.latex';
+	my $conceptDomainName = $conceptDomain->name;
+	my $dotfile = $figurePrefix . '-domain-'.$conceptDomainName.'.dot';
+	my $latexfile = $figurePrefix . '-domain-'.$conceptDomainName.'.latex';
+	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomainName.'-standalone.latex';
 	if(open(my $DOT,'>:utf8',$dotfile)) {
 		print $DOT <<DEOF;
 digraph G {
@@ -1242,13 +1246,12 @@ DEOF
 DEOF
 		# The FK restrictions from related concepts
 		foreach my $concept (@{$conceptDomain->concepts}) {
-			my $conceptDomainName = $conceptDomain->name;
-			my $entry = $conceptDomainName.'_'.$concept->name;
 			# Let's visit each concept!
 			if(scalar(@{$concept->relatedConcepts})>0) {
+				my $entry = $conceptDomainName.'_'.$concept->name;
 				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 					# Not showing the graphs to abstract concept domains
-					next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+					next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 					
 					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 					
@@ -1287,6 +1290,38 @@ DEOF
 				}
 			}
 		}
+		
+		# And the specialization relations
+		my %parentConceptNodes = ();
+		my $parentEntryLines = '';
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			# There is one, so..... let's go!
+			if($concept->parentConcept) {
+				# Not showing the graphs to abstract concept domains
+				my $parentConcept = $concept->parentConcept;
+				next  if($RELEASE && $parentConcept->conceptDomain->isAbstract);
+				
+				my $entry = $conceptDomainName.'_'.$concept->name;
+				my $parentEntry = $parentConcept->conceptDomain->name.'_'.$parentConcept->name;
+				my $extendsEntry = $parentEntry.'__extends';
+				if(!exists($parentConceptNodes{$parentEntry})) {
+					# Let's create the node, if external
+					if($parentConcept->conceptDomain!=$conceptDomain) {
+						$parentEntryLines .= $parentEntry.' [shape="box",style="top color='.$parentEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$parentEntry.']{\Large{}'.latex_escape(exists($parentConcept->annotations->hash->{'altkey'})?$parentConcept->annotations->hash->{'altkey'}:$parentConcept->fullname).'}}"];'."\n";
+					}
+					
+					# Let's create the (d) node, along with its main arc
+					$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",texlbl="\texttt{d}"];'."\n";
+					$parentEntryLines .= $extendsEntry.' -> '.$parentEntry.' [style="double distance=2pt"];'."\n";
+					
+					$parentConceptNodes{$parentEntry} = undef;
+				}
+				
+				# Let's create the arc to the (d) node
+				$parentEntryLines .= $entry.' -> '.$extendsEntry."\n\n";
+			}
+		}
+		print $DOT $parentEntryLines  if(length($parentEntryLines)>0);
 		
 		# And now, let's close the graph
 		print $DOT <<DEOF;
@@ -1375,8 +1410,13 @@ DEOF
 		# First, the concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			# Skipping abstract concept domains
-			next  if(RELEASE && $conceptDomain->isAbstract);
+			next  if($RELEASE && $conceptDomain->isAbstract);
 			
+			my @defaultConceptDomainColorDef = @defaultColorDef;
+			if(exists($conceptDomain->annotations->hash->{defaultColor})) {
+				@defaultConceptDomainColorDef = parseColor($conceptDomain->annotations->hash->{defaultColor});
+			}
+
 			my $conceptDomainName = $conceptDomain->name;
 			my $conceptDomainFullName = $conceptDomain->fullname;
 			print $DOT <<DEOF;
@@ -1386,7 +1426,7 @@ DEOF
 			my %fks = ();
 			my @firstRank = ();
 			foreach my $concept (@{$conceptDomain->concepts}) {
-				my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultColorDef,$templateAbsDocDir);
+				my($dotline,$entry,$p_partialFKS,$color,$p_colorDef) = genConceptGraphNode($concept,@defaultConceptDomainColorDef,$templateAbsDocDir);
 				
 				print $DOT "\t",$dotline;
 				foreach my $refEntry (keys(%{$p_partialFKS})) {
@@ -1440,7 +1480,7 @@ DEOF
 				if(scalar(@{$concept->relatedConcepts})>0) {
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping relationships to abstract concept domains
-						next  if(RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
 						my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
 						
@@ -1484,6 +1524,39 @@ DEOF
 DEOF
 		}
 		
+		# And the specialization relations!!!
+		my %parentConceptNodes = ();
+		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			# Skipping abstract concept domains
+			next  if($RELEASE && $conceptDomain->isAbstract);
+			
+			my $conceptDomainName = $conceptDomain->name;
+			my $parentEntryLines = '';
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				# There is one, so..... let's go!
+				if($concept->parentConcept) {
+					# Not showing the graphs to abstract concept domains
+					my $parentConcept = $concept->parentConcept;
+					next  if($RELEASE && $parentConcept->conceptDomain->isAbstract);
+					
+					my $entry = $conceptDomainName.'_'.$concept->name;
+					my $parentEntry = $parentConcept->conceptDomain->name.'_'.$parentConcept->name;
+					my $extendsEntry = $parentEntry.'__extends';
+					if(!exists($parentConceptNodes{$parentEntry})) {
+						# Let's create the (d) node, along with its main arc
+						$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",texlbl="\texttt{d}"];'."\n";
+						$parentEntryLines .= $extendsEntry.' -> '.$parentEntry.' [style="double distance=2pt"];'."\n";
+						
+						$parentConceptNodes{$parentEntry} = undef;
+					}
+					
+					# Let's create the arc to the (d) node
+					$parentEntryLines .= $entry.' -> '.$extendsEntry."\n\n";
+				}
+			}
+			print $DOT $parentEntryLines  if(length($parentEntryLines)>0);
+		}
+
 		# And now, let's close the graph
 		print $DOT <<DEOF;
 }
@@ -1555,6 +1628,15 @@ sub printConceptDomain($$$$$\%) {
 	# TODO: consider using encode('latex',...) for the content
 	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
 	
+	# Printing embedded documentation in the model
+	foreach my $documentation (@{$conceptDomain->description}) {
+		printDescription($O,$documentation);
+	}
+	my $cDomainAnnotationSet = $conceptDomain->annotations;
+	my $cDomainAnnotations = $cDomainAnnotationSet->hash;
+	foreach my $annotKey (@{$cDomainAnnotationSet->order}) {
+		printDescription($O,$cDomainAnnotations->{$annotKey},$annotKey);
+	}
 	# The additional documentation
 	# The concept domain holds its additional documentation in a subdirectory with
 	# the same name as the concept domain
@@ -1683,7 +1765,7 @@ EOF
 			push(@descriptionItems,$description);
 			
 			# Only references to concepts is non abstract concept domains
-			if(defined($column->refColumn) && (!RELEASE || !$column->refConcept->conceptDomain->isAbstract)) {
+			if(defined($column->refColumn) && (!$RELEASE || !$column->refConcept->conceptDomain->isAbstract)) {
 				my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
 				push(@descriptionItems,$related);
 			}
@@ -1759,10 +1841,18 @@ EOF
 	
 }
 
+# Flag validation
 my $onlySQL = undef;
-if(scalar(@ARGV)>0 && $ARGV[0] eq '--sql') {
-	shift(@ARGV);
-	$onlySQL = 1;
+while(scalar(@ARGV)>0 && substr($ARGV[0],0,2) eq '--') {
+	my $flag = shift(@ARGV);
+	if($flag eq '--sql') {
+		$onlySQL = 1;
+	} elsif($flag eq '--showAbstract') {
+		$RELEASE = undef;
+	} else {
+		print STDERR "Unknown flag $flag. This program takes as input: optional --sql or --showAbstract flags, the model (in XML or BPModel formats), the documentation template directory and the output file\n";
+		exit 1;
+	}
 }
 
 if(scalar(@ARGV)>=3) {
@@ -1900,7 +1990,7 @@ TEOF
 	# Let's iterate over all the concept domains and their concepts
 	foreach my $conceptDomain (@{$model->conceptDomains}) {
 		# Skipping abstract concept domains on documentation generation
-		next  if(RELEASE && $conceptDomain->isAbstract);
+		next  if($RELEASE && $conceptDomain->isAbstract);
 		
 		printConceptDomain($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,$TO,%colors);
 	}

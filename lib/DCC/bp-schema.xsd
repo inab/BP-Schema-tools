@@ -959,6 +959,12 @@ If if starts as $$, it tells the required or idref column with the value for thi
                     </xs:annotation>
                     <xs:complexType>
                         <xs:sequence>
+                            <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation>The detailed description of this concept domain</xs:documentation>
+                                </xs:annotation>
+                            </xs:element>
+                            <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                             <xs:element ref="bp:concept" minOccurs="1" maxOccurs="unbounded"/>
                         </xs:sequence>
                         <xs:attribute name="domain" type="bp:symbolType" use="required">

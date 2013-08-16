@@ -29,6 +29,59 @@ use constant {
 	CVFORMAT_OBO	=>	1,
 };
 
+package DCC::Model::ColumnType;
+
+# These two are to prepare the values to be inserted
+use boolean;
+use DateTime::Format::ISO8601;
+
+# Static methods to prepare the data once read (data mangling)
+sub __integer($) {
+	$_[0]+0;
+}
+
+sub __decimal($) {
+	$_[0]+0.0
+}
+
+sub __string($) {
+	$_[0]
+}
+
+sub __boolean($) {
+	($_[0] =~ /^1|[tT](?:rue)?|[yY](?:es)?$/)?boolean::true:boolean::false
+}
+
+sub __timestamp($) {
+	DateTime::Format::ISO8601->parse_datetime($_[0]);
+}
+
+sub __duration($) {
+	$_[0]
+}
+
+# The pattern matching the contents for this type, and whether it is not a numeric type or yes
+use constant {
+	TYPEPATTERN	=>	0,
+	ISNOTNUMERIC	=>	1,
+	DATATYPEMANGLER	=>	2,
+	DATATYPECHECKER	=>	3,
+};
+
+use constant ItemTypes => {
+	'string'	=> [1,1,\&__string,undef],	# With this we avoid costly checks
+	'text'		=> [1,1,\&__string,undef],	# With this we avoid costly checks
+	'integer'	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef,\&__integer,undef],
+	'decimal'	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef,\&__decimal,undef],
+	'boolean'	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1,\&__boolean,undef],
+	'timestamp'	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1,\&__timestamp,undef],
+	'duration'	=> [qr/^$/,1,\&__duration,undef],
+	'compound'	=> [undef,1,undef,undef]
+};
+
+# Always valid value
+sub __true { 1 };
+
 # Main package
 package DCC::Model;
 #use version 0.77;
@@ -36,23 +89,6 @@ package DCC::Model;
 
 use constant DCCSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
-
-# The pattern matching the contents for this type, and whether it is not a numeric type or yes
-use constant {
-	TYPEPATTERN	=>	0,
-	ISNOTNUMERIC	=>	1
-};
-
-use constant ItemTypes => {
-	'string'	=> [1,1],	# With this we avoid costly checks
-	'text'		=> [1,1],	# With this we avoid costly checks
-	'integer'	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef],
-	'decimal'	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef],
-	'boolean'	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1],
-	'timestamp'	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1],
-	'duration'	=> [qr/^$/,1],
-	'compound'	=> [undef,1]
-};
 
 use constant {
 	BPMODEL_MODEL	=> 'bp-model.xml',
@@ -179,7 +215,15 @@ sub new($;$) {
 	}
 	
 	# Setting the internal system item types
-	%{$self->{TYPES}} = %{(ItemTypes)};
+	%{$self->{TYPES}} = %{(DCC::Model::ColumnType::ItemTypes)};
+	
+	# Setting the checks column
+	foreach my $p_itemType (values(%{$self->{TYPES}})) {
+		my $pattern = $p_itemType->[DCC::Model::ColumnType::TYPEPATTERN];
+		if(defined($pattern)) {
+			$p_itemType->[DCC::Model::ColumnType::DATATYPECHECKER] =  (ref($pattern) eq 'Regexp')?sub { $_[0] =~ $pattern }:\&DCC::Model::ColumnType::__true;
+		}
+	}
 	
 	# No error, so, let's process it!!
 	$self->digestModel($model);
@@ -1701,6 +1745,17 @@ sub isValid($) {
 	return exists($self->CV->{$cvkey});
 }
 
+# With this method a reference to a validator is given
+sub dataChecker {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return sub($) {
+		$self->isValid($_[0]);
+	};
+}
+
 # addTerm parameters:
 #	term: a DCC::Model::CV::Term instance, which can be a term or an alias
 sub addTerm($) {
@@ -2145,7 +2200,9 @@ sub parseCompoundType($$) {
 	# columnSet
 	# separators
 	# template
-	my @compoundType = (undef,undef,undef,undef);
+	# dataMangler
+	# isValid
+	my @compoundType = (undef,undef,undef,undef,undef,undef);
 	
 	# If it has name, then it has to have either a collection name or a key name
 	# either inline or inherited from the ancestors
@@ -2169,6 +2226,48 @@ sub parseCompoundType($$) {
 	}
 	
 	$compoundType[3] = $template;
+	
+	# the data mangler!
+	my @colMangler = map { [$_, $columnSet->columns->{$_}->columnType->dataMangler] } @{$columnSet->columnNames};
+	my @colChecker = map { $columnSet->columns->{$_}->columnType->dataChecker } @{$columnSet->columnNames};
+	$compoundType[4] = sub {
+		my %result = ();
+		
+		my $input = $_[0];
+		my $idx = 0;
+		foreach my $sep (@seps) {
+			my $limit = index($input,$sep);
+			if($limit!=-1) {
+				$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->(substr($input,0,$limit));
+				$input = substr($input,$limit+length($sep));
+			} else {
+				Carp::croak('Data mangler of '.$template.' complained parsing '.$_[0].' on facet '.$colMangler[$idx][0]);
+			}
+			$idx++;
+		}
+		# And last one
+		$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->($input);
+		
+		return  \%result;
+	};
+	
+	# And the subref for the dataChecker method
+	$compoundType[5] = sub {
+		my $input = $_[0];
+		my $idx = 0;
+		foreach my $sep (@seps) {
+			my $limit = index($input,$sep);
+			if($limit!=-1) {
+				return undef  unless($colChecker[$idx]->(substr($input,0,$limit)));
+				$input = substr($input,$limit+length($sep));
+			} else {
+				return undef;
+			}
+			$idx++;
+		}
+		# And last one
+		return $colChecker[$idx]->($input);
+	};
 	
 	# The returning values array
 	return bless(\@compoundType,$class);
@@ -2197,6 +2296,24 @@ sub tokens {
 	return $_[0]->[1]->columnNames;
 }
 
+sub dataMangler {
+	return $_[0]->[4];
+}
+
+sub dataChecker {
+	return $_[0]->[5];
+}
+
+sub isValid($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $val = shift;
+	
+	return $self->dataChecker->($val);
+}
+
 1;
 
 
@@ -2208,7 +2325,9 @@ use constant {
 	RESTRICTION	=>	2,
 	DEFAULT	=>	3,
 	ARRAYSEPS	=>	4,
-	ALLOWEDNULLS	=>	5
+	ALLOWEDNULLS	=>	5,
+	DATAMANGLER	=>	6,
+	DATACHECKER	=>	7,
 };
 
 use constant {
@@ -2248,6 +2367,8 @@ sub parseColumnType($$$) {
 	# default value
 	# array separators
 	# null values
+	# data mangler
+	# data checker
 	my @nullValues = ();
 	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
 	
@@ -2285,42 +2406,68 @@ sub parseColumnType($$$) {
 		
 		# First, is it a compound type?
 		my @compChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'compound-type');
-		my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
-		my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
-		if(scalar(@compChildren)>0 || (scalar(@compChildren)==0 && $colType->hasAttribute('compound-type'))) {
-			if(scalar(@compChildren)>0) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CompoundType->parseCompoundType($compChildren[0],$model);
+		if(defined($refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER]) && (scalar(@compChildren)>0 || $colType->hasAttribute('compound-type'))) {
+			Carp::croak("Column $columnName does not use a compound type, but it was declared");
+		} elsif(!defined($refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER]) && scalar(@compChildren)==0 && !$colType->hasAttribute('compound-type')) {
+			Carp::croak("Column $columnName uses a compound type, but it was not declared");
+		}
+		
+		# Second, setting the restrictions
+		my $restriction = undef;
+		if(scalar(@compChildren)>0) {
+			$restriction = DCC::Model::CompoundType->parseCompoundType($compChildren[0],$model);
+		} elsif($colType->hasAttribute('compound-type')) {
+			my $compoundType = $model->getCompoundType($colType->getAttribute('compound-type'));
+			if(defined($compoundType)) {
+				$restriction = $compoundType;
 			} else {
-				my $compoundType = $model->getCompoundType($colType->getAttribute('compound-type'));
-				if(defined($compoundType)) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = $compoundType;
-				} else {
-					Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
-				}
+				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
 			}
-		} elsif(scalar(@cvChildren)>0 || (scalar(@patChildren)==0 && $colType->hasAttribute('cv'))) {
+		} else {
+			my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
 			if(scalar(@cvChildren)>0) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::CV->parseCV($cvChildren[0],$model);
-			} else {
+				$restriction = DCC::Model::CV->parseCV($cvChildren[0],$model);
+			} elsif($colType->hasAttribute('cv')) {
 				my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
 				if(defined($namedCV)) {
-					$columnType[DCC::Model::ColumnType::RESTRICTION] = $namedCV;
+					$restriction = $namedCV;
 				} else {
 					Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
 				}
-			}
-		} elsif(scalar(@patChildren)>0) {
-			$columnType[DCC::Model::ColumnType::RESTRICTION] = DCC::Model::__parse_pattern($patChildren[0]);
-		} elsif($colType->hasAttribute('pattern')) {
-			my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
-			if(defined($PAT)) {
-				$columnType[DCC::Model::ColumnType::RESTRICTION] = $PAT;
 			} else {
-				Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
+				my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
+				if(scalar(@patChildren)>0) {
+					$restriction = DCC::Model::__parse_pattern($patChildren[0]);
+				} elsif($colType->hasAttribute('pattern')) {
+					my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
+					if(defined($PAT)) {
+						$restriction = $PAT;
+					} else {
+						Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
+					}
+				}
+			}
+		}
+		$columnType[DCC::Model::ColumnType::RESTRICTION] = $restriction;
+		
+		
+		# Setting up the data checker
+		my $dataChecker = \&__true;
+		
+		if(defined($restriction) && ref($restriction)) {
+			# We are covering here both compound type checks and CV checks
+			if($restriction->can('dataChecker')) {
+				$dataChecker = $restriction->dataChecker;
+			} elsif(ref($restriction) eq 'Regexp') {
+				$dataChecker = sub { $_[0] =~ $restriction };
 			}
 		} else {
-			$columnType[DCC::Model::ColumnType::RESTRICTION] = undef;
+			# Simple type checks
+			$dataChecker = $refItemType->[DCC::Model::ColumnType::DATATYPECHECKER]  if(defined($refItemType->[DCC::Model::ColumnType::DATATYPECHECKER]));
 		}
+		
+		# Setting up the data mangler
+		my $dataMangler = (defined($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER];
 		
 		# Default value
 		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
@@ -2333,7 +2480,8 @@ sub parseColumnType($$$) {
 			my $arraySeps = $colType->getAttribute('array-seps');
 			if(length($arraySeps) > 0) {
 				my %sepVal = ();
-				foreach my $sep (split(//,$arraySeps)) {
+				my @seps = split(//,$arraySeps);
+				foreach my $sep (@seps) {
 					if(exists($sepVal{$sep})) {
 						Carp::croak("Column $columnName has repeated the array separator $sep!")
 					}
@@ -2341,8 +2489,82 @@ sub parseColumnType($$$) {
 					$sepVal{$sep}=undef;
 				}
 				$columnType[DCC::Model::ColumnType::ARRAYSEPS] = $arraySeps;
+				
+				# Altering the data mangler in order to handle multidimensional matrices
+				my $itemDataMangler = $dataMangler;
+				$dataMangler = sub {
+					my @splittedVal = ($_[0]);
+					
+					my $result = [$_[0]];
+					my @frags = ($result);
+					my $countdown = $#seps;
+					foreach my $sep (@seps) {
+						my @newFrags = ();
+						foreach my $frag (@frags) {
+							foreach my $value (@{$frag}) {
+								my(@newVals)=split($sep,$value);
+								if($countdown==0) {
+									# Last step, so data mangling!!!!
+									foreach my $newVal (@newVals) {
+										$newVal = $itemDataMangler->($newVal);
+									}
+								}
+								my $newFrag = \@newVals;
+								
+								$value = $newFrag;
+								push(@newFrags,$newFrag);
+							}
+						}
+						if($countdown>0) {
+							@frags = @newFrags;
+							$countdown--;
+						}
+					}
+					
+					# The real result is here
+					return $result->[0];
+				};
+				
+				# Altering the data checker in order to handle multidimensional matrices
+				my $itemDataChecker = $dataChecker;
+				$dataChecker = sub {
+					my @splittedVal = ($_[0]);
+					
+					my $result = [$_[0]];
+					my @frags = ($result);
+					my $countdown = $#seps;
+					foreach my $sep (@seps) {
+						my @newFrags = ();
+						foreach my $frag (@frags) {
+							foreach my $value (@{$frag}) {
+								my(@newVals)=split($sep,$value);
+								if($countdown==0) {
+									# Last step, so data mangling!!!!
+									foreach my $newVal (@newVals) {
+										return undef  unless($itemDataChecker->($newVal));
+									}
+								}
+								my $newFrag = \@newVals;
+								
+								$value = $newFrag;
+								push(@newFrags,$newFrag);
+							}
+						}
+						if($countdown>0) {
+							@frags = @newFrags;
+							$countdown--;
+						}
+					}
+					
+					# The real result is here
+					return 1;
+				};
 			}
 		}
+		
+		# And now, the data mangler and checker
+		$columnType[DCC::Model::ColumnType::DATAMANGLER] = $dataMangler;
+		$columnType[DCC::Model::ColumnType::DATACHECKER] = $dataChecker;
 		
 		last;
 	}
@@ -2384,6 +2606,26 @@ sub allowedNulls {
 	return $_[0]->[DCC::Model::ColumnType::ALLOWEDNULLS];
 }
 
+# A subroutine for data mangling from tabular file
+sub dataMangler {
+	return $_[0]->[DCC::Model::ColumnType::DATAMANGLER];
+}
+
+# A subroutine for data checking from tabular file
+sub dataChecker {
+	return $_[0]->[DCC::Model::ColumnType::DATACHECKER];
+}
+
+sub isValid($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $val = shift;
+	
+	return $self->dataChecker->($val);
+}
+
 sub setDefault($) {
 	my $self = shift;
 	
@@ -2395,7 +2637,7 @@ sub setDefault($) {
 }
 
 # clone parameters:
-#	relatedConcept: optional, it signals whether to change cloned columnType
+#	relatedConcept: optional DCC::Model::RelatedConcept instance, it signals whether to change cloned columnType
 #		according to relatedConcept hints
 # it returns a DCC::Model::ColumnType instance
 sub clone(;$) {
@@ -2405,7 +2647,7 @@ sub clone(;$) {
 	
 	my $relatedConcept = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
+	Carp::croak('Input parameter must be a DCC::Model::RelatedConcept')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
 	
 	# Cloning this object
 	my @cloneData = @{$self};
@@ -2703,6 +2945,8 @@ sub combineColumnSets($@) {
 		foreach my $columnName (@{$columnSet->columnNames}) {
 			# We want to keep the original column order as far as possible
 			if(exists($columnDecl{$columnName})) {
+				# Same column, so skip!
+				next  if($columnDecl{$columnName} == $p_columns->{$columnName});
 				if($columnDecl{$columnName}->columnType->use eq DCC::Model::ColumnType::IDREF) {
 					next  if($dontCroak);
 					Carp::croak('It is not allowed to redefine column '.$columnName.'. It is an idref one!');
@@ -2952,7 +3196,7 @@ sub parseFilenameFormat($$) {
 		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::SimpleType') {
 			my $typeObject = $model->getItemType($2);
 			if(defined($typeObject)) {
-				my $type = $typeObject->[DCC::Model::TYPEPATTERN];
+				my $type = $typeObject->[DCC::Model::ColumnType::TYPEPATTERN];
 				if(defined($type)) {
 					$pattern .= '('.(($type->isa('Regexp'))?$type:'.+').')';
 					
@@ -3145,6 +3389,10 @@ sub parseConceptDomain($$) {
 	# full name of the concept domain
 	# Filename Pattern for the filenames
 	# An array with the concepts under this concept domain umbrella
+	# the concept hash
+	# The is abstract flag
+	# The descriptions
+	# The annotations
 	my @concepts = ();
 	my %conceptHash = ();
 	my @conceptDomain = (
@@ -3154,6 +3402,8 @@ sub parseConceptDomain($$) {
 		\@concepts,
 		\%conceptHash,
 		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 'true'))?1:undef,
+		DCC::Model::DescriptionSet->parseDescriptions($conceptDomainDecl),
+		DCC::Model::AnnotationSet->parseAnnotations($conceptDomainDecl),
 	);
 	
 	# Does the filename-pattern exist?
@@ -3175,6 +3425,7 @@ sub parseConceptDomain($$) {
 	
 	# Last, chicken and egg problem, part 2
 	# This step must be delayed, because we need a enumeration of all the concepts
+	# just at this point
 	$retConceptDomain->filenamePattern->registerConceptDomain($retConceptDomain);
 	
 	return $retConceptDomain;
@@ -3211,6 +3462,17 @@ sub conceptHash {
 # It returns 1 or undef, so it tells whether the whole concept domain is abstract or not
 sub isAbstract {
 	return $_[0]->[5];
+}
+
+# An instance of a DCC::Model::DescriptionSet, holding the documentation
+# for this Conceptdomain
+sub description {
+	return $_[0]->[6];
+}
+
+# A DCC::Model::AnnotationSet instance, with all the annotations
+sub annotations {
+	return $_[0]->[7];
 }
 
 # registerConcept parameters:
