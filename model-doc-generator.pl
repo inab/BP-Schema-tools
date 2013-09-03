@@ -124,6 +124,28 @@ sub latex_format($) {
 	return latex_escape_internal($paragraph);
 }
 
+sub entryName($;$) {
+	my($concept,$conceptDomainName)=@_;
+	
+	$conceptDomainName = $concept->conceptDomain->name  unless(defined($conceptDomainName));
+	
+	return $conceptDomainName.'_'.$concept->name;
+}
+
+sub labelPrefix($) {
+	my($concept)=@_;
+	
+	return $concept->conceptDomain->name.'.'.$concept->name.'.';
+}
+
+sub labelColumn($$) {
+	my($conceptOrLabelPrefix,$column)=@_;
+	
+	$conceptOrLabelPrefix = labelPrefix($conceptOrLabelPrefix)  if(ref($conceptOrLabelPrefix));
+	
+	return $conceptOrLabelPrefix.$column->name;
+}
+
 my %ABSTYPE2SQL = (
 	'string' => 'VARCHAR(1024)',
 	'text' => 'TEXT',
@@ -291,7 +313,7 @@ sub genSQL($$$) {
 			my %pcon = ();
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				#my $conceptName = $concept->name;
-				my $basename = $conceptDomainName.'_'.$concept->name;
+				my $basename = entryName($concept,$conceptDomainName);
 
 				my %fkselemrefs = ();
 				my @fkselem = ($basename,$concept,\%fkselemrefs);
@@ -311,7 +333,7 @@ sub genSQL($$$) {
 						$fksinit = 1;
 						
 						my $refConcept = $column->refConcept;
-						my $refBasename = $refConcept->conceptDomain->name . '_' . $refConcept->name;
+						my $refBasename = entryName($refConcept);
 						
 						$fkselemrefs{$refBasename} = [$refConcept,[]]  unless(exists($fkselemrefs{$refBasename}));
 						
@@ -371,11 +393,11 @@ sub genSQL($$$) {
 			
 			## Now, the FK restrictions from inheritance
 			#foreach my $concept (@{$conceptDomain->concepts}) {
-			#	my $basename = $conceptDomainName.'_'.$concept->name;
+			#	my $basename = entryName($concept,$conceptDomainName);
 			#	if(defined($concept->idConcept)) {
 			#		my $idConcept = $concept->idConcept;
 			#		my $refColnames = $idConcept->columnSet->idColumnNames;
-			#		my $idBasename = $conceptDomainName.'_'.$idConcept->name;
+			#		my $idBasename = entryName($idConcept,$conceptDomainName);
 			#		
 			#		# Referencing only concepts with keys
 			#		if(exists($pcon{$idBasename})) {
@@ -573,7 +595,7 @@ TCVEOF
 			
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				#my $conceptName = $concept->name;
-				my $basename = $conceptDomainName.'_'.$concept->name;
+				my $basename = entryName($concept,$conceptDomainName);
 				
 				# Let's visit each concept!
 				if(scalar(@{$concept->relatedConcepts})>0) {
@@ -583,7 +605,7 @@ TCVEOF
 						# Skipping foreign keys to abstract concepts
 						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
-						my $refBasename = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+						my $refBasename = entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
 						#print $SQL "\nCREATE INDEX ${basename}_FK${cycle}_${refBasename} ON $basename (",join(',',map { $_->name } @refColumns),");\n";
 						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
@@ -1096,7 +1118,7 @@ sub genConceptGraphNode($\@$) {
 	
 	my $conceptDomain = $concept->conceptDomain;
 	
-	my $entry = $conceptDomain->name.'_'.$concept->name;
+	my $entry = entryName($concept);
 	my $color = $entry;
 	
 	my $p_colorDef = $p_defaultColorDef;
@@ -1111,13 +1133,13 @@ sub genConceptGraphNode($\@$) {
 	my $latexAttribs = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}} \arrayrulecolor{Black} \begin{tabular}{ c l }  \multicolumn{2}{c}{\textbf{\hyperref[tab:'.$entry.']{\Large{}'.latex_escape(exists($concept->annotations->hash->{'altkey'})?$concept->annotations->hash->{'altkey'}:$concept->fullname).'}}} \\\\ \hline ';
 	
 	my @colOrder = fancyColumnOrdering($concept);
-	my $labelPrefix = $conceptDomain->name.'.'.$concept->name.'.';
+	my $labelPrefix = labelPrefix($concept);
 	
 	my %partialFKS = ();
 	$latexAttribs .= join(' \\\\ ',map {
 		my $column = $_;
 		if(defined($column->refColumn) && !defined($column->relatedConcept) && $column->refConcept->conceptDomain eq $conceptDomain) {
-			my $refEntry = $column->refConcept->conceptDomain->name . '_' . $column->refConcept->name;
+			my $refEntry = entryName($column->refConcept);
 			$partialFKS{$refEntry} = (defined($concept->idConcept) && $column->refConcept eq $concept->idConcept)?1:undef  unless(exists($partialFKS{$refEntry}));
 		}
 		my $formattedColumnName = latex_escape($column->name);
@@ -1146,10 +1168,10 @@ sub genConceptGraphNode($\@$) {
 		
 		my $image = defined($icon)?('\includegraphics[height=1.6ex]{'.$icon.'.pdf}'):'';
 		if($refConcreteConcept) {
-			$image = '\hyperref[column:'.join('.',$column->refConcept->conceptDomain->name,$column->refConcept->name,$column->refColumn->name).']{'.$image.'}';
+			$image = '\hyperref[column:'.labelColumn($column->refConcept,$column->refColumn).']{'.$image.'}';
 		}
 		
-		$image.' & \hyperref[column:'.($labelPrefix.$column->name).']{'.$formattedColumnName.'}'
+		$image.' & \hyperref[column:'.labelColumn($labelPrefix,$column).']{'.$formattedColumnName.'}'
 	} @{$columnSet->columns}{@colOrder});
 	
 	$latexAttribs .= ' \end{tabular}';
@@ -1205,8 +1227,10 @@ DEOF
 			}
 			$p_colors->{$color} = $p_colorDef;
 			
-			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
-				push(@firstRank,$entry);
+			if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain != $conceptDomain) {
+				if(!defined($concept->parentConcept) || $concept->parentConcept->conceptDomain != $conceptDomain) {
+					push(@firstRank,$entry);
+				}
 			}
 		}
 		
@@ -1248,12 +1272,12 @@ DEOF
 		foreach my $concept (@{$conceptDomain->concepts}) {
 			# Let's visit each concept!
 			if(scalar(@{$concept->relatedConcepts})>0) {
-				my $entry = $conceptDomainName.'_'.$concept->name;
+				my $entry = entryName($concept,$conceptDomainName);
 				foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 					# Not showing the graphs to abstract concept domains
 					next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 					
-					my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+					my $refEntry = entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 					
 					my $refEntryLine = '';
 					
@@ -1301,8 +1325,8 @@ DEOF
 				my $parentConcept = $concept->parentConcept;
 				next  if($RELEASE && $parentConcept->conceptDomain->isAbstract);
 				
-				my $entry = $conceptDomainName.'_'.$concept->name;
-				my $parentEntry = $parentConcept->conceptDomain->name.'_'.$parentConcept->name;
+				my $entry = entryName($concept,$conceptDomainName);
+				my $parentEntry = entryName($parentConcept);
 				my $extendsEntry = $parentEntry.'__extends';
 				if(!exists($parentConceptNodes{$parentEntry})) {
 					# Let's create the node, if external
@@ -1434,8 +1458,10 @@ DEOF
 				}
 				$p_colors->{$color} = $p_colorDef;
 			
-				if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain ne $conceptDomain) {
-					push(@firstRank,$entry);
+				if(!defined($concept->idConcept) || $concept->idConcept->conceptDomain != $conceptDomain) {
+					if(!defined($concept->parentConcept) || $concept->parentConcept->conceptDomain != $conceptDomain) {
+						push(@firstRank,$entry);
+					}
 				}
 			}
 			
@@ -1475,14 +1501,14 @@ DEOF
 			# The FK restrictions from related concepts
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				my $conceptDomainName = $conceptDomain->name;
-				my $entry = $conceptDomainName.'_'.$concept->name;
+				my $entry = entryName($concept,$conceptDomainName);
 				# Let's visit each concept!
 				if(scalar(@{$concept->relatedConcepts})>0) {
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping relationships to abstract concept domains
 						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
-						my $refEntry = (defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName).'_'.$relatedConcept->concept->name;
+						my $refEntry = entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 						
 						my $refEntryLine = '';
 						
@@ -1539,8 +1565,8 @@ DEOF
 					my $parentConcept = $concept->parentConcept;
 					next  if($RELEASE && $parentConcept->conceptDomain->isAbstract);
 					
-					my $entry = $conceptDomainName.'_'.$concept->name;
-					my $parentEntry = $parentConcept->conceptDomain->name.'_'.$parentConcept->name;
+					my $entry = entryName($concept,$conceptDomainName);
+					my $parentEntry = entryName($parentConcept);
 					my $extendsEntry = $parentEntry.'__extends';
 					if(!exists($parentConceptNodes{$parentEntry})) {
 						# Let's create the (d) node, along with its main arc
@@ -1626,7 +1652,9 @@ sub printConceptDomain($$$$$\%) {
 	
 	# The title
 	# TODO: consider using encode('latex',...) for the content
-	print $O '\\section{'.latex_format($conceptDomain->fullname).'}\\label{fea:'.$conceptDomain->name."}\n";
+	my $conceptDomainName = $conceptDomain->name;
+	my $conceptDomainFullname = $conceptDomain->fullname;
+	print $O '\\section{'.latex_format($conceptDomainFullname).'}\\label{fea:'.$conceptDomainName."}\n";
 	
 	# Printing embedded documentation in the model
 	foreach my $documentation (@{$conceptDomain->description}) {
@@ -1640,7 +1668,7 @@ sub printConceptDomain($$$$$\%) {
 	# The additional documentation
 	# The concept domain holds its additional documentation in a subdirectory with
 	# the same name as the concept domain
-	my $domainDocDir = File::Spec->catfile($model->documentationDir,$conceptDomain->name);
+	my $domainDocDir = File::Spec->catfile($model->documentationDir,$conceptDomainName);
 	my $docfile = File::Spec->catfile($domainDocDir,$TOCFilename);
 	
 	if(-f $docfile && -r $docfile){
@@ -1652,7 +1680,6 @@ sub printConceptDomain($$$$$\%) {
 	my($conceptDomainLatexFile,$figDomainPreamble) = genConceptDomainGraph($model,$conceptDomain,$figurePrefix,$templateAbsDocDir,%{$p_colors});
 	
 	my(undef,$absLaTeXDir,$relLaTeXFile) = File::Spec->splitpath($conceptDomainLatexFile);
-	my $conceptDomainFullname = $conceptDomain->fullname;
 	
 	#my $gdef = '\graphicspath{{'.File::Spec->catfile($templateAbsDocDir,ICONS_DIR).'/}}';
 	print $O <<GEOF;
@@ -1691,8 +1718,13 @@ GEOF
 			printDescription($O,$annotations->{$annotKey},$annotKey);
 		}
 		
+		# The relation to the extended concept
+		if($concept->parentConcept && (!$concept->parentConcept->conceptDomain->isAbstract || !$RELEASE)) {
+			print $O '\textit{This concept extends \hyperref[tab:'.entryName($concept->parentConcept).']{'.$concept->parentConcept->fullname.'}}'."\n";
+		}
+		
 		# The table header
-		my $entry = $conceptDomain->name.'_'.$concept->name;
+		my $entry = entryName($concept,$conceptDomainName);
 #	\begin{tabularx}{\linewidth}{|>{\setlength{\hsize}{.5\hsize}\raggedright\arraybackslash}X|c|c|p{0.5\textwidth}|}
 		print $O <<'EOF';
 {
@@ -1766,7 +1798,7 @@ EOF
 			
 			# Only references to concepts is non abstract concept domains
 			if(defined($column->refColumn) && (!$RELEASE || !$column->refConcept->conceptDomain->isAbstract)) {
-				my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.($column->refConcept->conceptDomain->name.'.'.$column->refConcept->name.'.'.$column->refColumn->name).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
+				my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'.labelColumn($column->refConcept,$column->refColumn).']{'.latex_escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
 				push(@descriptionItems,$related);
 			}
 			
@@ -1780,7 +1812,7 @@ EOF
 			
 			# The default value
 			if(defined($columnType->default)) {
-				my $related = '\textcolor{gray}{If it is set to '.$latexDefaultValue.', the default value for this column is '.(ref($columnType->default)?'from ':'').'\textbf{\texttt{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.$conceptDomain->name.'.'.$concept->name.'.'.$columnType->default->name.']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'}}}';
+				my $related = '\textcolor{gray}{If it is set to '.$latexDefaultValue.', the default value for this column is '.(ref($columnType->default)?'from ':'').'\textbf{\texttt{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.labelColumn($concept,$columnType->default).']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'}}}';
 				push(@descriptionItems,$related);
 			}
 			
@@ -1796,6 +1828,28 @@ EOF
 					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 				}
 			}
+			
+			### HACK ###
+			if(ref($restriction) eq 'DCC::Model::CompoundType') {
+				my $rColumnSet = $restriction->columnSet;
+				foreach my $rColumnName (@{$rColumnSet->columnNames}) {
+					my $rColumn = $rColumnSet->columns->{$rColumnName};
+					my $rRestr = $rColumn->columnType->restriction;
+					
+					if(defined($rRestr) && ref($rRestr) eq 'DCC::Model::CV') {
+						$values .= "\n".'\textit{\texttt{\textbf{'.$rColumnName.'}}}';
+						# Is it an anonymous CV?
+						my $numterms = scalar(@{$rRestr->order});
+						if($numterms < 20 && (!defined($rRestr->name) || (exists($rRestr->annotations->hash->{'disposition'}) && $rRestr->annotations->hash->{disposition} eq 'inline'))) {
+							$values .= "\n".processInlineCVTable($rRestr);
+						} else {
+							my $cv = $rRestr->name;
+							$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'.(($rRestr->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+						}
+					}
+				}
+			}
+			
 			push(@descriptionItems,$values)  if(length($values)>0);
 			
 			# What it goes to the column type column
@@ -1805,7 +1859,7 @@ EOF
 			
 			push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
 			
-			#push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(default \textbf{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.$conceptDomain->name.'.'.$concept->name.'.'.$columnType->default->name.']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'})}}')  if(defined($columnType->default));
+			#push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(default \textbf{\color{black}'.(ref($columnType->default)?('\hyperref[column:'.labelColumn($concept,$columnType->default).']{'.latex_escape($columnType->default->name).'}'):latex_escape($columnType->default)).'})}}')  if(defined($columnType->default));
 			
 			# Stringify it!
 			my $colTypeStr = (scalar(@colTypeLines)>1)?
@@ -1817,7 +1871,7 @@ EOF
 			;
 			
 			print $O join(' & ',
-				'\label{column:'.($conceptDomain->name.'.'.$concept->name.'.'.$column->name).'}'.latex_escape($column->name),
+				'\label{column:'.labelColumn($concept,$column).'}'.latex_escape($column->name),
 				$colTypeStr,
 				$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED},
 				join("\n\n",@descriptionItems)
@@ -1962,21 +2016,27 @@ if(scalar(@ARGV)>=3) {
 \\ifthenelse{\\modelheight<\\modelwidth}{%then
 % This is what must be done to center landscape figures
 \\begin{landscape}
-\\parbox[c][\\textwidth][s]{\\linewidth}{%
+%\\parbox[c][\\textwidth][s]{\\linewidth}{%
 \\vfill
 \\centering
-\\resizebox{\\linewidth}{!}{
+%\\resizebox{\\linewidth}{!}{
+%\\usebox{\\modelbox}
+%}
+\\maxsizebox{.95\\textwidth}{.95\\textheight}{
 \\usebox{\\modelbox}
 }
 \\captionof{figure}{Overview of $modelName data model}
 \\vfill
-}
+%}
 \\end{landscape}
 }{%else
 {
 \\vfill
 \\centering
-\\resizebox{\\linewidth}{!}{
+%\\resizebox{\\linewidth}{!}{
+%\\usebox{\\modelbox}
+%}
+\\maxsizebox{.95\\textwidth}{.95\\textheight}{
 \\usebox{\\modelbox}
 }
 \\captionof{figure}{Overview of $modelName data model}

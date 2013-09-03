@@ -3630,6 +3630,9 @@ sub parseConcept($$$;$$) {
 	# This array will contain the names of the related concepts
 	my @related = ();
 	
+	# This hash will contain the named related concepts
+	my %relPos = ();
+	
 	# Let's resolve inherited relations topic
 	if(defined($parentConcept)) {
 		# First, cloning
@@ -3638,6 +3641,7 @@ sub parseConcept($$$;$$) {
 		# Second, reparenting the RelatedConcept objects
 		# Third, updating inheritable related concepts
 		my $parentDomainChanges = $parentConceptDomain ne $conceptDomain;
+		my $pos = 0;
 		foreach my $relatedConcept (@related) {
 			# Setting the name of the concept domain, in the cases where it was relative
 			$relatedConcept->setConceptDomainName($parentConceptDomainName)  if($parentDomainChanges && !defined($relatedConcept->conceptDomainName));
@@ -3647,13 +3651,23 @@ sub parseConcept($$$;$$) {
 			if($relatedConcept->isInheritable && $relatedConcept->conceptName eq $parentConceptName && $relatedConceptDomainName eq $parentConceptDomainName) {
 				$relatedConcept->setConceptName($conceptName);
 			}
+			
+			# Registering it (if it could be substituted)
+			$relPos{$relatedConcept->id} = $pos  if(defined($relatedConcept->id));
+			$pos ++;
 		}
 		
 	}
 	
 	# Saving the related concepts (the ones explicitly declared within this concept)
 	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
-		push(@related,DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl));
+		my $parsedRelatedConcept = DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl);
+		if(defined($parsedRelatedConcept->id) && exists($relPos{$parsedRelatedConcept->id})) {
+			# TODO Validation of a legal substitution
+			$related[$relPos{$parsedRelatedConcept->id}] = $parsedRelatedConcept;
+		} else {
+			push(@related,$parsedRelatedConcept);
+		}
 	}
 	
 	# Let's resolve the default values which depend on the context (i.e. the value of other columns)
@@ -3805,6 +3819,7 @@ sub parseRelatedConcept($) {
 		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->getAttribute('partial-participation') eq 'true')?1:undef,
 		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef,
 		DCC::Model::AnnotationSet->parseAnnotations($relatedDecl),
+		$relatedDecl->hasAttribute('id')?$relatedDecl->getAttribute('id'):undef,
 	],$class);
 }
 
@@ -3853,6 +3868,11 @@ sub isInheritable {
 # It returns a DCC::Model::AnnotationSet instance
 sub annotations {
 	return $_[0]->[9];
+}
+
+# The id of this relation. If returns undef, it is an anonymous relation
+sub id {
+	return $_[0]->[10];
 }
 
 # setRelatedConcept parameters:

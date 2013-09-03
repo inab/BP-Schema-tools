@@ -62,6 +62,7 @@
         </xs:restriction>
     </xs:simpleType>
     
+    <!--
     <xs:simpleType name="compoundTypePatternType">
         <xs:annotation>
             <xs:documentation>The compound type pattern pattern, which validates the right patterns</xs:documentation>
@@ -83,6 +84,7 @@
             <xs:pattern value="[^\\$%@]*(([\\%@]|${1,2})([a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*)[^\\$%@]*)*" />
         </xs:restriction>
     </xs:simpleType>
+    -->
     
     <xs:simpleType name="colorType">
         <xs:annotation>
@@ -721,6 +723,11 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                         </xs:annotation>
                                     </xs:element>
                                 </xs:sequence>
+                                <xs:attribute name="id" use="optional" type="bp:conceptTypeNameType">
+                                    <xs:annotation>
+                                        <xs:documentation>The unique name of this relation. If it is repeated, it can be replaced</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
                                 <xs:attribute name="arity" use="optional" default="1">
                                     <xs:annotation>
                                         <xs:documentation>The arity of this directional relation</xs:documentation>
