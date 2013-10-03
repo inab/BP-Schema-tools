@@ -8,10 +8,21 @@ Core
 
 The bpmodel validator and the core libraries are written in Perl. Their requisites are:
 
-
+* Archive::Zip
+* DateTime::Format::ISO8601
+* Digest::SHA1
+* Encode
+* File::Basename
+* File::Copy
+* File::Spec
+* File::Temp
+* IO::File
 * JSON
+* Sys::CPU
+* XML::LibXML
+* URI
 
-Many of these modules could already be in your standard Perl installation
+Many of these modules could already be included in your standard Perl installation
 
 Documentation Generator
 -----------------------
