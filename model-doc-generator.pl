@@ -352,10 +352,10 @@ sub genSQL($$$) {
 						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
 						my $CV = $columnType->restriction;
 						
-						my $cvname = $CV->name;
+						my $cvname = $CV->id;
 						#$cvname = $basename.'_'.$column->name  unless(defined($cvname));
 						# Perl reference trick to get a number
-						$cvname = 'anon_'.($CV+0)  unless(defined($cvname));
+						#$cvname = 'anon_'.($CV+0)  unless(defined($cvname));
 						
 						# Second position is the SQL type
 						# Third position holds the columns which depend on this CV
