@@ -879,6 +879,31 @@ sub getConceptDomain($) {
 	return exists($self->{CDOMAINHASH}{$conceptDomainName})?$self->{CDOMAINHASH}{$conceptDomainName}:undef;
 }
 
+# matchConceptsFromFilename parameters:
+#	filename: A filename which we want to know about its corresponding concept
+sub matchConceptsFromFilename($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $filename = shift;
+	
+	# Let's be sure we have a relative path
+	$filename = File::Basename::basename($filename);
+	
+	my @matched = ();
+	foreach my $fpattern (values(%{$self->{FPATTERN}})) {
+		my($concept,$mappedValues,$extractedValues) = $fpattern->matchConcept($filename);
+		
+		# Did we match a concept?
+		if(defined($concept)) {
+			push(@matched,[$concept,$mappedValues,$extractedValues]);
+		}
+	}
+	
+	return (scalar(@matched)>0) ? \@matched : undef;
+}
+
 # It returns a DCC::Model::AnnotationSet instance
 sub annotations() {
 	my $self = shift;
@@ -2238,7 +2263,7 @@ sub parseConceptType($$;$) {
 			$ctype[2] = $ctypeElem->getAttribute('key');
 		} elsif(defined($ctypeParent) && defined($ctypeParent->path)) {
 			# Let's fetch the inheritance
-			$ctype[1] = $ctypeParent->isCollection;
+			$ctype[1] = $ctypeParent->goesToCollection;
 			$ctype[2] = $ctypeParent->path;
 		} else {
 			Carp::croak("A concept type must have a storage state of physical or virtual collection");
@@ -2263,7 +2288,7 @@ sub name {
 }
 
 # collection/key based (true,undef)
-sub isCollection {
+sub goesToCollection {
 	return $_[0]->[1];
 }
 
@@ -3477,7 +3502,7 @@ sub match($) {
 	
 	if(scalar(@values) ne scalar(@{$p_parts})) {
 		#Carp::croak("Matching filename $filename against pattern ".$self->pattern." did not work!");
-		return undef;
+		return wantarray ? (undef,undef) : undef;
 	}
 	
 	my %rethash = ();
@@ -3498,7 +3523,7 @@ sub match($) {
 		}
 	}
 	
-	return \%rethash;
+	return wantarray ? (\%rethash,\@values) : \%rethash;
 }
 
 # This method matches the concept related to this
@@ -3511,11 +3536,11 @@ sub matchConcept($) {
 	
 	my $retConcept = undef;
 	
-	my $extractedValues = $self->match($filename);
+	my($mappedValues,$extractedValues) = $self->match($filename);
 	
-	if(defined($extractedValues) && exists($extractedValues->{'$domain'}) && exists($extractedValues->{'$concept'})) {
-		my $domainName = $extractedValues->{'$domain'};
-		my $conceptName = $extractedValues->{'$concept'};
+	if(defined($mappedValues) && exists($mappedValues->{'$domain'}) && exists($mappedValues->{'$concept'})) {
+		my $domainName = $mappedValues->{'$domain'};
+		my $conceptName = $mappedValues->{'$concept'};
 		if(exists($self->registeredConceptDomains->{$domainName})) {
 			my $conceptDomain = $self->registeredConceptDomains->{$domainName};
 			if(exists($conceptDomain->conceptHash->{$conceptName})) {
@@ -3524,7 +3549,7 @@ sub matchConcept($) {
 		}
 	}
 	
-	return $retConcept;
+	return wantarray ? ($retConcept,$mappedValues,$extractedValues) : $retConcept;
 }
 
 # This method is called when new concept domains are being read,
@@ -3779,8 +3804,8 @@ sub parseConcept($$$;$$) {
 	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypesDecl)==0 && !defined($parentConcept));
 
 	my @basetypes = ();
-	foreach my $baseConceptType (@baseConceptTypesDecl) {
-		my $basetypeName = $baseConceptType->getAttribute('name');
+	foreach my $baseConceptTypeDecl (@baseConceptTypesDecl) {
+		my $basetypeName = $baseConceptTypeDecl->getAttribute('name');
 		my $basetype = $model->getConceptType($basetypeName);
 		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
 		
@@ -3820,7 +3845,7 @@ sub parseConcept($$$;$$) {
 	
 	# Adding the ones from the identifying concept
 	# (and later from the related stuff)
-	$columnSet->addColumns($idConcept->idColumns(! $idConcept->baseConceptType->isCollection,$weakAnnotations),1)  if(defined($idConcept));
+	$columnSet->addColumns($idConcept->idColumns(! $idConcept->goesToCollection,$weakAnnotations),1)  if(defined($idConcept));
 	
 	# This array will contain the names of the related concepts
 	my @related = ();
@@ -3922,6 +3947,36 @@ sub baseConceptType {
 	
 	my $p_arr = $self->baseConceptTypes;
 	return (scalar(@{$p_arr})>0)?$p_arr->[0]:undef;
+}
+
+# It tells whether the concept data should go to a collection or not
+sub goesToCollection {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $baseConceptType = $self->baseConceptType;
+	return defined($baseConceptType) ? $baseConceptType->goesToCollection : undef;
+}
+
+# If goesToCollection is true, it returns a DCC::Model::Collection instance
+sub collection {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $baseConceptType = $self->baseConceptType;
+	return (defined($baseConceptType) && $baseConceptType->goesToCollection) ? $baseConceptType->collection : undef;
+}
+
+# If goesToCollection is undef, it returns a string with the key
+sub key {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $baseConceptType = $self->baseConceptType;
+	return (defined($baseConceptType) && !$baseConceptType->goesToCollection) ? $baseConceptType->key : undef;
 }
 
 # The DCC::Model::ConceptDomain instance where this concept is defined

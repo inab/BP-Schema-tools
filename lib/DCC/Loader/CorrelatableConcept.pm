@@ -7,7 +7,7 @@ use DCC::Model;
 use File::Temp;
 use Sys::CPU;
 #use Sys::MemInfo;
-use Time::HiRes;
+#use Time::HiRes;
 
 # These two are to prepare the values to be inserted
 use boolean;
@@ -109,8 +109,10 @@ sub readColDesc($$$) {
 			# Mapping the columns in the file to the DCC::Model::Column instances in the DCC::Model::Concept
 			my %unmappedCols = map { $_ => undef } @{$columnSet->columnNames};
 			my $pos = 0;
+			my $effpos = 0;
 			my @coldesc = ();
 			my @colpos = ();
+			my @colMap = ();
 			foreach my $columnName (split(/\t/,$header)) {
 				my $typePrep = undef;
 				my $typeCheck = undef;
@@ -120,8 +122,13 @@ sub readColDesc($$$) {
 					# As it is being mapped, remove it from the hash!
 					delete($unmappedCols{$columnName});
 					
-					$pk_hash{$columnName}=$pos  if(exists($pk_hash{$columnName}));
-					$fk_hash{$columnName}=$pos  if(exists($fk_hash{$columnName}));
+					# Store it for column mapping when there are multiple files
+					push(@colMap,[$pos,$columnName]);
+					
+					# We have to use the effective position instead of the real one, because
+					# unknown columns have to be dropped
+					$pk_hash{$columnName}=$effpos  if(exists($pk_hash{$columnName}));
+					$fk_hash{$columnName}=$effpos  if(exists($fk_hash{$columnName}));
 					
 					# We are not going to translate and store foreign keys from correlated entries
 					unless($isSlave && exists($fk_hash{$columnName})) {
@@ -133,10 +140,12 @@ sub readColDesc($$$) {
 						$typePrep = undef  if($typePrep == \&DCC::Model::ColumnType::__string);
 						$typeCheck = undef  if($typeCheck == \&DCC::Model::ColumnType::__true);
 						push(@coldesc,[$columnName,$typePrep,$typeCheck,$column]);
-						push(@colpos,$pos);
+						push(@colpos,$effpos);
 					}
+					$effpos++;
 				} else {
 					Carp::cluck('Unknown column '.$columnName.' in file '.$infile);
+					$self->{hasUnknown} = 1;
 				}
 				$pos++;
 			}
@@ -148,6 +157,7 @@ sub readColDesc($$$) {
 			$self->{coldesc} = \@coldesc;
 			# Known columns to be stored
 			$self->{colpos} = \@colpos;
+			$self->{colMap} = \@colMap;
 			
 			# Mapping positions to keys (only if needed!)
 			$self->{PKkeypos} = ($hasPK && $isIdentifying) ? [@pk_hash{@{$columnSet->idColumnNames}}] : undef;
@@ -158,169 +168,86 @@ sub readColDesc($$$) {
 	}
 }
 
-
-# Static internal method
-# __SortCompressed parameters:
-#	infile: The input file
-#	p_keypos: The position of the ordering keys
-# It returns a File::Temp instance with the sorted file, compressed with gzip
-sub __SortCompressed($\@) {
-	my($infile,$p_keypos) = @_;
-	
-	my $sortkeys = join(' ',map { my $p = $_ + 1 ; '-k'.$p.','.$p } @{$p_keypos});
-	
-	my $tmpout = File::Temp->new();
-	my $tmpoutfilename = $tmpout->filename();
-	
-	# This command line reorders the lines
-	# keeping the comments and the header at the beginning of the file
-	# and sorting by the input keys
-	# my $cmd = "('$GREP' '^#' '$infile' ; '$GREP' -v '^#' '$infile' | head -n 1 ; '$GREP' -v '^#' '$infile' | tail -n +2 | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys ) | gzip -9c > '$tmpoutfilename'";
-	
-	# This command line reorders the lines
-	# pruning both the comments and header at the beginning of the file
-	my $cmd = "'$GREP' -v '^#' '$infile' | tail -n +2 | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys | gzip -9c > '$tmpoutfilename'";
-	
-	system($cmd);
-	
-	return $tmpout;
-}
-
-# sortCompressed parameters:
+# hasUnknownColumns parameters:
 #	(none)
-# This method sorts the files by the PK and FK columns (only if it is needed)
-sub sortCompressed($$) {
+# It returns true when the file has unknown columns
+sub hasUnknownColumns() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	Carp::croak('readColDesc must be called before '.(caller(0))[3].'!')  unless(exists($self->{coldesc}));
+	return exists($self->{hasUnknown});
+}
+
+# getColumnMap parameters:
+#	(none)
+# It returns the position -> column name mapping
+sub getColumnMap() {
+	my $self = shift;
 	
-	my $isIdentifying = shift;
-	my $isSlave = shift;
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	unless(exists($self->{__compressed})) {
-		# Identifying whether we have to do two sorts
-		my $distinctFK = 1;
-		if($self->{FKkeypos} && $self->{PKkeypos}) {
-			my $maxSteps = scalar(@{$self->{FKkeypos}});
-			if(scalar(@{$self->{PKkeypos}}) >= $maxSteps) {
-				$distinctFK = undef;
-				foreach my $keypos (0..($maxSteps-1)) {
-					if($self->{PKkeypos}[$keypos] != $self->{FKkeypos}[$keypos]) {
-						$distinctFK = 1;
-						Carp::croak('FATAL ERROR: Model does not correlate the identifying concept keys with the foreign keys!');
-						last;
-					}
+	return $self->{colMap};
+}
+
+# generatePipeSentence parameters:
+#	referenceFile: a DCC::Loader::CorrelatableConcept::File, whose columns are used as reference (optional)
+sub generatePipeSentence(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $referenceFile = shift;
+	
+	my $infile = $self->filename;
+	my $retval = [
+		[$GREP,'-v','^#',$infile],
+		['tail','-n','+2']
+	];
+	
+	my $mode = undef;
+	my $columns = undef;
+	if(defined($referenceFile) && $referenceFile!=$self) {
+		$mode = 'awk';
+		if(!$referenceFile->hasUnknownColumns && @{$self->getColumnMap} ~~ @{$referenceFile->getColumnMap}) {
+			$mode = undef;
+		} else {
+			# The order is setup by its master
+			my $refColMap = $referenceFile->getColumnMap();
+			my %colMapHash = map { $_->[1] => ($_->[0] + 1) } @{$self->getColumnMap()};
+			my @masterColMap = @colMapHash{map { $_->[1] } @{$refColMap}};
+			
+			# Is it monotonically ascendant?
+			my $prevCol = $masterColMap[0];
+			foreach my $col (@masterColMap[1..$#masterColMap]) {
+				if($prevCol >= $col) {
+					# As it is not, set up the awk mode
+					$columns = '$'.join(' , $',@masterColMap);
+					last;
+				} else {
+					$prevCol = $col;
 				}
 			}
-		}
-
-		my $infile = $self->filename;
-		$self->{PKsortedConceptFile} = $self->{PKkeypos} ? __SortCompressed($infile,@{$self->{PKkeypos}}) : undef;
-
-		if($self->{FKkeypos}) {
-			$self->{FKsortedConceptFile} = $distinctFK ? __SortCompressed($infile,@{$self->{FKkeypos}}) : $self->{PKsortedConceptFile};
-		} else {
-			$self->{FKsortedConceptFile} = undef;
-		}
-		
-		$self->{__compressed} = 1;
-	}
-}
-
-# prepare parameters:
-#	(none)
-# This method prepares the correlated model files to be optimally inserted
-# prefilling the internal buffers
-sub prepare() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	# Sorted Filehandle
-	# entry
-	# keyvals
-	# File::Temp sorted file
-	# Column description (arrayref)
-	# Position of PK columns
-	# Position of FK columns
-	
-	unless(exists($self->{__prepared})) {
-		# Assuring it is as it should be
-		$self->sortCompressed();
-		
-		my $infile = $self->filename;
-		
-		if($self->{PKsortedConceptFile} || $self->{FKsortedConceptFile}) {
-			my $sortedFilename = $self->{PKsortedConceptFile}?$self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
-			if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
-				$self->{H} = $H;
-			} else {
-				Carp::croak('ERROR: Unable to open sorted temp file(s) from '.$infile);
+			
+			unless(defined($columns)) {
+				$mode = 'cut';
+				$columns = join(',',@masterColMap);
 			}
-		} elsif(open(my $H,$infile)) {
-			# First, skip initial comments and header
-			$self->{H} = $H;
-			while(my $line = <$H>) {
-				next  if(substr($line,0,1) eq '#');
-				
-				# The header is here, so go out
-				last;
-			}
-		} else {
-			Carp::croak('ERROR: Unable to open file '.$infile);
 		}
-		$self->{entry} = undef;
-		$self->{PKkeyvals} = undef;
-		$self->{FKkeyvals} = undef;
-		
-		# As this is too expensive, we are doing it only once!
-		$self->{__prepared} = 1;
-		
-		# First read, prefilling so internal buffers
-		$self->nextLine();
-	}
-}
-
-# This method closes the open filehandles, but it does not erase the sorted temp file
-sub close() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	if(exists($self->{__prepared})) {
-		close($self->{H});
-		
-		delete($self->{H});
-		delete($self->{entry});
-		delete($self->{PKkeyvals});
-		delete($self->{FKkeyvals});
-		delete($self->{__prepared});
-		delete($self->{eof});
-	}
-}
-
-# This method reads one line from the file, mapping the values
-# It returns undef on eof, and sets eof flag
-sub nextLine() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	unless(exists($self->{eof})) {
-		my $H = $self->{H};
-		my $line = <$H>;
-		unless(eof($H)) {
-			chomp($line);
-			$self->mapValues(split(/\t/,$line));
-			return 1;
-		} else {
-			$self->{eof} = 1;
-		}
+	} elsif($self->hasUnknownColumns) {
+		$mode = 'cut';
+		$columns = join(',',map { $_->[0] + 1 } @{$self->getColumnMap()});
 	}
 	
-	return undef;
+	# It is not going to use itself as a reference! C'mon!
+	if($mode eq 'awk') {
+		push(@{$retval},['awk',"BEGIN{OFS=\"\\t\";} { print $columns;}"]);
+	} elsif($mode eq 'cut') {
+		# The instance sets up its order
+		push(@{$retval},['cut','-f',$columns]);
+	} # If there is no unknown column, then it is right!
+	
+	return $retval;
 }
 
 # checkValues parameters:
@@ -371,11 +298,61 @@ sub mapValues(\@) {
 		$pos++;
 	}
 	
+	# Saved for subsequent fetch
 	$self->{entry} = \%entry;
 	$self->{PKkeyvals} = $p_PKkeyvals;
 	$self->{FKkeyvals} = $p_FKkeyvals;
 }
 
+# entry parameters:
+#	(none)
+# It returns the last parsed entry, along with the PK values
+sub entry() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return ($self->{entry},$self->{PKkeyvals});
+}
+
+sub __keyMatches(\@\@) {
+	my($l,$r)=@_;
+	
+	return 0  if @{$l}~~@{$r};
+	my $maxidx = $#{$l};
+	
+	foreach my $pos (0..$maxidx) {
+		return -1  if($l->[$pos] lt $r->[$pos]);
+		return 1  if($l->[$pos] gt $r->[$pos]);
+	}
+	
+	return 0;
+}
+
+# keyMatches parameters:
+#	p_PK: The PK values from the parent correlated concept, used to compare
+#		against the FK values
+# It returns -1 if the PK is less than the FK, 0 if they match and 1 if the
+# PK is greater than FK
+sub keyMatches(\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_PK = shift;
+	
+	return __keyMatches(@{$p_PK},@{$self->{FKkeyvals}});
+}
+
+sub cleanup() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	delete($self->{entry});
+	delete($self->{PKkeyvals});
+	delete($self->{FKkeyvals});
+}
 
 
 package DCC::Loader::CorrelatableConcept;
@@ -460,6 +437,50 @@ sub readColDesc() {
 	#}
 }
 
+sub __inpipe2Str(\@) {
+	my($inpipe)=@_;
+	
+	# Translating the pipes structures into command-line
+	my $inpipeStr = join(' && ', map {
+		join(' | ', map {
+			"'".join("' '",@{$_})."'";
+		} @{$_});
+	} @{$inpipe});
+	
+	$inpipeStr = '( '.$inpipeStr.' )'  if(scalar(@{$inpipe}) > 1);
+	
+	return $inpipeStr;
+}
+
+# Static internal method
+# __SortCompressed parameters:
+#	inpipe: The input streams
+#	p_keypos: The position of the ordering keys
+# It returns a File::Temp instance with the sorted file, compressed with gzip
+sub __SortCompressed(\@\@) {
+	my($inpipe,$p_keypos) = @_;
+	
+	my $sortkeys = join(' ',map { my $p = $_ + 1 ; '-k'.$p.','.$p } @{$p_keypos});
+	
+	my $tmpout = File::Temp->new();
+	my $tmpoutfilename = $tmpout->filename();
+	
+	# This command line reorders the lines
+	# keeping the comments and the header at the beginning of the file
+	# and sorting by the input keys
+	# my $cmd = "('$GREP' '^#' '$infile' ; '$GREP' -v '^#' '$infile' | head -n 1 ; '$GREP' -v '^#' '$infile' | tail -n +2 | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys ) | gzip -9c > '$tmpoutfilename'";
+	
+	my $inpipeStr = __inpipe2Str(@{$inpipe});
+	
+	my $cmd = "$inpipeStr | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys | gzip -9c > '$tmpoutfilename'";
+	
+	system($cmd);
+	
+	return $tmpout;
+}
+
+# sortCompressed parameters:
+#	(none)
 # This method sorts the files by the PK and FK columns (only if it is needed)
 sub sortCompressed() {
 	my $self = shift;
@@ -468,77 +489,244 @@ sub sortCompressed() {
 	
 	# Assuring we have what we need
 	$self->readColDesc();
-
-	foreach my $p_conceptFile (@{$self->{conceptFiles}}) {
-		$p_conceptFile->sortCompressed();
-	}
 	
-	# And also for the slave correlated concepts
-	if(defined($self->{correlatedConcepts})) {
-		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
-			$correlatedConcept->sortCompressed();
+	unless(exists($self->{__compressed})) {
+		my $referenceConceptFile = $self->{conceptFiles}->[0];
+		$self->{referenceConceptFile} = $referenceConceptFile;
+		# We only have to sort when we have slave correlated concepts
+		# or when this correlatable concept is already a slave
+		if(defined($self->{correlatedConcepts}) || $self->isSlave()) {
+			# First, the internal sort
+			my @sortPipes = ();
+			push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
+			
+			# Primary and foreign key positions on the reference concept file
+			my $PKkeypos = $referenceConceptFile->{PKkeypos};
+			my $FKkeypos = $referenceConceptFile->{FKkeypos};
+			
+			my $isIdentifying = shift;
+			my $isSlave = shift;
+	
+			# Identifying whether we have to do two sorts
+			my $distinctFK = 1;
+			if($FKkeypos && $PKkeypos) {
+				my $maxSteps = scalar(@{$FKkeypos});
+				if(scalar(@{$PKkeypos}) >= $maxSteps) {
+					$distinctFK = undef;
+					foreach my $keypos (0..($maxSteps-1)) {
+						if($PKkeypos->[$keypos] != $FKkeypos->[$keypos]) {
+							$distinctFK = 1;
+							Carp::croak('FATAL ERROR: Model does not correlate the identifying concept keys with the foreign keys!');
+							last;
+						}
+					}
+				}
+			}
+
+			$self->{PKsortedConceptFile} = $PKkeypos ? __SortCompressed(@sortPipes,@{$PKkeypos}) : undef;
+
+			if($FKkeypos) {
+				$self->{FKsortedConceptFile} = $distinctFK ? __SortCompressed(@sortPipes,@{$FKkeypos}) : $self->{PKsortedConceptFile};
+			} else {
+				$self->{FKsortedConceptFile} = undef;
+			}
+			
+			$self->{__compressed} = 1;
+			
+			# And also for the slave correlated concepts
+			if(defined($self->{correlatedConcepts})) {
+				foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+					$correlatedConcept->sortCompressed();
+				}
+			}
+		} else {
+			$self->{__compressed} = undef;
 		}
 	}
 }
 
-# prepare parameters:
+# openFiles parameters:
 #	(none)
-# This method prepares the correlated model files to be optimally inserted
-sub prepare() {
+# This method prepares and opens the correlated model files to be optimally inserted
+# prefilling the internal buffers
+sub openFiles() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	foreach my $p_conceptFile (@{$self->{conceptFiles}}) {
-		$p_conceptFile->prepare();
-	}
+	# Sorted Filehandle
+	# entry
+	# keyvals
+	# File::Temp sorted file
+	# Column description (arrayref)
+	# Position of PK columns
+	# Position of FK columns
 	
-	# And also for the slave correlated concepts
-	if(defined($self->{correlatedConcepts})) {
-		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
-			$correlatedConcept->prepare();
-		}
-	}
-}
-
-# This method closes the open filehandles, but it does not erase the sorted temp file(s)
-sub close() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	foreach my $p_conceptFile (@{$self->{conceptFiles}}) {
-		$p_conceptFile->close();
-	}
-	
-	# And also for the slave correlated concepts
-	if(defined($self->{correlatedConcepts})) {
-		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
-			$correlatedConcept->close();
-		}
-	}
-}
-
-sub readEntry(;\@) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $p_PK = shift;
-	
-	if($self->isSlave()) {
+	unless(exists($self->{__prepared})) {
+		# Assuring it is as it should be
+		$self->sortCompressed();
 		
+		my $referenceConceptFile = exists($self->{referenceConceptFile}) ? $self->{referenceConceptFile} : undef;
+		if(defined($self->{__compressed})) {
+			# All the content is already preprocessed
+			my $sortedFilename = $self->{PKsortedConceptFile} ? $self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
+			if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
+				$self->{H} = $H;
+			} else {
+				Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->_jsonId);
+			}
+		} elsif(scalar(@{$self->{conceptFiles}}) > 0) {
+			# Content is spread over several files. Reclaim pipe expressions
+			my @sortPipes = ();
+			push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
+			
+			my $inpipeStr = __inpipe2Str(@sortPipes);
+			
+			if(open(my $H,'-|',$inpipeStr)) {
+				$self->{H} = $H;
+			} else {
+				Carp::croak('ERROR: Unable to open pipe '.$inpipeStr.' associated to concept '.$self->{concept}->_jsonId);
+			}
+		} elsif(open(my $H,'<',$referenceConceptFile->filename())) {
+			# Single file
+			# First, skip initial comments and header
+			$self->{H} = $H;
+			while(my $line = <$H>) {
+				next  if(substr($line,0,1) eq '#');
+				
+				# The header is here, so go out
+				last;
+			}
+		} else {
+			Carp::croak('ERROR: Unable to open file '.$referenceConceptFile->filename());
+		}
+		
+		# As this is too expensive, we are doing it only once!
+		$self->{__prepared} = 1;
+		
+		# First read, prefilling so internal buffers
+		$self->nextLine();
+		
+		# And now, the slave correlated concepts
+		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+			$correlatedConcept->openFiles();
+		}
 	}
+}
+
+# This method closes the open filehandles, but it does not erase the sorted temp file
+sub closeFiles() {
+	my $self = shift;
 	
-	my $H = $self->{H};
-	my $line = <$H>;
-	unless(eof($H)) {
-		chomp($line);
-		$self->mapValues(split(/\t/,$line));
-		return 1;
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	if(exists($self->{__prepared})) {
+		# The slave correlated concepts
+		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+			$correlatedConcept->closeFiles();
+		}
+		
+		close($self->{H});
+		
+		delete($self->{H});
+		$self->{referenceConceptFile}->cleanup();
+		delete($self->{__prepared});
+		delete($self->{eof});
+	}
+}
+
+# This method reads one line from the file, mapping the values
+# It returns undef on eof, and sets eof flag
+sub nextLine() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	unless(exists($self->{eof})) {
+		my $H = $self->{H};
+		my $line = <$H>;
+		unless(eof($H)) {
+			chomp($line);
+			$self->{referenceConceptFile}->mapValues(split(/\t/,$line));
+			return 1;
+		} else {
+			$self->{eof} = 1;
+		}
 	}
 	
 	return undef;
+}
+
+# readEntry parameters:
+#	readahead: Number of entries to read ahead, when there is no correlation to apply
+#	p_parentPK: reference to an array with the PK values from the parent to compare
+#		for correlation. Values must appear in the same order as the declared PK (and FK)
+sub readEntry(;$\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# No processing when there is nothing more to say
+	return undef  if(exists($self->{eof}));
+	
+	# The input parameters
+	my $readahead = shift;
+	$readahead = 1  unless(defined($readahead) && int($readahead)>0);
+	my $p_parentPK = shift;
+	
+	my @entries = ();
+	my @orphan = ();
+	
+	my $assembleEntry = sub() {
+		my($entry,$p_PK) = $self->{referenceConceptFile}->entry();
+		
+		# Now, let's read from the slaves
+		if(defined($self->{correlatedConcepts})) {
+			foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+				my $entorf = $correlatedConcept->readEntry(undef,$p_PK);
+				if(defined($entorf) && scalar(@{$entorf->[0]}) > 0) {
+					my $key = $correlatedConcept->concept->key();
+					unless(exists($entry->{$key})) {
+						$entry->{$key} = $entorf->[0];
+					} else {
+						push(@{$entry->{$key}},@{$entorf->[0]});
+					}
+				}
+			}
+		}
+		
+		return $entry;
+	};
+	
+	if($self->isSlave()) {
+		my $retval = 0;
+		while(($retval = $self->{referenceConceptFile}->keyMatches(@{$p_parentPK}))>=0) {
+			my $entry = $assembleEntry->();
+			
+			# Let's save the entry in the corresponding batch
+			if($retval >0) {
+				push(@orphan,$entry);
+			} else {
+				push(@entries,$entry);
+			}
+			
+			# We read next line, but we stop on eof
+			last  unless($self->nextLine());
+		}
+	} else {
+		# Let's read with no remorse
+		foreach my $record (1..$readahead) {
+			my $entry = $assembleEntry->();
+			
+			# Let's save the entry in the batch
+			push(@entries,$entry);
+			
+			# We read next line, but we stop on eof
+			last  unless($self->nextline());
+		}
+	}
+	
+	return [\@entries,\@orphan];
 }
 
 1;
