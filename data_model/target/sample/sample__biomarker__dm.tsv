@@ -1,6 +1,0 @@
-# name	required?	datatype	primary key?	index?
-donor_id_key	true	BIGINT	false	true
-specimen_id	true	TEXT	false	false
-biomarker_name	true	TEXT	false	false
-biomarker_threshold	true	TEXT	false	false
-biomarker_positive	true	VARCHAR(128)	false	false

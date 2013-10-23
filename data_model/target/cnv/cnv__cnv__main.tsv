@@ -1,5 +1,0 @@
-# name	required?	datatype	primary key?	index?
-cnv_id_key	true	BIGINT	true	true
-chromosome	true	VARCHAR(64)	false	true
-chromosome_start	true	INTEGER	false	true
-chromosome_end	true	INTEGER	false	true

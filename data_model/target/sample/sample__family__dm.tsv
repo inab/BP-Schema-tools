@@ -1,8 +1,0 @@
-# name	required?	datatype	primary key?	index?
-donor_id_key	true	BIGINT	false	true
-relationship_type	true	VARCHAR(128)	false	false
-relationship_type_other	true	TEXT	false	false
-relationship_sex	true	VARCHAR(128)	false	false
-relationship_age	true	INTEGER	false	false
-relationship_disease_icd10	true	TEXT	false	false
-relationship_disease	true	TEXT	false	false

@@ -1,3 +1,0 @@
-# name	required?	datatype	primary key?	index?
-snp_id_key	true	BIGINT	true	true
-xref_ensembl_var_id	false	VARCHAR(128)	false	true

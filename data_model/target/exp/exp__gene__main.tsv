@@ -1,8 +1,0 @@
-# name	required?	datatype	primary key?	index?
-gene_id_key	true	BIGINT	true	true
-gene_stable_id	true	VARCHAR(64)	false	true
-gene_chromosome	true	VARCHAR(64)	false	true
-gene_start	true	INTEGER	false	true
-gene_end	true	INTEGER	false	true
-gene_strand	true	INTEGER	false	true
-gene_symbol	false	VARCHAR(64)	false	false

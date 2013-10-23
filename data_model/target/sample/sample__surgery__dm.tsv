@@ -1,7 +1,0 @@
-# name	required?	datatype	primary key?	index?
-donor_id_key	true	BIGINT	false	true
-procedure_interval	true	INTEGER	false	false
-procedure_type	true	VARCHAR(128)	false	false
-procedure_site	true	VARCHAR(128)	false	false
-resection_status	true	VARCHAR(128)	false	false
-specimen_id	true	TEXT	false	false

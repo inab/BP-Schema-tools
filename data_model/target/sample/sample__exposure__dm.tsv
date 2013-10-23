@@ -1,5 +1,0 @@
-# name	required?	datatype	primary key?	index?
-donor_id_key	true	BIGINT	false	true
-exposure_type	true	TEXT	false	false
-exposure_intensity	true	INTEGER	false	false
-exposure_notes	true	TEXT	false	false

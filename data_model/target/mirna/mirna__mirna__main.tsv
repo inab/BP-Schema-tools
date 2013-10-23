@@ -1,4 +1,0 @@
-# name	required?	datatype	primary key?	index?
-mirna_id_key	true	BIGINT	true	true
-xref_mirbase_id	false	VARCHAR(64)	false	true
-mirna_seq	true	TEXT	false	false

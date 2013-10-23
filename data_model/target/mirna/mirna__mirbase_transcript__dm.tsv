@@ -1,9 +1,0 @@
-# name	required?	datatype	primary key?	index?
-mirna_id_key	true	BIGINT	false	true
-transcript_id	true	VARCHAR(256)	false	true
-overlap_type	true	VARCHAR(32)	false	false
-number	true	INTEGER	false	false
-transcript_source	true	VARCHAR(64)	false	false
-transcript_name	true	VARCHAR(128)	false	false
-gene_stable_id	true	VARCHAR(128)	false	false
-gene_symbol	false	VARCHAR(64)	false	false
