@@ -18,7 +18,7 @@ use Archive::Zip::MemberRead;
 use JSON;
 
 # Early subpackage constant declarations
-package DCC::Model::CV;
+package BP::Model::CV;
 
 use constant {
 	INLINE	=>	'inline',
@@ -32,7 +32,7 @@ use constant {
 	CVFORMAT_OBO	=>	1,
 };
 
-package DCC::Model::ColumnType;
+package BP::Model::ColumnType;
 
 # These two are to prepare the values to be inserted
 use boolean;
@@ -86,11 +86,11 @@ use constant ItemTypes => {
 sub __true { 1 };
 
 # Main package
-package DCC::Model;
+package BP::Model;
 #use version 0.77;
 #our $VERSION = qv('0.2.0');
 
-use constant DCCSchemaFilename => 'bp-schema.xsd';
+use constant BPSchemaFilename => 'bp-schema.xsd';
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';
 
 use constant {
@@ -155,7 +155,7 @@ sub new($;$) {
 		($expectedSchemaSHA1,$expectedModelSHA1,$expectedCvSHA1) = $self->readSignatures(@{(Signatures)});
 	}
 	
-	# DCC model XML file parsing
+	# BP model XML file parsing
 	my $model = undef;
 	my $modelSHA1 = undef;
 	my $SHA = Digest::SHA1->new;
@@ -218,13 +218,13 @@ sub new($;$) {
 	}
 	
 	# Setting the internal system item types
-	%{$self->{TYPES}} = %{(DCC::Model::ColumnType::ItemTypes)};
+	%{$self->{TYPES}} = %{(BP::Model::ColumnType::ItemTypes)};
 	
 	# Setting the checks column
 	foreach my $p_itemType (values(%{$self->{TYPES}})) {
-		my $pattern = $p_itemType->[DCC::Model::ColumnType::TYPEPATTERN];
+		my $pattern = $p_itemType->[BP::Model::ColumnType::TYPEPATTERN];
 		if(defined($pattern)) {
-			$p_itemType->[DCC::Model::ColumnType::DATATYPECHECKER] =  (ref($pattern) eq 'Regexp')?sub { $_[0] =~ $pattern }:\&DCC::Model::ColumnType::__true;
+			$p_itemType->[BP::Model::ColumnType::DATATYPECHECKER] =  (ref($pattern) eq 'Regexp')?sub { $_[0] =~ $pattern }:\&BP::Model::ColumnType::__true;
 		}
 	}
 	
@@ -296,7 +296,7 @@ sub librarySchemaPath() {
 		} else {
 			my $schemaDir = File::Basename::dirname(__FILE__);
 			
-			$self->{_schemaPath} = File::Spec->catfile($schemaDir,DCCSchemaFilename);
+			$self->{_schemaPath} = File::Spec->catfile($schemaDir,BPSchemaFilename);
 		}
 	}
 	
@@ -464,9 +464,9 @@ sub saveBPModel($) {
 ####################
 
 # digestModel parameters:
-#	model: XML::LibXML::Document node following DCC schema
+#	model: XML::LibXML::Document node following BP schema
 # The method parses the input XML::LibXML::Document and fills in the
-# internal memory structures used to represent a DCC model
+# internal memory structures used to represent a BP model
 sub digestModel($) {
 	my $self = shift;
 	
@@ -490,12 +490,12 @@ sub digestModel($) {
 	$self->{_docsDir} = $docsDir;
 	
 	# Now, let's store the annotations
-	$self->{ANNOTATIONS} = DCC::Model::AnnotationSet->parseAnnotations($modelRoot);
+	$self->{ANNOTATIONS} = BP::Model::AnnotationSet->parseAnnotations($modelRoot);
 	
 	# Now, the collection domain
 	my $p_collections = undef;
-	foreach my $colDom ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'collection-domain')) {
-		$p_collections = $self->{COLLECTIONS} = DCC::Model::Collection::parseCollections($colDom);
+	foreach my $colDom ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'collection-domain')) {
+		$p_collections = $self->{COLLECTIONS} = BP::Model::Collection::parseCollections($colDom);
 		last;
 	}
 	
@@ -504,7 +504,7 @@ sub digestModel($) {
 	my @cvArray = ();
 	$self->{CV} = \%cv;
 	$self->{CVARRAY} = \@cvArray;
-	foreach my $cvDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv-declarations')) {
+	foreach my $cvDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'cv-declarations')) {
 		$self->{_cvDecl} = $cvDecl;
 		# Let's setup the path to disk stored CVs
 		my $cvdir = undef;
@@ -528,7 +528,7 @@ sub digestModel($) {
 		foreach my $cv ($cvDecl->childNodes()) {
 			next  unless($cv->nodeType == XML::LibXML::XML_ELEMENT_NODE && $cv->localname eq 'cv');
 			
-			my $p_structCV = DCC::Model::CV->parseCV($cv,$model);
+			my $p_structCV = BP::Model::CV->parseCV($cv,$model);
 			
 			# Let's store named CVs here, not anonymous ones
 			if(defined($p_structCV->name)) {
@@ -540,11 +540,11 @@ sub digestModel($) {
 		last;
 	}
 	
-	foreach my $nullDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null-values')) {
-		my $p_nullCV = DCC::Model::CV->parseCV($nullDecl,$model);
+	foreach my $nullDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'null-values')) {
+		my $p_nullCV = BP::Model::CV->parseCV($nullDecl,$model);
 		
 		# Let's store the controlled vocabulary for nulls
-		# as a DCC::Model::CV
+		# as a BP::Model::CV
 		$self->{NULLCV} = $p_nullCV;
 	}
 	
@@ -552,20 +552,20 @@ sub digestModel($) {
 	$self->{_cvDir} = $self->{_modelDir}  unless(exists($self->{_cvDir}));
 	
 	# Now, the pattern declarations
-	foreach my $patternDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern-declarations')) {
-		$self->{PATTERNS} = DCC::Model::parsePatterns($patternDecl);		
+	foreach my $patternDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'pattern-declarations')) {
+		$self->{PATTERNS} = BP::Model::parsePatterns($patternDecl);		
 		last;
 	}
 	
 	# And we start with the concept types
 	my %compoundTypes = ();
 	$self->{COMPOUNDTYPES} = \%compoundTypes;
-	foreach my $compoundTypesDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'compound-types')) {
+	foreach my $compoundTypesDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'compound-types')) {
 		foreach my $compoundTypeDecl ($compoundTypesDecl->childNodes()) {
 			next  unless($compoundTypeDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $compoundTypeDecl->localname eq 'compound-type');
 			
 			# We need to give the model because a compound type could use in one of its facets a previously declared compound type
-			my $compoundType = DCC::Model::CompoundType->parseCompoundType($compoundTypeDecl,$model);
+			my $compoundType = BP::Model::CompoundType->parseCompoundType($compoundTypeDecl,$model);
 			$compoundTypes{$compoundType->name} = $compoundType;
 		}
 		
@@ -575,11 +575,11 @@ sub digestModel($) {
 	# And we start with the concept types
 	my %conceptTypes = ();
 	$self->{CTYPES} = \%conceptTypes;
-	foreach my $conceptTypesDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept-types')) {
+	foreach my $conceptTypesDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'concept-types')) {
 		foreach my $ctype ($conceptTypesDecl->childNodes()) {
 			next  unless($ctype->nodeType == XML::LibXML::XML_ELEMENT_NODE && $ctype->localname eq 'concept-type');
 			
-			my @conceptTypeLineage = DCC::Model::ConceptType::parseConceptTypeLineage($ctype,$model);
+			my @conceptTypeLineage = BP::Model::ConceptType::parseConceptTypeLineage($ctype,$model);
 			
 			# Now, let's store the concrete (non-anonymous, abstract) concept types
 			map { $conceptTypes{$_->name} = $_  if(defined($_->name)); } @conceptTypeLineage;
@@ -592,8 +592,8 @@ sub digestModel($) {
 	my %filenameFormats = ();
 	$self->{FPATTERN} = \%filenameFormats;
 	
-	foreach my $filenameFormatDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'filename-format')) {
-		my $filenameFormat = DCC::Model::FilenamePattern->parseFilenameFormat($filenameFormatDecl,$model);
+	foreach my $filenameFormatDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'filename-format')) {
+		my $filenameFormat = BP::Model::FilenamePattern->parseFilenameFormat($filenameFormatDecl,$model);
 		
 		$filenameFormats{$filenameFormat->name} = $filenameFormat;
 	}
@@ -603,8 +603,8 @@ sub digestModel($) {
 	my %conceptDomainHash = ();
 	$self->{CDOMAINS} = \@conceptDomains;
 	$self->{CDOMAINHASH} = \%conceptDomainHash;
-	foreach my $conceptDomainDecl ($modelRoot->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept-domain')) {
-		my $conceptDomain = DCC::Model::ConceptDomain->parseConceptDomain($conceptDomainDecl,$model);
+	foreach my $conceptDomainDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'concept-domain')) {
+		my $conceptDomain = BP::Model::ConceptDomain->parseConceptDomain($conceptDomainDecl,$model);
 		
 		push(@conceptDomains,$conceptDomain);
 		$conceptDomainHash{$conceptDomain->name} = $conceptDomain;
@@ -706,7 +706,7 @@ sub digestCVline($) {
 
 # registerCVfile parameters:
 #	cv: a XML::LibXML::Element 'dcc:cv' node
-# returns a DCC::Model::CV array reference, with all the controlled vocabulary
+# returns a BP::Model::CV array reference, with all the controlled vocabulary
 # stored inside.
 # If the CV is in an external file, this method reads it, and registers it to save it later.
 # If the CV is in an external URI, this method only checks whether it is available (TBD)
@@ -857,7 +857,7 @@ sub getFilenamePattern($) {
 	return exists($self->{FPATTERN}{$name})?$self->{FPATTERN}{$name}:undef;
 }
 
-# It returns an array with DCC::Model::ConceptDomain instances (all the concept domains)
+# It returns an array with BP::Model::ConceptDomain instances (all the concept domains)
 sub conceptDomains() {
 	my $self = shift;
 	
@@ -868,7 +868,7 @@ sub conceptDomains() {
 
 # getConceptDomain parameters:
 #	conceptDomainName: The name of the concept domain to look for
-# returns a DCC::Model::ConceptDomain object or undef (if it does not exist)
+# returns a BP::Model::ConceptDomain object or undef (if it does not exist)
 sub getConceptDomain($) {
 	my $self = shift;
 	
@@ -904,7 +904,7 @@ sub matchConceptsFromFilename($) {
 	return (scalar(@matched)>0) ? \@matched : undef;
 }
 
-# It returns a DCC::Model::AnnotationSet instance
+# It returns a BP::Model::AnnotationSet instance
 sub annotations() {
 	my $self = shift;
 	
@@ -982,7 +982,7 @@ sub documentationDir() {
 	return $self->{_docsDir};
 }
 
-# A reference to an array of DCC::Model::CV instances
+# A reference to an array of BP::Model::CV instances
 sub namedCVs() {
 	my $self = shift;
 	
@@ -991,7 +991,7 @@ sub namedCVs() {
 	return $self->{CVARRAY};
 }
 
-# A reference to a DCC::Model::CV instance, for the valid null values for this model
+# A reference to a BP::Model::CV instance, for the valid null values for this model
 sub nullCV() {
 	my $self = shift;
 	
@@ -1034,7 +1034,7 @@ sub TO_JSON() {
 
 # And now, the helpers for the different pseudo-packages
 
-package DCC::Model::Collection;
+package BP::Model::Collection;
 
 sub parseCollections($) {
 	my $colDom = shift;
@@ -1043,7 +1043,7 @@ sub parseCollections($) {
 	foreach my $coll ($colDom->childNodes()) {
 		next  unless($coll->nodeType == XML::LibXML::XML_ELEMENT_NODE && $coll->localname eq 'collection');
 		
-		my $collection = DCC::Model::Collection->parseCollection($coll);
+		my $collection = BP::Model::Collection->parseCollection($coll);
 		$collections{$collection->name} = $collection;
 	}
 	
@@ -1059,7 +1059,7 @@ sub parseCollection($) {
 	my $coll = shift;
 	
 	# Collection name, collection path, index declarations
-	my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),DCC::Model::Index::parseIndexes($coll));
+	my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),BP::Model::Index::parseIndexes($coll));
 	return bless(\@collection,$class);
 }
 
@@ -1097,19 +1097,19 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::Index;
+package BP::Model::Index;
 
 # This is an static method.
 # parseIndexes parameters:
 #	container: a XML::LibXML::Element container of 'dcc:index' elements
-# returns an array reference, containing DCC::Model::Index instances
+# returns an array reference, containing BP::Model::Index instances
 sub parseIndexes($) {
 	my $container = shift;
 	
 	# And the index declarations for this collection
 	my @indexes = ();
-	foreach my $ind ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'index')) {
-		push(@indexes,DCC::Model::Index->parseIndex($ind));
+	foreach my $ind ($container->getChildrenByTagNameNS(BP::Model::dccNamespace,'index')) {
+		push(@indexes,BP::Model::Index->parseIndex($ind));
 	}
 	
 	return \@indexes;
@@ -1118,7 +1118,7 @@ sub parseIndexes($) {
 # This is the constructor.
 # parseIndex parameters:
 #	ind: a XML::LibXML::Element which is a 'dcc:index'
-# returns a DCC::Model::Index instance
+# returns a BP::Model::Index instance
 sub parseIndex($) {
 	my $class = shift;
 	
@@ -1162,7 +1162,7 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::DescriptionSet;
+package BP::Model::DescriptionSet;
 
 # This is the empty constructor.
 sub new() {
@@ -1176,7 +1176,7 @@ sub new() {
 # This is the constructor.
 # parseDescriptions parameters:
 #	container: a XML::LibXML::Element container of 'dcc:description' elements
-# returns a DCC::Model::DescriptionSet array reference, containing the contents of all
+# returns a BP::Model::DescriptionSet array reference, containing the contents of all
 # the 'dcc:description' XML elements found
 sub parseDescriptions($) {
 	my $self = shift;
@@ -1189,7 +1189,7 @@ sub parseDescriptions($) {
 		$self = $class->new();
 	}
 	
-	foreach my $description ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'description')) {
+	foreach my $description ($container->getChildrenByTagNameNS(BP::Model::dccNamespace,'description')) {
 		my @dChildren = $description->nonBlankChildNodes();
 		
 		my $value = undef;
@@ -1254,10 +1254,10 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::AnnotationSet;
+package BP::Model::AnnotationSet;
 
 # This is the empty constructor.
-#	seedAnnotationSet: an optional DCC::Model::AnnotationSet used as seed
+#	seedAnnotationSet: an optional BP::Model::AnnotationSet used as seed
 sub new(;$) {
 	my $class = shift;
 	
@@ -1280,8 +1280,8 @@ sub new(;$) {
 # This is the constructor.
 # parseAnnotations paremeters:
 #	container: a XML::LibXML::Element container of 'dcc:annotation' elements
-#	seedAnnotationSet: an optional DCC::Model::AnnotationSet used as seed
-# It returns a DCC::Model::AnnotationSet hash reference, containing the contents of all the
+#	seedAnnotationSet: an optional BP::Model::AnnotationSet used as seed
+# It returns a BP::Model::AnnotationSet hash reference, containing the contents of all the
 # 'dcc:annotation' XML elements found
 sub parseAnnotations($;$) {
 	my $self = shift;
@@ -1298,7 +1298,7 @@ sub parseAnnotations($;$) {
 	my $p_hash = $self->hash;
 	my $p_order = $self->order;
 	
-	foreach my $annotation ($container->getChildrenByTagNameNS(DCC::Model::dccNamespace,'annotation')) {
+	foreach my $annotation ($container->getChildrenByTagNameNS(BP::Model::dccNamespace,'annotation')) {
 		unless(exists($p_hash->{$annotation->getAttribute('key')})) {
 			push(@{$p_order},$annotation->getAttribute('key'));
 		}
@@ -1307,7 +1307,7 @@ sub parseAnnotations($;$) {
 		my $value = undef;
 		foreach my $aChild (@aChildren) {
 			next  unless($aChild->nodeType == XML::LibXML::XML_ELEMENT_NODE);
-			if($aChild->namespaceURI() eq DCC::Model::dccNamespace) {
+			if($aChild->namespaceURI() eq BP::Model::dccNamespace) {
 				$value = $aChild;
 			} else {
 				$value = \@aChildren;
@@ -1342,7 +1342,7 @@ sub addAnnotation($$) {
 	$hash->{$key} = $value;
 }
 
-# This method adds the annotations from an existing DCC::Model::AnnotationSet instance
+# This method adds the annotations from an existing BP::Model::AnnotationSet instance
 sub addAnnotations($) {
 	my $self = shift;
 	
@@ -1394,7 +1394,7 @@ sub TO_JSON() {
 
 1;
 
-package DCC::Model::CV::Term;
+package BP::Model::CV::Term;
 
 use constant {
 	KEY	=>	0,
@@ -1504,12 +1504,12 @@ sub gotLineage {
 
 # calculateAncestors parameters:
 #	p_CV: a reference to a hash, which is the pool of
-#		DCC::Model::CV::Term instances where this instance can
+#		BP::Model::CV::Term instances where this instance can
 #		find its parents.
 #	doRecover: If true, it tries to recover from unknown parents,
 #		removing them
 #	p_visited: a reference to an array, which is the pool of
-#		DCC::Model::CV::Term keys which are still being
+#		BP::Model::CV::Term keys which are still being
 #		visited.
 sub calculateAncestors($;$$) {
 	my $self = shift;
@@ -1575,7 +1575,7 @@ sub calculateAncestors($;$$) {
 	return $p_ancestors;
 }
 
-# This method serializes the DCC::Model::CV instance into a OBO structure
+# This method serializes the BP::Model::CV instance into a OBO structure
 # serialize parameters:
 #	O: the output file handle
 sub OBOserialize($) {
@@ -1587,8 +1587,8 @@ sub OBOserialize($) {
 	
 	# We need this
 	print $O "[Term]\n";
-	DCC::Model::CV::printOboKeyVal($O,'id',$self->key);
-	DCC::Model::CV::printOboKeyVal($O,'name',$self->name);
+	BP::Model::CV::printOboKeyVal($O,'id',$self->key);
+	BP::Model::CV::printOboKeyVal($O,'name',$self->name);
 	
 	# The alterative ids
 	my $first = 1;
@@ -1598,24 +1598,24 @@ sub OBOserialize($) {
 			$first=undef;
 			next;
 		}
-		DCC::Model::CV::printOboKeyVal($O,'alt_id',$alt_id);
+		BP::Model::CV::printOboKeyVal($O,'alt_id',$alt_id);
 	}
 	if(defined($self->parents)) {
 		my $propLabel = ($self->isAlias)?'union_of':'is_a';
 		foreach my $parKey (@{$self->parents}) {
-			DCC::Model::CV::printOboKeyVal($O,$propLabel,$parKey);
+			BP::Model::CV::printOboKeyVal($O,$propLabel,$parKey);
 		}
 	}
 	print $O "\n";
 }
 
 
-package DCC::Model::CV::External;
+package BP::Model::CV::External;
 
 # This is the constructor
 # parseCVExternal parameters:
 #	el: a XML::LibXML::Element 'dcc:cv-uri' node
-#	model: a DCC::Model instance
+#	model: a BP::Model instance
 sub parseCVExternal($) {
 	my $class = shift;
 	
@@ -1650,7 +1650,7 @@ sub docURI {
 1;
 
 
-package DCC::Model::CV;
+package BP::Model::CV;
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
 use constant {
@@ -1678,13 +1678,13 @@ sub new() {
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
 	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
-	my $cvAnnot = DCC::Model::AnnotationSet->new();
-	my $cvDesc = DCC::Model::DescriptionSet->new();
+	my $cvAnnot = BP::Model::AnnotationSet->new();
+	my $cvDesc = BP::Model::DescriptionSet->new();
 	my @structCV=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef);
 	
-	$structCV[DCC::Model::CV::CVKEYS] = [];
+	$structCV[BP::Model::CV::CVKEYS] = [];
 	# Hash shared by terms and term-aliases
-	$structCV[DCC::Model::CV::CVHASH] = {};
+	$structCV[BP::Model::CV::CVHASH] = {};
 	
 	return bless(\@structCV,$class);
 }
@@ -1692,8 +1692,8 @@ sub new() {
 # This is the constructor and/or the parser
 # parseCV parameters:
 #	cv: a XML::LibXML::Element 'dcc:cv' node
-#	model: a DCC::Model instance
-# returns a DCC::Model::CV array reference, with all the controlled vocabulary
+#	model: a BP::Model instance
+# returns a BP::Model::CV array reference, with all the controlled vocabulary
 # stored inside.
 # If the CV is in an external file, this method reads it, and calls the model to
 # sanitize the paths and to digest the read lines.
@@ -1713,42 +1713,42 @@ sub parseCV($$) {
 	$self->annotations->parseAnnotations($cv);
 	$self->description->parseDescriptions($cv);
 	
-	$self->[DCC::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
+	$self->[BP::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
 		
 		if($el->localname eq 'e') {
-			unless(defined($self->[DCC::Model::CV::CVKIND])) {
-				$self->[DCC::Model::CV::CVKIND] = ($cv->localname eq DCC::Model::CV::NULLVALUES) ? DCC::Model::CV::NULLVALUES : DCC::Model::CV::INLINE;
+			unless(defined($self->[BP::Model::CV::CVKIND])) {
+				$self->[BP::Model::CV::CVKIND] = ($cv->localname eq BP::Model::CV::NULLVALUES) ? BP::Model::CV::NULLVALUES : BP::Model::CV::INLINE;
 			}
-			$self->addTerm(DCC::Model::CV::Term->new($el->getAttribute('v'),$el->textContent()));
+			$self->addTerm(BP::Model::CV::Term->new($el->getAttribute('v'),$el->textContent()));
 		} elsif($el->localname eq 'cv-uri') {
-			unless(defined($self->[DCC::Model::CV::CVKIND])) {
-				$self->[DCC::Model::CV::CVKIND] = DCC::Model::CV::URIFETCHED;
-				$self->[DCC::Model::CV::CVURI] = [];
+			unless(defined($self->[BP::Model::CV::CVKIND])) {
+				$self->[BP::Model::CV::CVKIND] = BP::Model::CV::URIFETCHED;
+				$self->[BP::Model::CV::CVURI] = [];
 			}
 			
 			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
-			push(@{$self->[DCC::Model::CV::CVURI]},DCC::Model::CV::External->parseCVExternal($el,$self));
+			push(@{$self->[BP::Model::CV::CVURI]},BP::Model::CV::External->parseCVExternal($el,$self));
 			
 		} elsif($el->localname eq 'cv-file') {
 			my $cvPath = $el->textContent();
 			$cvPath = $model->sanitizeCVpath($cvPath);
 			
-			my $cvFormat = ($el->hasAttribute('format') && $el->getAttribute('format') eq 'obo')?DCC::Model::CV::CVFORMAT_OBO : DCC::Model::CV::CVFORMAT_CVFORMAT;
+			my $cvFormat = ($el->hasAttribute('format') && $el->getAttribute('format') eq 'obo')?BP::Model::CV::CVFORMAT_OBO : BP::Model::CV::CVFORMAT_CVFORMAT;
 			
 			# Local fetch
-			$self->[DCC::Model::CV::CVKIND] = DCC::Model::CV::CVLOCAL  unless(defined($self->[DCC::Model::CV::CVKIND]));
-			$self->[DCC::Model::CV::CVLOCALPATH] = $cvPath;
-			$self->[DCC::Model::CV::CVLOCALFORMAT] = $cvFormat;
+			$self->[BP::Model::CV::CVKIND] = BP::Model::CV::CVLOCAL  unless(defined($self->[BP::Model::CV::CVKIND]));
+			$self->[BP::Model::CV::CVLOCALPATH] = $cvPath;
+			$self->[BP::Model::CV::CVLOCALFORMAT] = $cvFormat;
 			# Saving it for a possible storage in a bpmodel
-			$self->[DCC::Model::CV::CVXMLEL] = $el;
+			$self->[BP::Model::CV::CVXMLEL] = $el;
 			
 			my $CVH = $model->openCVpath($cvPath);
-			if($cvFormat == DCC::Model::CV::CVFORMAT_CVFORMAT) {
+			if($cvFormat == BP::Model::CV::CVFORMAT_CVFORMAT) {
 				$self->__parseCVFORMAT($CVH,$model);
-			} elsif($cvFormat == DCC::Model::CV::CVFORMAT_OBO) {
+			} elsif($cvFormat == BP::Model::CV::CVFORMAT_OBO) {
 				$self->__parseOBO($CVH,$model);
 			}
 			
@@ -1756,7 +1756,7 @@ sub parseCV($$) {
 			# We register the local CVs, even the local dumps of the remote CVs
 			$model->registerCV($self);
 		} elsif($el->localname eq 'term-alias') {
-			my $alias = DCC::Model::CV::Term->parseAlias($el);
+			my $alias = BP::Model::CV::Term->parseAlias($el);
 			$self->addTerm($alias);
 		}
 	}
@@ -1789,74 +1789,74 @@ sub validateAndEnactAncestors(;$) {
 
 # The name of this CV (optional)
 sub name {
-	return $_[0]->[DCC::Model::CV::CVNAME];
+	return $_[0]->[BP::Model::CV::CVNAME];
 }
 
 # The kind of CV
 sub kind {
-	return $_[0]->[DCC::Model::CV::CVKIND];
+	return $_[0]->[BP::Model::CV::CVKIND];
 }
 
-# Ref to an array of DCC::Model::CV::External, holding these values (it could be undef)
+# Ref to an array of BP::Model::CV::External, holding these values (it could be undef)
 sub uri {
-	return $_[0]->[DCC::Model::CV::CVURI];
+	return $_[0]->[BP::Model::CV::CVURI];
 }
 
 # Filename holding these values (optional)
 sub localFilename {
-	return $_[0]->[DCC::Model::CV::CVLOCALPATH];
+	return $_[0]->[BP::Model::CV::CVLOCALPATH];
 }
 
 # Format of the filename holding these values (optional)
 sub localFormat {
-	return $_[0]->[DCC::Model::CV::CVLOCALFORMAT];
+	return $_[0]->[BP::Model::CV::CVLOCALFORMAT];
 }
 
-# An instance of a DCC::Model::AnnotationSet, holding the annotations
+# An instance of a BP::Model::AnnotationSet, holding the annotations
 # for this CV
 sub annotations {
-	return $_[0]->[DCC::Model::CV::CVANNOT];
+	return $_[0]->[BP::Model::CV::CVANNOT];
 }
 
-# An instance of a DCC::Model::DescriptionSet, holding the documentation
+# An instance of a BP::Model::DescriptionSet, holding the documentation
 # for this CV
 sub description {
-	return $_[0]->[DCC::Model::CV::CVDESC];
+	return $_[0]->[BP::Model::CV::CVDESC];
 }
 
 # The hash holding the CV in memory
 sub CV {
-	return $_[0]->[DCC::Model::CV::CVHASH];
+	return $_[0]->[BP::Model::CV::CVHASH];
 }
 
 # The order of the CV values (as in the file)
 sub order {
-	return $_[0]->[DCC::Model::CV::CVKEYS];
+	return $_[0]->[BP::Model::CV::CVKEYS];
 }
 
 # The order of the alias values (as in the file)
 sub aliasOrder {
-	return $_[0]->[DCC::Model::CV::CVALKEYS];
+	return $_[0]->[BP::Model::CV::CVALKEYS];
 }
 
 # The original XML::LibXML::Element instance where
 # the path to a CV file was read from
 sub xmlElement {
-	return $_[0]->[DCC::Model::CV::CVXMLEL];
+	return $_[0]->[BP::Model::CV::CVXMLEL];
 }
 
 # The id
 sub id {
-	unless(defined($_[0]->[DCC::Model::CV::CVID])) {
-		if(defined($_[0]->[DCC::Model::CV::CVNAME])) {
-			$_[0]->[DCC::Model::CV::CVID] = $_[0]->[DCC::Model::CV::CVNAME];
+	unless(defined($_[0]->[BP::Model::CV::CVID])) {
+		if(defined($_[0]->[BP::Model::CV::CVNAME])) {
+			$_[0]->[BP::Model::CV::CVID] = $_[0]->[BP::Model::CV::CVNAME];
 		} else {
-			$_[0]->[DCC::Model::CV::CVID] = '_anonCV_'.$_ANONCOUNTER;
+			$_[0]->[BP::Model::CV::CVID] = '_anonCV_'.$_ANONCOUNTER;
 			$_ANONCOUNTER++;
 		}
 	}
 	
-	return $_[0]->[DCC::Model::CV::CVID];
+	return $_[0]->[BP::Model::CV::CVID];
 }
 
 # With this method we check the locality of the CV
@@ -1894,7 +1894,7 @@ sub dataChecker {
 }
 
 # addTerm parameters:
-#	term: a DCC::Model::CV::Term instance, which can be a term or an alias
+#	term: a BP::Model::CV::Term instance, which can be a term or an alias
 sub addTerm($) {
 	my $self = shift;
 	
@@ -1942,7 +1942,7 @@ sub addTerm($) {
 
 # __parseCVFORMAT parameters:
 #	CVH: The file handle to read the controlled vocabulary file
-#	model: a DCC::Model instance, where the digestion of this file is going to be registered.
+#	model: a BP::Model instance, where the digestion of this file is going to be registered.
 sub __parseCVFORMAT($$) {
 	my $self = shift;
 	
@@ -1973,7 +1973,7 @@ sub __parseCVFORMAT($$) {
 			}
 		} else {
 			my($key,$value) = split(/\t/,$cvline,2);
-			$self->addTerm(DCC::Model::CV::Term->new($key,$value));
+			$self->addTerm(BP::Model::CV::Term->new($key,$value));
 		}
 	}
 }
@@ -2011,7 +2011,7 @@ sub __parseOBO($$) {
 		if(substr($cvline,0,1) eq '[') {
 			$terms = 1;
 			if(defined($keys)) {
-				$self->addTerm(DCC::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef));
+				$self->addTerm(BP::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef));
 				
 				# Cleaning!
 				$keys = undef;
@@ -2066,7 +2066,7 @@ sub __parseOBO($$) {
 		}
 	}
 	# Last term in a file
-	$self->addTerm(DCC::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef))  if(defined($keys));
+	$self->addTerm(BP::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef))  if(defined($keys));
 }
 
 
@@ -2119,7 +2119,7 @@ sub printOboKeyVal($$$) {
 	$_[0]->print($_[1],': ',$_[2],"\n");
 }
 
-# This method serializes the DCC::Model::CV instance into a OBO structure
+# This method serializes the BP::Model::CV instance into a OBO structure
 # serialize parameters:
 #	O: the output file handle
 #	comments: the comments to put
@@ -2144,7 +2144,7 @@ sub OBOserialize($;$) {
 	printOboKeyVal($O,'format-version','1.2');
 	my @timetoks = localtime();
 	printOboKeyVal($O,'date',sprintf('%02d:%02d:%04d %02d:%02d',$timetoks[3],$timetoks[4]+1,$timetoks[5]+1900,$timetoks[2],$timetoks[1]));
-	printOboKeyVal($O,'auto-generated-by','DCC::Model $Id$');
+	printOboKeyVal($O,'auto-generated-by','BP::Model $Id$');
 	
 	# Are there descriptions?
 	foreach my $desc (@{$self->description}) {
@@ -2175,7 +2175,7 @@ sub TO_JSON() {
 
 1;
 
-package DCC::Model::ConceptType;
+package BP::Model::ConceptType;
 
 # Prototypes of static methods
 sub parseConceptTypeLineage($$;$);
@@ -2183,10 +2183,10 @@ sub parseConceptTypeLineage($$;$);
 # This is an static method.
 # parseConceptTypeLineage parameters:
 #	ctypeElem: a XML::LibXML::Element 'dcc:concept-type' node
-#	model: a DCC::Model instance where the concept type was defined
-#	ctypeParent: an optional 'DCC::Model::ConceptType' instance, which is the
+#	model: a BP::Model instance where the concept type was defined
+#	ctypeParent: an optional 'BP::Model::ConceptType' instance, which is the
 #		parent concept type
-# returns an array of 'DCC::Model::ConceptType' instances, which are the concept type
+# returns an array of 'BP::Model::ConceptType' instances, which are the concept type
 # and its descendants.
 sub parseConceptTypeLineage($$;$) {
 	my $ctypeElem = shift;
@@ -2196,16 +2196,16 @@ sub parseConceptTypeLineage($$;$) {
 	$ctypeParent = shift  if(scalar(@_) > 0);
 	
 	# The returning values array
-	my $me = DCC::Model::ConceptType->parseConceptType($ctypeElem,$model,$ctypeParent);
+	my $me = BP::Model::ConceptType->parseConceptType($ctypeElem,$model,$ctypeParent);
 	my @retval = ($me);
 	
 	# Now, let's find subtypes
-	foreach my $subtypes ($ctypeElem->getChildrenByTagNameNS(DCC::Model::dccNamespace,'subtypes')) {
+	foreach my $subtypes ($ctypeElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'subtypes')) {
 		foreach my $childCTypeElem ($subtypes->childNodes()) {
 			next  unless($childCTypeElem->nodeType == XML::LibXML::XML_ELEMENT_NODE && $childCTypeElem->localname() eq 'concept-type');
 			
 			# Parse subtypes and store them!
-			push(@retval,DCC::Model::ConceptType::parseConceptTypeLineage($childCTypeElem,$model,$me));
+			push(@retval,BP::Model::ConceptType::parseConceptTypeLineage($childCTypeElem,$model,$me));
 		}
 		last;
 	}
@@ -2216,10 +2216,10 @@ sub parseConceptTypeLineage($$;$) {
 # This is the constructor.
 # parseConceptType parameters:
 #	ctypeElem: a XML::LibXML::Element 'dcc:concept-type' node
-#	model: a DCC::Model instance where the concept type was defined
-#	ctypeParent: an optional 'DCC::Model::ConceptType' instance, which is the
+#	model: a BP::Model instance where the concept type was defined
+#	ctypeParent: an optional 'BP::Model::ConceptType' instance, which is the
 #		parent concept type
-# returns an array of 'DCC::Model::ConceptType' instances, which are the concept type
+# returns an array of 'BP::Model::ConceptType' instances, which are the concept type
 # and its descendants.
 sub parseConceptType($$;$) {
 	my $class = shift;
@@ -2252,7 +2252,7 @@ sub parseConceptType($$;$) {
 			
 			$ctype[1] = 1;
 			my $collName = $ctypeElem->getAttribute('collection');
-			# Let's link the DCC::Model::Collection
+			# Let's link the BP::Model::Collection
 			my $collection = $model->getCollection($collName);
 			if(defined($collection)) {
 				$ctype[2] = $collection;
@@ -2271,10 +2271,10 @@ sub parseConceptType($$;$) {
 	}
 	
 	# Let's parse the columns
-	$ctype[4] = DCC::Model::ColumnSet->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columnSet:undef,$model);
+	$ctype[4] = BP::Model::ColumnSet->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columnSet:undef,$model);
 	
 	# And the index declarations
-	$ctype[5] = DCC::Model::Index::parseIndexes($ctypeElem);
+	$ctype[5] = BP::Model::Index::parseIndexes($ctypeElem);
 	# inheriting the ones from the parent concept types
 	push(@{$ctype[5]},@{$ctypeParent->indexes})  if(defined($ctypeParent));
 	
@@ -2292,13 +2292,13 @@ sub goesToCollection {
 	return $_[0]->[1];
 }
 
-# It can be either a DCC::Model::Collection instance
+# It can be either a BP::Model::Collection instance
 # or a string
 sub path {
 	return $_[0]->[2];
 }
 
-# collection, a DCC::Model::Collection instance
+# collection, a BP::Model::Collection instance
 # An abstract concept type will return undef here
 sub collection {
 	return $_[0]->[2];
@@ -2312,18 +2312,18 @@ sub key {
 
 # parent
 # It returns either undef (when it has no parent),
-# or a DCC::Model::ConceptType instance
+# or a BP::Model::ConceptType instance
 sub parent {
 	return $_[0]->[3];
 }
 
 # columnSet
-# It returns a DCC::Model::ColumnSet instance, with all the column declarations
+# It returns a BP::Model::ColumnSet instance, with all the column declarations
 sub columnSet {
 	return $_[0]->[4];
 }
 
-# It returns a reference to an array full of DCC::Model::Index instances
+# It returns a reference to an array full of BP::Model::Index instances
 sub indexes {
 	return $_[0]->[5];
 }
@@ -2331,13 +2331,13 @@ sub indexes {
 1;
 
 
-package DCC::Model::CompoundType;
+package BP::Model::CompoundType;
 
 # This is the constructor.
 # parseCompoundType parameters:
 #	compoundTypeElem: a XML::LibXML::Element 'dcc:compound-type' node
-#	model: a DCC::Model instance where the concept type was defined
-# returns an array of 'DCC::Model::ConceptType' instances, which are the concept type
+#	model: a BP::Model instance where the concept type was defined
+# returns an array of 'BP::Model::ConceptType' instances, which are the concept type
 # and its descendants.
 sub parseCompoundType($$) {
 	my $class = shift;
@@ -2361,11 +2361,11 @@ sub parseCompoundType($$) {
 	$compoundType[0] = $compoundTypeElem->getAttribute('name')  if($compoundTypeElem->hasAttribute('name'));
 	
 	# Let's parse the columns
-	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($compoundTypeElem,undef,$model);
+	my $columnSet = BP::Model::ColumnSet->parseColumnSet($compoundTypeElem,undef,$model);
 	$compoundType[1] = $columnSet;
 	
 	my @seps = ();
-	foreach my $sepDecl ($compoundTypeElem->getChildrenByTagNameNS(DCC::Model::dccNamespace,'sep')) {
+	foreach my $sepDecl ($compoundTypeElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'sep')) {
 		push(@seps,$sepDecl->textContent());
 	}
 	$compoundType[2] = \@seps;
@@ -2431,7 +2431,7 @@ sub name {
 }
 
 # columnSet
-# It returns a DCC::Model::ColumnSet instance, with all the column declarations inside this compound type
+# It returns a BP::Model::ColumnSet instance, with all the column declarations inside this compound type
 sub columnSet {
 	return $_[0]->[1];
 }
@@ -2469,7 +2469,7 @@ sub isValid($) {
 1;
 
 
-package DCC::Model::ColumnType;
+package BP::Model::ColumnType;
 
 use constant {
 	TYPE	=>	0,
@@ -2500,9 +2500,9 @@ use constant STR2TYPE => {
 # parseColumnType parameters:
 #	containerDecl: a XML::LibXML::Element containing 'dcc:column-type' nodes, which
 #		defines a column type. Only the first one is parsed.
-#	model: a DCC::Model instance, used to validate.
+#	model: a BP::Model instance, used to validate.
 #	columnName: The column name, used for error messages
-# returns a DCC::Model::ColumnType instance, with all the information related to
+# returns a BP::Model::ColumnType instance, with all the information related to
 # types, restrictions and enumerated values of this ColumnType.
 sub parseColumnType($$$) {
 	my $class = shift;
@@ -2525,27 +2525,27 @@ sub parseColumnType($$$) {
 	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
 	
 	# Let's parse the column type!
-	foreach my $colType ($containerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'column-type')) {
+	foreach my $colType ($containerDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'column-type')) {
 		#First, the item type
 		my $itemType = $colType->getAttribute('item-type');
 		
 		my $refItemType = $model->getItemType($itemType);
 		Carp::croak("unknown type '$itemType' for column $columnName")  unless(defined($refItemType));
 		
-		$columnType[DCC::Model::ColumnType::TYPE] = $itemType;
+		$columnType[BP::Model::ColumnType::TYPE] = $itemType;
 		
 		# Column use
 		my $columnKind = $colType->getAttribute('column-kind');
 		# Idref equals 0; required, 1; desirable, -1; optional, -2
-		if(exists((DCC::Model::ColumnType::STR2TYPE)->{$columnKind})) {
-			$columnType[DCC::Model::ColumnType::USE] = (DCC::Model::ColumnType::STR2TYPE)->{$columnKind};
+		if(exists((BP::Model::ColumnType::STR2TYPE)->{$columnKind})) {
+			$columnType[BP::Model::ColumnType::USE] = (BP::Model::ColumnType::STR2TYPE)->{$columnKind};
 		} else {
 			Carp::croak("Column $columnName has a unknown kind: $columnKind");
 		}
 		
 		# Content restrictions (children have precedence over attributes)
 		# Let's save allowed null values
-		foreach my $null ($colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'null')) {
+		foreach my $null ($colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'null')) {
 			my $val = $null->textContent();
 			
 			if($model->isValidNull($val)) {
@@ -2557,17 +2557,17 @@ sub parseColumnType($$$) {
 		}
 		
 		# First, is it a compound type?
-		my @compChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'compound-type');
-		if(defined($refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER]) && (scalar(@compChildren)>0 || $colType->hasAttribute('compound-type'))) {
+		my @compChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'compound-type');
+		if(defined($refItemType->[BP::Model::ColumnType::DATATYPEMANGLER]) && (scalar(@compChildren)>0 || $colType->hasAttribute('compound-type'))) {
 			Carp::croak("Column $columnName does not use a compound type, but it was declared");
-		} elsif(!defined($refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER]) && scalar(@compChildren)==0 && !$colType->hasAttribute('compound-type')) {
+		} elsif(!defined($refItemType->[BP::Model::ColumnType::DATATYPEMANGLER]) && scalar(@compChildren)==0 && !$colType->hasAttribute('compound-type')) {
 			Carp::croak("Column $columnName uses a compound type, but it was not declared");
 		}
 		
 		# Second, setting the restrictions
 		my $restriction = undef;
 		if(scalar(@compChildren)>0) {
-			$restriction = DCC::Model::CompoundType->parseCompoundType($compChildren[0],$model);
+			$restriction = BP::Model::CompoundType->parseCompoundType($compChildren[0],$model);
 		} elsif($colType->hasAttribute('compound-type')) {
 			my $compoundType = $model->getCompoundType($colType->getAttribute('compound-type'));
 			if(defined($compoundType)) {
@@ -2576,9 +2576,9 @@ sub parseColumnType($$$) {
 				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
 			}
 		} else {
-			my @cvChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'cv');
+			my @cvChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'cv');
 			if(scalar(@cvChildren)>0) {
-				$restriction = DCC::Model::CV->parseCV($cvChildren[0],$model);
+				$restriction = BP::Model::CV->parseCV($cvChildren[0],$model);
 			} elsif($colType->hasAttribute('cv')) {
 				my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
 				if(defined($namedCV)) {
@@ -2587,9 +2587,9 @@ sub parseColumnType($$$) {
 					Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
 				}
 			} else {
-				my @patChildren = $colType->getChildrenByTagNameNS(DCC::Model::dccNamespace,'pattern');
+				my @patChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'pattern');
 				if(scalar(@patChildren)>0) {
-					$restriction = DCC::Model::__parse_pattern($patChildren[0]);
+					$restriction = BP::Model::__parse_pattern($patChildren[0]);
 				} elsif($colType->hasAttribute('pattern')) {
 					my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
 					if(defined($PAT)) {
@@ -2600,7 +2600,7 @@ sub parseColumnType($$$) {
 				}
 			}
 		}
-		$columnType[DCC::Model::ColumnType::RESTRICTION] = $restriction;
+		$columnType[BP::Model::ColumnType::RESTRICTION] = $restriction;
 		
 		
 		# Setting up the data checker
@@ -2615,19 +2615,19 @@ sub parseColumnType($$$) {
 			}
 		} else {
 			# Simple type checks
-			$dataChecker = $refItemType->[DCC::Model::ColumnType::DATATYPECHECKER]  if(defined($refItemType->[DCC::Model::ColumnType::DATATYPECHECKER]));
+			$dataChecker = $refItemType->[BP::Model::ColumnType::DATATYPECHECKER]  if(defined($refItemType->[BP::Model::ColumnType::DATATYPECHECKER]));
 		}
 		
 		# Setting up the data mangler
-		my $dataMangler = (defined($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[DCC::Model::ColumnType::DATATYPEMANGLER];
+		my $dataMangler = (defined($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[BP::Model::ColumnType::DATATYPEMANGLER];
 		
 		# Default value
 		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
 		# Default values must be rechecked once all the columns are available
-		$columnType[DCC::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
+		$columnType[BP::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
 		
 		# Array separators
-		$columnType[DCC::Model::ColumnType::ARRAYSEPS] = undef;
+		$columnType[BP::Model::ColumnType::ARRAYSEPS] = undef;
 		if($colType->hasAttribute('array-seps')) {
 			my $arraySeps = $colType->getAttribute('array-seps');
 			if(length($arraySeps) > 0) {
@@ -2640,7 +2640,7 @@ sub parseColumnType($$$) {
 					
 					$sepVal{$sep}=undef;
 				}
-				$columnType[DCC::Model::ColumnType::ARRAYSEPS] = $arraySeps;
+				$columnType[BP::Model::ColumnType::ARRAYSEPS] = $arraySeps;
 				
 				# Altering the data mangler in order to handle multidimensional matrices
 				my $itemDataMangler = $dataMangler;
@@ -2715,8 +2715,8 @@ sub parseColumnType($$$) {
 		}
 		
 		# And now, the data mangler and checker
-		$columnType[DCC::Model::ColumnType::DATAMANGLER] = $dataMangler;
-		$columnType[DCC::Model::ColumnType::DATACHECKER] = $dataChecker;
+		$columnType[BP::Model::ColumnType::DATAMANGLER] = $dataMangler;
+		$columnType[BP::Model::ColumnType::DATACHECKER] = $dataChecker;
 		
 		last;
 	}
@@ -2726,46 +2726,46 @@ sub parseColumnType($$$) {
 
 # Item type
 sub type {
-	return $_[0]->[DCC::Model::ColumnType::TYPE];
+	return $_[0]->[BP::Model::ColumnType::TYPE];
 }
 
 # column use (idref, required, optional)
 # Idref equals 0; required, 1; optional, -1
 sub use {
-	return $_[0]->[DCC::Model::ColumnType::USE];
+	return $_[0]->[BP::Model::ColumnType::USE];
 }
 
 # content restrictions. Either
-# DCC::Model::CompoundType
-# DCC::Model::CV
+# BP::Model::CompoundType
+# BP::Model::CV
 # Pattern
 sub restriction {
-	return $_[0]->[DCC::Model::ColumnType::RESTRICTION];
+	return $_[0]->[BP::Model::ColumnType::RESTRICTION];
 }
 
 # default value
 sub default {
-	return $_[0]->[DCC::Model::ColumnType::DEFAULT];
+	return $_[0]->[BP::Model::ColumnType::DEFAULT];
 }
 
 # array separators
 sub arraySeps {
-	return $_[0]->[DCC::Model::ColumnType::ARRAYSEPS];
+	return $_[0]->[BP::Model::ColumnType::ARRAYSEPS];
 }
 
 # An array of allowed null values
 sub allowedNulls {
-	return $_[0]->[DCC::Model::ColumnType::ALLOWEDNULLS];
+	return $_[0]->[BP::Model::ColumnType::ALLOWEDNULLS];
 }
 
 # A subroutine for data mangling from tabular file
 sub dataMangler {
-	return $_[0]->[DCC::Model::ColumnType::DATAMANGLER];
+	return $_[0]->[BP::Model::ColumnType::DATAMANGLER];
 }
 
 # A subroutine for data checking from tabular file
 sub dataChecker {
-	return $_[0]->[DCC::Model::ColumnType::DATACHECKER];
+	return $_[0]->[BP::Model::ColumnType::DATACHECKER];
 }
 
 sub isValid($) {
@@ -2785,13 +2785,13 @@ sub setDefault($) {
 	
 	my $val = shift;
 	
-	$self->[DCC::Model::ColumnType::DEFAULT] = $val;
+	$self->[BP::Model::ColumnType::DEFAULT] = $val;
 }
 
 # clone parameters:
-#	relatedConcept: optional DCC::Model::RelatedConcept instance, it signals whether to change cloned columnType
+#	relatedConcept: optional BP::Model::RelatedConcept instance, it signals whether to change cloned columnType
 #		according to relatedConcept hints
-# it returns a DCC::Model::ColumnType instance
+# it returns a BP::Model::ColumnType instance
 sub clone(;$) {
 	my $self = shift;
 	
@@ -2799,7 +2799,7 @@ sub clone(;$) {
 	
 	my $relatedConcept = shift;
 	
-	Carp::croak('Input parameter must be a DCC::Model::RelatedConcept')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('DCC::Model::RelatedConcept')));
+	Carp::croak('Input parameter must be a BP::Model::RelatedConcept')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('BP::Model::RelatedConcept')));
 	
 	# Cloning this object
 	my @cloneData = @{$self};
@@ -2807,19 +2807,19 @@ sub clone(;$) {
 	
 	if(defined($relatedConcept)) {
 		if($relatedConcept->isPartial) {
-			$retval->[DCC::Model::ColumnType::USE] = DCC::Model::ColumnType::DESIRABLE;
+			$retval->[BP::Model::ColumnType::USE] = BP::Model::ColumnType::DESIRABLE;
 		}
 		
 		if($relatedConcept->arity eq 'M') {
 			my $sep = $relatedConcept->mArySeparator;
-			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS]) && index($retval->[DCC::Model::ColumnType::ARRAYSEPS],$sep)!=-1) {
+			if(defined($retval->[BP::Model::ColumnType::ARRAYSEPS]) && index($retval->[BP::Model::ColumnType::ARRAYSEPS],$sep)!=-1) {
 				Carp::croak("Cloned column has repeated the array separator $sep!");
 			}
 			
-			if(defined($retval->[DCC::Model::ColumnType::ARRAYSEPS])) {
-				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep . $retval->[DCC::Model::ColumnType::ARRAYSEPS];
+			if(defined($retval->[BP::Model::ColumnType::ARRAYSEPS])) {
+				$retval->[BP::Model::ColumnType::ARRAYSEPS] = $sep . $retval->[BP::Model::ColumnType::ARRAYSEPS];
 			} else {
-				$retval->[DCC::Model::ColumnType::ARRAYSEPS] = $sep;
+				$retval->[BP::Model::ColumnType::ARRAYSEPS] = $sep;
 			}
 		}
 	}
@@ -2847,9 +2847,9 @@ sub TO_JSON() {
 	}
 	
 	if(defined($self->restriction)) {
-		if($self->restriction->isa('DCC::Model::CV')) {
+		if($self->restriction->isa('BP::Model::CV')) {
 			$jsonColumnType{'cv'} = $self->restriction->_jsonId;
-		} elsif($self->restriction->isa('DCC::Model::CompoundType')) {
+		} elsif($self->restriction->isa('BP::Model::CompoundType')) {
 			$jsonColumnType{'columns'} = $self->restriction->columnSet->columns;
 		} elsif($self->restriction->isa('Pattern')) {
 			$jsonColumnType{'pattern'} = $self->restriction;
@@ -2862,7 +2862,7 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::Column;
+package BP::Model::Column;
 
 use constant {
 	NAME => 0,
@@ -2879,8 +2879,8 @@ use constant {
 # parseColumn parameters:
 #	colDecl: a XML::LibXML::Element 'dcc:column' node, which defines
 #		a column
-#	model: a DCC::Model instance, used to validate
-# returns a DCC::Model::Column instance, with all the information related to
+#	model: a BP::Model instance, used to validate
+# returns a BP::Model::Column instance, with all the information related to
 # types, restrictions and enumerated values used by this column.
 sub parseColumn($$) {
 	my $class = shift;
@@ -2893,9 +2893,9 @@ sub parseColumn($$) {
 	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
 	my @column = (
 		$colDecl->getAttribute('name'),
-		DCC::Model::DescriptionSet->parseDescriptions($colDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($colDecl),
-		DCC::Model::ColumnType->parseColumnType($colDecl,$model,$colDecl->getAttribute('name')),
+		BP::Model::DescriptionSet->parseDescriptions($colDecl),
+		BP::Model::AnnotationSet->parseAnnotations($colDecl),
+		BP::Model::ColumnType->parseColumnType($colDecl,$model,$colDecl->getAttribute('name')),
 		undef,
 		undef,
 		undef,
@@ -2907,57 +2907,57 @@ sub parseColumn($$) {
 
 # The column name
 sub name {
-	return $_[0]->[DCC::Model::Column::NAME];
+	return $_[0]->[BP::Model::Column::NAME];
 }
 
-# The description, a DCC::Model::DescriptionSet instance
+# The description, a BP::Model::DescriptionSet instance
 sub description {
-	return $_[0]->[DCC::Model::Column::DESCRIPTION];
+	return $_[0]->[BP::Model::Column::DESCRIPTION];
 }
 
-# Annotations, a DCC::Model::AnnotationSet instance
+# Annotations, a BP::Model::AnnotationSet instance
 sub annotations {
-	return $_[0]->[DCC::Model::Column::ANNOTATIONS];
+	return $_[0]->[BP::Model::Column::ANNOTATIONS];
 }
 
-# It returns a DCC::Model::ColumnType instance
+# It returns a BP::Model::ColumnType instance
 sub columnType {
-	return $_[0]->[DCC::Model::Column::COLUMNTYPE];
+	return $_[0]->[BP::Model::Column::COLUMNTYPE];
 }
 
 # If this column is masked (because it is a inherited idref on a concept hosted in a hash)
 # it will return true, otherwise undef
 sub isMasked {
-	return $_[0]->[DCC::Model::Column::ISMASKED];
+	return $_[0]->[BP::Model::Column::ISMASKED];
 }
 
 # If this column is part of a foreign key pointing
-# to a concept, this method will return a DCC::Model::Concept instance
+# to a concept, this method will return a BP::Model::Concept instance
 # Otherwise, it will return undef
 sub refConcept {
-	return $_[0]->[DCC::Model::Column::REFCONCEPT];
+	return $_[0]->[BP::Model::Column::REFCONCEPT];
 }
 
 # If this column is part of a foreign key pointing
-# to a concept, this method will return a DCC::Model::Column instance
+# to a concept, this method will return a BP::Model::Column instance
 # which correlates to
 # Otherwise, it will return undef
 sub refColumn {
-	return $_[0]->[DCC::Model::Column::REFCOLUMN];
+	return $_[0]->[BP::Model::Column::REFCOLUMN];
 }
 
 # If this column is part of a foreign key pointing
-# to a concept using related-to, this method will return a DCC::Model::RelatedConcept
+# to a concept using related-to, this method will return a BP::Model::RelatedConcept
 # instance which correlates to
 # Otherwise, it will return undef
 sub relatedConcept {
-	return $_[0]->[DCC::Model::Column::RELATED_CONCEPT];
+	return $_[0]->[BP::Model::Column::RELATED_CONCEPT];
 }
 
 # clone parameters:
 #	doMask: optional, it signals whether to mark cloned column
 #		as masked, so it should not be considered for value storage in the database.
-# it returns a DCC::Model::Column instance
+# it returns a BP::Model::Column instance
 sub clone(;$) {
 	my $self = shift;
 	
@@ -2970,22 +2970,22 @@ sub clone(;$) {
 	my $retval = bless(\@cloneData,ref($self));
 	
 	# Cloning the description and the annotations
-	$retval->[DCC::Model::Column::DESCRIPTION] = $self->description->clone;
-	$retval->[DCC::Model::Column::ANNOTATIONS] = $self->annotations->clone;
+	$retval->[BP::Model::Column::DESCRIPTION] = $self->description->clone;
+	$retval->[BP::Model::Column::ANNOTATIONS] = $self->annotations->clone;
 	
-	$retval->[DCC::Model::Column::ISMASKED] = ($doMask)?1:undef;
+	$retval->[BP::Model::Column::ISMASKED] = ($doMask)?1:undef;
 	
 	return $retval;
 }
 
 # cloneRelated parameters:
-#	refConcept: A DCC::Model::Concept instance, which this column is related to.
+#	refConcept: A BP::Model::Concept instance, which this column is related to.
 #		The kind of relation could be inheritance, or 1:N
-#	relatedConcept: optional, DCC::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
+#	relatedConcept: optional, BP::Model::RelatedConcept, which contains the prefix to be set to the name when the column is cloned
 #	doMask: optional, it signals whether to mark cloned column
 #		as masked, so it should not be considered for value storage in the database.
-#	weakAnnotations: optional, DCC::Model::AnnotationSet
-# it returns a DCC::Model::Column instance
+#	weakAnnotations: optional, BP::Model::AnnotationSet
+# it returns a BP::Model::Column instance
 sub cloneRelated($;$$$) {
 	my $self = shift;
 	
@@ -3001,7 +3001,7 @@ sub cloneRelated($;$$$) {
 	my $retval = $self->clone($doMask);
 	
 	# Adding the prefix
-	$retval->[DCC::Model::Column::NAME] = $prefix.$retval->[DCC::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
+	$retval->[BP::Model::Column::NAME] = $prefix.$retval->[BP::Model::Column::NAME]  if(defined($prefix) && length($prefix)>0);
 	
 	# Adding the annotations from the related concept
 	$retval->annotations->addAnnotations($relatedConcept->annotations)  if(defined($relatedConcept));
@@ -3010,15 +3010,15 @@ sub cloneRelated($;$$$) {
 	
 	# And adding the relation info
 	# to this column
-	$retval->[DCC::Model::Column::REFCONCEPT] = $refConcept;
-	$retval->[DCC::Model::Column::REFCOLUMN] = $self;
-	$retval->[DCC::Model::Column::RELATED_CONCEPT] = $relatedConcept;
+	$retval->[BP::Model::Column::REFCONCEPT] = $refConcept;
+	$retval->[BP::Model::Column::REFCOLUMN] = $self;
+	$retval->[BP::Model::Column::RELATED_CONCEPT] = $relatedConcept;
 	
 	# Does this column become optional due the participation?
 	# Does this column become an array due the arity?
 	if(defined($relatedConcept) && ($relatedConcept->isPartial || $relatedConcept->arity eq 'M')) {
 		# First, let's clone the concept type, to avoid side effects
-		$retval->[DCC::Model::Column::COLUMNTYPE] = $self->columnType->clone($relatedConcept);
+		$retval->[BP::Model::Column::COLUMNTYPE] = $self->columnType->clone($relatedConcept);
 	}
 	
 	return $retval;
@@ -3044,14 +3044,14 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::ColumnSet;
+package BP::Model::ColumnSet;
 
 # This is the constructor.
 # parseColumnSet parameters:
 #	container: a XML::LibXML::Element node, containing 'dcc:column' elements
-#	parentColumnSet: a DCC::Model::ColumnSet instance, which is the parent.
-#	model: a DCC::Model instance, used to validate the columns.
-# returns a DCC::Model::ColumnSet instance with all the DCC::Model::Column instances (including
+#	parentColumnSet: a BP::Model::ColumnSet instance, which is the parent.
+#	model: a BP::Model instance, used to validate the columns.
+# returns a BP::Model::ColumnSet instance with all the BP::Model::Column instances (including
 # the inherited ones from the parent).
 sub parseColumnSet($$$) {
 	my $class = shift;
@@ -3073,24 +3073,24 @@ sub parseColumnSet($$$) {
 	}
 	# Array with the idref column names
 	# Array with column names (all)
-	# Hash of DCC::Model::Column instances
+	# Hash of BP::Model::Column instances
 	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
 	
 	my @checkDefault = ();
 	foreach my $colDecl ($container->childNodes()) {
 		next  unless($colDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $colDecl->localname() eq 'column');
 		
-		my $column = DCC::Model::Column->parseColumn($colDecl,$model);
+		my $column = BP::Model::Column->parseColumn($colDecl,$model);
 		
 		# We want to keep the original column order as far as possible
 		if(exists($columnDecl{$column->name})) {
-			if($columnDecl{$column->name}->columnType->use eq DCC::Model::ColumnType::IDREF) {
+			if($columnDecl{$column->name}->columnType->use eq BP::Model::ColumnType::IDREF) {
 				Carp::croak('It is not allowed to redefine column '.$column->name.'. It is an idref one!');
 			}
 		} else {
 			push(@columnNames,$column->name);
 			# Is it a id column?
-			push(@idColumnNames,$column->name)  if($column->columnType->use eq DCC::Model::ColumnType::IDREF);
+			push(@idColumnNames,$column->name)  if($column->columnType->use eq BP::Model::ColumnType::IDREF);
 		}
 		
 		$columnDecl{$column->name}=$column;
@@ -3102,7 +3102,7 @@ sub parseColumnSet($$$) {
 		if(exists($columnDecl{${$column->columnType->default}})) {
 			my $defColumn = $columnDecl{${$column->columnType->default}};
 			
-			if($defColumn->columnType->use >= DCC::Model::ColumnType::IDREF) {
+			if($defColumn->columnType->use >= BP::Model::ColumnType::IDREF) {
 				$column->columnType->setDefault($defColumn);
 			} else {
 				Carp::croak('Column '.$column->name.' pretends to use as default value generator column '.${$column->columnType->default}.' which is not neither idref nor required!');
@@ -3119,7 +3119,7 @@ sub parseColumnSet($$$) {
 # combineColumnSets parameters:
 #	dontCroak: A flag which must be set to true when we want to skip
 #		idref column redefinitions, instead of complaining about
-#	columnSets: An array of DCC::Model::ColumnSet instances
+#	columnSets: An array of BP::Model::ColumnSet instances
 # It returns a columnSet which is the combination of the input ones. The
 # order of the columns is preserved the most.
 # It is not allowed to override IDREF columns
@@ -3137,7 +3137,7 @@ sub combineColumnSets($@) {
 	
 	# Array with the idref column names
 	# Array with column names (all)
-	# Hash of DCC::Model::Column instances
+	# Hash of BP::Model::Column instances
 	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
 	
 	# And now, the next ones!
@@ -3148,14 +3148,14 @@ sub combineColumnSets($@) {
 			if(exists($columnDecl{$columnName})) {
 				# Same column, so skip!
 				next  if($columnDecl{$columnName} == $p_columns->{$columnName});
-				if($columnDecl{$columnName}->columnType->use eq DCC::Model::ColumnType::IDREF) {
+				if($columnDecl{$columnName}->columnType->use eq BP::Model::ColumnType::IDREF) {
 					next  if($dontCroak);
 					Carp::croak('It is not allowed to redefine column '.$columnName.'. It is an idref one!');
 				}
 			} else {
 				push(@columnNames,$columnName);
 				# Is it a id column?
-				push(@idColumnNames,$columnName)  if($p_columns->{$columnName}->columnType->use eq DCC::Model::ColumnType::IDREF);
+				push(@idColumnNames,$columnName)  if($p_columns->{$columnName}->columnType->use eq BP::Model::ColumnType::IDREF);
 			}
 			$columnDecl{$columnName} = $p_columns->{$columnName};
 		}
@@ -3184,16 +3184,16 @@ sub columnNames {
 	return $_[0]->[1];
 }
 
-# Hash of DCC::Model::Column instances
+# Hash of BP::Model::Column instances
 sub columns {
 	return $_[0]->[2];
 }
 
 # idColumns parameters:
-#	idConcept: The DCC::Model::Concept instance owning the id columns
+#	idConcept: The BP::Model::Concept instance owning the id columns
 #	doMask: Are the columns masked for storage?
-#	weakAnnotations: DCC::Model::AnnotationSet from weak-concepts.
-# It returns a DCC::Model::ColumnSet instance, with the column declarations
+#	weakAnnotations: BP::Model::AnnotationSet from weak-concepts.
+# It returns a BP::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
 sub idColumns($;$$) {
 	my $self = shift;
@@ -3218,11 +3218,11 @@ sub idColumns($;$$) {
 }
 
 # relatedColumns parameters:
-#	myConcept: A DCC::Model::Concept instance, which this columnSet belongs
+#	myConcept: A BP::Model::Concept instance, which this columnSet belongs
 #		The kind of relation could be inheritance, or 1:N
-#	relatedConcept: A DCC::Model::RelatedConcept instance
+#	relatedConcept: A BP::Model::RelatedConcept instance
 #		(which contains the optional prefix to be set to the name when the columns are cloned)
-# It returns a DCC::Model::ColumnSet instance, with the column declarations
+# It returns a BP::Model::ColumnSet instance, with the column declarations
 # corresponding to columns with idref restriction
 sub relatedColumns(;$$) {
 	my $self = shift;
@@ -3253,7 +3253,7 @@ sub relatedColumns(;$$) {
 }
 
 # addColumns parameters:
-#	inputColumnSet: A DCC::Model::ColumnSet instance which contains
+#	inputColumnSet: A BP::Model::ColumnSet instance which contains
 #		the columns to be added to this column set. Those
 #		columns with the same name are overwritten.
 #	isPKFriendly: if true, when the columns are idref, their role are
@@ -3292,7 +3292,7 @@ sub addColumns($;$) {
 		unless(exists($p_columnsHash->{$inputColumnName})) {
 			push(@{$p_columnNames},$inputColumnName);
 			# Is it a id column which should be added?
-			if($doAddIDREF && $inputColumn->columnType->use eq DCC::Model::ColumnType::IDREF) {
+			if($doAddIDREF && $inputColumn->columnType->use eq BP::Model::ColumnType::IDREF) {
 				push(@{$p_idColumnNames},$inputColumnName);
 			}
 		}
@@ -3326,13 +3326,13 @@ sub resolveDefaultCalculatedValues() {
 1;
 
 
-package DCC::Model::FilenamePattern;
+package BP::Model::FilenamePattern;
 
 use constant FileTypeSymbolPrefixes => {
-	'$' => 'DCC::Model::Annotation',
-	'@' => 'DCC::Model::CV',
+	'$' => 'BP::Model::Annotation',
+	'@' => 'BP::Model::CV',
 	'\\' => 'Regexp',
-	'%' => 'DCC::Model::SimpleType'
+	'%' => 'BP::Model::SimpleType'
 };
 
 # This is the constructor.
@@ -3340,8 +3340,8 @@ use constant FileTypeSymbolPrefixes => {
 #	filenameFormatDecl: a XML::LibXML::Element 'dcc:filename-format' node
 #		which has all the information to defined a named filename format
 #		(or pattern)
-#	model: A DCC::Model instance, where this filename-pattern is declared
-# returns a DCC::Model::FilenamePattern instance, with all the needed information
+#	model: A BP::Model instance, where this filename-pattern is declared
+# returns a BP::Model::FilenamePattern instance, with all the needed information
 # to recognise a filename following the defined pattern
 sub parseFilenameFormat($$) {
 	my $class = shift;
@@ -3394,10 +3394,10 @@ sub parseFilenameFormat($$) {
 			} else {
 				Carp::croak("Unknown pattern '$2' used in filename-format '$formatString'");
 			}
-		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::SimpleType') {
+		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::SimpleType') {
 			my $typeObject = $model->getItemType($2);
 			if(defined($typeObject)) {
-				my $type = $typeObject->[DCC::Model::ColumnType::TYPEPATTERN];
+				my $type = $typeObject->[BP::Model::ColumnType::TYPEPATTERN];
 				if(defined($type)) {
 					$pattern .= '('.(($type->isa('Regexp'))?$type:'.+').')';
 					
@@ -3409,7 +3409,7 @@ sub parseFilenameFormat($$) {
 			} else {
 				Carp::croak("Unknown type '$2' used in filename-format '$formatString'");
 			}
-		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::CV') {
+		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::CV') {
 			my $CV = $model->getNamedCV($2);
 			if(defined($CV)) {
 				$pattern .= '(.+)';
@@ -3419,7 +3419,7 @@ sub parseFilenameFormat($$) {
 			} else {
 				Carp::croak("Unknown controlled vocabulary '$2' used in filename-format '$formatString'");
 			}
-		} elsif(FileTypeSymbolPrefixes->{$1} eq 'DCC::Model::Annotation') {
+		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::Annotation') {
 			my $annot = $2;
 			
 			# Is it a context-constant?
@@ -3474,12 +3474,12 @@ sub pattern {
 }
 
 # An array of post matching validations to be applied
-# (mainly DCC::Model::CV validation and context constant catching)
+# (mainly BP::Model::CV validation and context constant catching)
 sub postValidationParts {
 	return $_[0]->[2];
 }
 
-# It returns a hash of DCC::Model::ConceptDomain instances
+# It returns a hash of BP::Model::ConceptDomain instances
 sub registeredConceptDomains {
 	return $_[0]->[3];
 }
@@ -3512,7 +3512,7 @@ sub match($) {
 		next  unless(defined($part));
 		
 		# Is it a CV?
-		if($part->isa('DCC::Model::CV')) {
+		if($part->isa('BP::Model::CV')) {
 			Carp::croak('Validation against CV did not match')  unless($part->isValid($values[$ipart]));
 			
 			# Let's save the matched CV value
@@ -3554,7 +3554,7 @@ sub matchConcept($) {
 
 # This method is called when new concept domains are being read,
 # and they use this filename-format, so they can be found later
-#	conceptDomain:	a DCC::Model::ConceptDomain instance, which uses this filename-pattern
+#	conceptDomain:	a BP::Model::ConceptDomain instance, which uses this filename-pattern
 # The method returns nothing
 sub registerConceptDomain($) {
 	my $self = shift;
@@ -3570,13 +3570,13 @@ sub registerConceptDomain($) {
 1;
 
 
-package DCC::Model::ConceptDomain;
+package BP::Model::ConceptDomain;
 
 # This is the constructor.
 # parseConceptDomain parameters:
 #	conceptDomainDecl: a XML::LibXML::Element 'dcc:concept-domain' element
-#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
-# it returns a DCC::Model::ConceptDomain instance, with all the concept domain
+#	model: a BP::Model instance used to validate the concepts, columsn, etc...
+# it returns a BP::Model::ConceptDomain instance, with all the concept domain
 # structures and data
 sub parseConceptDomain($$) {
 	my $class = shift;
@@ -3603,8 +3603,8 @@ sub parseConceptDomain($$) {
 		\@concepts,
 		\%conceptHash,
 		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 'true'))?1:undef,
-		DCC::Model::DescriptionSet->parseDescriptions($conceptDomainDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($conceptDomainDecl),
+		BP::Model::DescriptionSet->parseDescriptions($conceptDomainDecl),
+		BP::Model::AnnotationSet->parseAnnotations($conceptDomainDecl),
 	);
 	
 	# Does the filename-pattern exist?
@@ -3622,7 +3622,7 @@ sub parseConceptDomain($$) {
 
 	# And now, next method handles parsing of embedded concepts
 	# It must register the concepts in the concept domain as soon as possible
-	DCC::Model::Concept::ParseConceptContainer($conceptDomainDecl,$retConceptDomain,$model);
+	BP::Model::Concept::ParseConceptContainer($conceptDomainDecl,$retConceptDomain,$model);
 	
 	# Last, chicken and egg problem, part 2
 	# This step must be delayed, because we need a enumeration of all the concepts
@@ -3643,19 +3643,19 @@ sub fullname {
 }
 
 # Filename Pattern for the filenames
-# A DCC::Model::FilenamePattern instance
+# A BP::Model::FilenamePattern instance
 sub filenamePattern {
 	return $_[0]->[2];
 }
 
 # An array with the concepts under this concept domain umbrella
-# An array of DCC::Model::Concept instances
+# An array of BP::Model::Concept instances
 sub concepts {
 	return $_[0]->[3];
 }
 
 # A hash with the concepts under this concept domain umbrella
-# A hash of DCC::Model::Concept instances
+# A hash of BP::Model::Concept instances
 sub conceptHash {
 	return $_[0]->[4];
 }
@@ -3665,19 +3665,19 @@ sub isAbstract {
 	return $_[0]->[5];
 }
 
-# An instance of a DCC::Model::DescriptionSet, holding the documentation
+# An instance of a BP::Model::DescriptionSet, holding the documentation
 # for this Conceptdomain
 sub description {
 	return $_[0]->[6];
 }
 
-# A DCC::Model::AnnotationSet instance, with all the annotations
+# A BP::Model::AnnotationSet instance, with all the annotations
 sub annotations {
 	return $_[0]->[7];
 }
 
 # registerConcept parameters:
-#	concept: a DCC::Model::Concept instance, which is going to be registered in the concept domain
+#	concept: a BP::Model::Concept instance, which is going to be registered in the concept domain
 sub registerConcept($) {
 	my $self = shift;
 	
@@ -3711,7 +3711,7 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::Concept;
+package BP::Model::Concept;
 
 # Prototypes of static methods
 sub ParseConceptContainer($$$;$);
@@ -3720,12 +3720,12 @@ sub ParseConceptContainer($$$;$);
 # ParseConceptContainer parameters:
 #	conceptContainerDecl: A XML::LibXML::Element 'dcc:concept-domain'
 #		or 'dcc:weak-concepts' instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#	conceptDomain: A BP::Model::ConceptDomain instance, where this concept
 #		has been defined.
-#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
-#	idConcept: An optional, identifying DCC::Model::Concept instance of
+#	model: a BP::Model instance used to validate the concepts, columsn, etc...
+#	idConcept: An optional, identifying BP::Model::Concept instance of
 #		all the (weak) concepts to be parsed from the container
-# it returns an array of DCC::Model::Concept instances, which are all the
+# it returns an array of BP::Model::Concept instances, which are all the
 # concepts and weak concepts inside the input concept container
 sub ParseConceptContainer($$$;$) {
 	my $conceptContainerDecl = shift;
@@ -3734,14 +3734,14 @@ sub ParseConceptContainer($$$;$) {
 	my $idConcept = shift;	# This is optional (remember!)
 	
 	# Let's get the annotations inside the concept container
-	my $weakAnnotations = DCC::Model::AnnotationSet->parseAnnotations($conceptContainerDecl);
-	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'concept')) {
+	my $weakAnnotations = BP::Model::AnnotationSet->parseAnnotations($conceptContainerDecl);
+	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'concept')) {
 		# Concepts self register on the concept domain!
-		my $concept = DCC::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept,$weakAnnotations);
+		my $concept = BP::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept,$weakAnnotations);
 		
 		# There should be only one!
-		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'weak-concepts')) {
-			DCC::Model::Concept::ParseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept);
+		foreach my $weakContainerDecl ($conceptDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'weak-concepts')) {
+			BP::Model::Concept::ParseConceptContainer($weakContainerDecl,$conceptDomain,$model,$concept);
 			last;
 		}
 	}
@@ -3750,13 +3750,13 @@ sub ParseConceptContainer($$$;$) {
 # This is the constructor
 # parseConcept paramereters:
 #	conceptDecl: A XML::LibXML::Element 'dcc:concept' instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, where this concept
+#	conceptDomain: A BP::Model::ConceptDomain instance, where this concept
 #		has been defined.
-#	model: a DCC::Model instance used to validate the concepts, columsn, etc...
-#	idConcept: An optional, identifying DCC::Model::Concept instance of
+#	model: a BP::Model instance used to validate the concepts, columsn, etc...
+#	idConcept: An optional, identifying BP::Model::Concept instance of
 #		the concept to be parsed from conceptDecl
 #	weakAnnotations: The weak annotations for the columns of the identifying concept
-# it returns an array of DCC::Model::Concept instances, the first one
+# it returns an array of BP::Model::Concept instances, the first one
 # corresponds to this concept, and the other ones are the weak-concepts
 sub parseConcept($$$;$$) {
 	my $class = shift;
@@ -3778,7 +3778,7 @@ sub parseConcept($$$;$$) {
 	my $parentConcept = undef;
 	
 	# There must be at most one
-	foreach my $baseConcept ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'extends')) {
+	foreach my $baseConcept ($conceptDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'extends')) {
 		$parentConceptDomainName = $baseConcept->hasAttribute('domain')?$baseConcept->getAttribute('domain'):undef;
 		$parentConceptName = $baseConcept->getAttribute('concept');
 		
@@ -3800,7 +3800,7 @@ sub parseConcept($$$;$$) {
 	push(@conceptBaseTypes,@{$parentConcept->baseConceptTypes})  if(defined($parentConcept));
 	
 	# Now, let's get the base concept types
-	my @baseConceptTypesDecl = $conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'base-concept-type');
+	my @baseConceptTypesDecl = $conceptDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'base-concept-type');
 	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypesDecl)==0 && !defined($parentConcept));
 
 	my @basetypes = ();
@@ -3823,14 +3823,14 @@ sub parseConcept($$$;$$) {
 		}
 	}
 	# First, let's process the basetypes columnSets
-	my $baseColumnSet = (scalar(@basetypes) > 1)?DCC::Model::ColumnSet->combineColumnSets(1,map { $_->columnSet } @basetypes):((scalar(@basetypes) == 1)?$basetypes[0]->columnSet:undef);
+	my $baseColumnSet = (scalar(@basetypes) > 1)?BP::Model::ColumnSet->combineColumnSets(1,map { $_->columnSet } @basetypes):((scalar(@basetypes) == 1)?$basetypes[0]->columnSet:undef);
 	
 	# And now, let's process the inherited columnSets, along with the basetypes ones
 	if(defined($baseColumnSet)) {
 		# Let's combine!
 		if(defined($parentConcept)) {
 			# Restrictive mode, with croaks
-			$baseColumnSet = DCC::Model::ColumnSet->combineColumnSets(undef,$parentConcept->columnSet,$baseColumnSet);
+			$baseColumnSet = BP::Model::ColumnSet->combineColumnSets(undef,$parentConcept->columnSet,$baseColumnSet);
 		}
 	} elsif(defined($parentConcept)) {
 		# Should we clone this, to avoid potentian side effects?
@@ -3841,7 +3841,7 @@ sub parseConcept($$$;$$) {
 	}
 	
 	# Preparing the columns
-	my $columnSet = DCC::Model::ColumnSet->parseColumnSet($conceptDecl,$baseColumnSet,$model);
+	my $columnSet = BP::Model::ColumnSet->parseColumnSet($conceptDecl,$baseColumnSet,$model);
 	
 	# Adding the ones from the identifying concept
 	# (and later from the related stuff)
@@ -3880,8 +3880,8 @@ sub parseConcept($$$;$$) {
 	}
 	
 	# Saving the related concepts (the ones explicitly declared within this concept)
-	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(DCC::Model::dccNamespace,'related-to')) {
-		my $parsedRelatedConcept = DCC::Model::RelatedConcept->parseRelatedConcept($relatedDecl);
+	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'related-to')) {
+		my $parsedRelatedConcept = BP::Model::RelatedConcept->parseRelatedConcept($relatedDecl);
 		if(defined($parsedRelatedConcept->id) && exists($relPos{$parsedRelatedConcept->id})) {
 			# TODO Validation of a legal substitution
 			$related[$relPos{$parsedRelatedConcept->id}] = $parsedRelatedConcept;
@@ -3906,8 +3906,8 @@ sub parseConcept($$$;$$) {
 		$conceptFullname,
 		\@conceptBaseTypes,
 		$conceptDomain,
-		DCC::Model::DescriptionSet->parseDescriptions($conceptDecl),
-		DCC::Model::AnnotationSet->parseAnnotations($conceptDecl,defined($parentConcept)?$parentConcept->annotations:undef),
+		BP::Model::DescriptionSet->parseDescriptions($conceptDecl),
+		BP::Model::AnnotationSet->parseAnnotations($conceptDecl,defined($parentConcept)?$parentConcept->annotations:undef),
 		$columnSet,
 		$idConcept,
 		\@related,
@@ -3933,12 +3933,12 @@ sub fullname {
 	return $_[0]->[1];
 }
 
-# A reference to the array of DCC::Model::ConceptType instances basetypes
+# A reference to the array of BP::Model::ConceptType instances basetypes
 sub baseConceptTypes {
 	return $_[0]->[2];
 }
 
-# The DCC::Model::ConceptType instance basetype is the first element of the array
+# The BP::Model::ConceptType instance basetype is the first element of the array
 # It returns undef if there is no one
 sub baseConceptType {
 	my $self = shift;
@@ -3959,7 +3959,7 @@ sub goesToCollection {
 	return defined($baseConceptType) ? $baseConceptType->goesToCollection : undef;
 }
 
-# If goesToCollection is true, it returns a DCC::Model::Collection instance
+# If goesToCollection is true, it returns a BP::Model::Collection instance
 sub collection {
 	my $self = shift;
 	
@@ -3979,44 +3979,44 @@ sub key {
 	return (defined($baseConceptType) && !$baseConceptType->goesToCollection) ? $baseConceptType->key : undef;
 }
 
-# The DCC::Model::ConceptDomain instance where this concept is defined
+# The BP::Model::ConceptDomain instance where this concept is defined
 sub conceptDomain {
 	return $_[0]->[3];
 }
 
-# A DCC::Model::DescriptionSet instance, with all the descriptions
+# A BP::Model::DescriptionSet instance, with all the descriptions
 sub description {
 	return $_[0]->[4];
 }
 
-# A DCC::Model::AnnotationSet instance, with all the annotations
+# A BP::Model::AnnotationSet instance, with all the annotations
 sub annotations {
 	return $_[0]->[5];
 }
 
-# A DCC::Model::ColumnSet instance with all the columns (including the inherited ones) of this concept
+# A BP::Model::ColumnSet instance with all the columns (including the inherited ones) of this concept
 sub columnSet {
 	return $_[0]->[6];
 }
 
-# A DCC::Model::Concept instance, which represents the identifying concept of this one
+# A BP::Model::Concept instance, which represents the identifying concept of this one
 sub idConcept {
 	return $_[0]->[7];
 }
 
-# related conceptNames, an array of DCC::Model::RelatedConcept (trios concept domain name, concept name, prefix)
+# related conceptNames, an array of BP::Model::RelatedConcept (trios concept domain name, concept name, prefix)
 sub relatedConcepts {
 	return $_[0]->[8];
 }
 
-# A DCC::Model::Concept instance, which represents the concept which has been extended
+# A BP::Model::Concept instance, which represents the concept which has been extended
 sub parentConcept {
 	return $_[0]->[9];
 }
 
 # refColumns parameters:
-#	relatedConcept: The DCC::Model::RelatedConcept instance which rules this (with the optional prefix to put on cloned idref columns)
-# It returns a DCC::Model::ColumnSet instance with clones of all the idref columns
+#	relatedConcept: The BP::Model::RelatedConcept instance which rules this (with the optional prefix to put on cloned idref columns)
+# It returns a BP::Model::ColumnSet instance with clones of all the idref columns
 # referring to this object and with a possible prefix.
 sub refColumns($) {
 	my $self = shift;
@@ -4030,7 +4030,7 @@ sub refColumns($) {
 
 # idColumns parameters:
 #	doMask: Are the columns masked for storage?
-#	weakAnnotations: DCC::Model::AnnotationSet from weak-concepts
+#	weakAnnotations: BP::Model::AnnotationSet from weak-concepts
 sub idColumns(;$$) {
 	my $self = shift;
 	
@@ -4086,12 +4086,12 @@ sub TO_JSON() {
 1;
 
 
-package DCC::Model::RelatedConcept;
+package BP::Model::RelatedConcept;
 
 # This is the constructor.
 # parseRelatedConcept parameters:
 #	relatedDecl: A XML::LibXML::Element 'dcc:related-concept' instance
-# It returns a DCC::Model::RelatedConcept instance
+# It returns a BP::Model::RelatedConcept instance
 sub parseRelatedConcept($) {
 	my $class = shift;
 	
@@ -4109,7 +4109,7 @@ sub parseRelatedConcept($) {
 		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
 		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->getAttribute('partial-participation') eq 'true')?1:undef,
 		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef,
-		DCC::Model::AnnotationSet->parseAnnotations($relatedDecl),
+		BP::Model::AnnotationSet->parseAnnotations($relatedDecl),
 		$relatedDecl->hasAttribute('id')?$relatedDecl->getAttribute('id'):undef,
 	],$class);
 }
@@ -4126,12 +4126,12 @@ sub keyPrefix {
 	return $_[0]->[2];
 }
 
-# It returns a DCC::Model::Concept instance
+# It returns a BP::Model::Concept instance
 sub concept {
 	return $_[0]->[3];
 }
 
-# It returns a DCC::Model::ColumnSet with the remote columns used for this relation
+# It returns a BP::Model::ColumnSet with the remote columns used for this relation
 sub columnSet {
 	return $_[0]->[4];
 }
@@ -4156,7 +4156,7 @@ sub isInheritable {
 	return $_[0]->[8];
 }
 
-# It returns a DCC::Model::AnnotationSet instance
+# It returns a BP::Model::AnnotationSet instance
 sub annotations {
 	return $_[0]->[9];
 }
@@ -4167,7 +4167,7 @@ sub id {
 }
 
 # setRelatedConcept parameters:
-#	concept: the DCC::Model::Concept instance being referenced
+#	concept: the BP::Model::Concept instance being referenced
 #	columnSet: the columns inherited from the concept, already with the key prefix
 sub setRelatedConcept($$) {
 	my $self = shift;
@@ -4177,14 +4177,14 @@ sub setRelatedConcept($$) {
 	my $concept = shift;
 	my $columnSet = shift;
 	
-	Carp::croak('Parameter must be either a DCC::Model::Concept or undef')  unless(!defined($concept) || (ref($concept) && $concept->isa('DCC::Model::Concept')));
-	Carp::croak('Parameter must be either a DCC::Model::ColumnSet or undef')  unless(!defined($columnSet) || (ref($columnSet) && $columnSet->isa('DCC::Model::ColumnSet')));
+	Carp::croak('Parameter must be either a BP::Model::Concept or undef')  unless(!defined($concept) || (ref($concept) && $concept->isa('BP::Model::Concept')));
+	Carp::croak('Parameter must be either a BP::Model::ColumnSet or undef')  unless(!defined($columnSet) || (ref($columnSet) && $columnSet->isa('BP::Model::ColumnSet')));
 	
 	$self->[3] = $concept;
 	$self->[4] = $columnSet;
 }
 
-# clone creates a new DCC::Model::RelatedConcept
+# clone creates a new BP::Model::RelatedConcept
 sub clone() {
 	my $self = shift;
 	

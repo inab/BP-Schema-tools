@@ -3,16 +3,16 @@
 use strict;
 use Carp;
 
-package DCC::Loader::Storage;
+package BP::Loader::Storage;
 
-use DCC::Model;
+use BP::Model;
 
 # The registered storage models
 our %storage_names;
 
 # Constructor parameters:
 #	storageModel: the key identifying the storage model
-#	model: a DCC::Model instance
+#	model: a BP::Model instance
 #	other parameters
 sub new($$;@) {
 	# Very special case for multiple inheritance handling
@@ -47,8 +47,8 @@ sub generateNativeModel($) {
 }
 
 # loadConcepts parameters:
-#	p_mainCorrelatableConcepts: a reference to an array of DCC::Loader::CorrelatableConcept instances.
-#	p_otherCorrelatedConcepts: a reference to an array of DCC::Loader::CorrelatableConcept instances (the "free slaves" ones).
+#	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
+#	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
 sub loadConcepts(\@\@) {
 	Carp::croak('Unimplemented method!');
 }
@@ -61,10 +61,10 @@ sub parseOrderingHints($) {
 	
 	my $retvalBlock = undef;
 	if(ref($ordHints) && $ordHints->isa('XML::LibXML::Element')
-		&& $ordHints->namespaceURI eq DCC::Model::dccNamespace
+		&& $ordHints->namespaceURI eq BP::Model::dccNamespace
 		&& $ordHints->localname eq 'ordering-hints'
 	) {
-		foreach my $block ($ordHints->getChildrenByTagNameNS(DCC::Model::dccNamespace,'block')) {
+		foreach my $block ($ordHints->getChildrenByTagNameNS(BP::Model::dccNamespace,'block')) {
 			$retvalBlock = $block->textContent;
 			last;
 		}
@@ -74,7 +74,7 @@ sub parseOrderingHints($) {
 }
 
 # _fancyColumnOrdering parameters:
-#	concept: a DCC::Concept instance
+#	concept: a BP::Concept instance
 # It returns an array with the column names from the concept in a fancy
 # order, based on several criteria, like annotations
 sub _fancyColumnOrdering($) {

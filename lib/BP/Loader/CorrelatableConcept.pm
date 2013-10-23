@@ -2,7 +2,7 @@
 
 use strict;
 use Carp;
-use DCC::Model;
+use BP::Model;
 
 use File::Temp;
 use Sys::CPU;
@@ -13,7 +13,7 @@ use Sys::CPU;
 use boolean;
 use DateTime::Format::ISO8601;
 
-package DCC::Loader::CorrelatableConcept::File;
+package BP::Loader::CorrelatableConcept::File;
 
 my $SORT = 'sort';
 my $GREP = 'grep';
@@ -40,12 +40,12 @@ sub filename {
 }
 
 # readColDesc parameters:
-#	concept: a DCC::Model::Concept
+#	concept: a BP::Model::Concept
 #	isIdentifying: 1 or undef
 #	isSlave: 1 or undef
 # This method reads the line with the column order from the input file
-# and maps their positions to their corresponding DCC::Model::Column
-# instances from the DCC::Model::Concept used to create this instance
+# and maps their positions to their corresponding BP::Model::Column
+# instances from the BP::Model::Concept used to create this instance
 sub readColDesc($$$) {
 	my $self = shift;
 	
@@ -54,7 +54,7 @@ sub readColDesc($$$) {
 	unless(exists($self->{coldesc})) {
 		my $concept = shift;
 		
-		Carp::croak('Parameter must be a DCC::Model::Concept')  unless(defined($concept) && ref($concept) && $concept->isa('DCC::Model::Concept'));
+		Carp::croak('Parameter must be a BP::Model::Concept')  unless(defined($concept) && ref($concept) && $concept->isa('BP::Model::Concept'));
 		my $isIdentifying = shift;
 		my $isSlave = shift;
 		
@@ -106,7 +106,7 @@ sub readColDesc($$$) {
 				}
 			}
 			
-			# Mapping the columns in the file to the DCC::Model::Column instances in the DCC::Model::Concept
+			# Mapping the columns in the file to the BP::Model::Column instances in the BP::Model::Concept
 			my %unmappedCols = map { $_ => undef } @{$columnSet->columnNames};
 			my $pos = 0;
 			my $effpos = 0;
@@ -137,8 +137,8 @@ sub readColDesc($$$) {
 						$typeCheck = $column->columnType->dataChecker;
 						
 						# Optimization
-						$typePrep = undef  if($typePrep == \&DCC::Model::ColumnType::__string);
-						$typeCheck = undef  if($typeCheck == \&DCC::Model::ColumnType::__true);
+						$typePrep = undef  if($typePrep == \&BP::Model::ColumnType::__string);
+						$typeCheck = undef  if($typeCheck == \&BP::Model::ColumnType::__true);
 						push(@coldesc,[$columnName,$typePrep,$typeCheck,$column]);
 						push(@colpos,$effpos);
 					}
@@ -191,7 +191,7 @@ sub getColumnMap() {
 }
 
 # generatePipeSentence parameters:
-#	referenceFile: a DCC::Loader::CorrelatableConcept::File, whose columns are used as reference (optional)
+#	referenceFile: a BP::Loader::CorrelatableConcept::File, whose columns are used as reference (optional)
 sub generatePipeSentence(;$) {
 	my $self = shift;
 	
@@ -355,10 +355,10 @@ sub cleanup() {
 }
 
 
-package DCC::Loader::CorrelatableConcept;
+package BP::Loader::CorrelatableConcept;
 
 # Constructor parameters:
-#	concept: a DCC::Model::Concept
+#	concept: a BP::Model::Concept
 #	conceptFiles: the file(name)s with the content
 sub new($@) {
 	my $proto = shift;
@@ -370,13 +370,13 @@ sub new($@) {
 	
 	$self->{concept} = shift;
 	my @conceptFiles = @_;
-	@{$self->{conceptFiles}} = map { DCC::Loader::CorrelatableConcept::File->new($_) } @conceptFiles;
+	@{$self->{conceptFiles}} = map { BP::Loader::CorrelatableConcept::File->new($_) } @conceptFiles;
 	$self->{correlatedConcepts} = undef;
 
 	return $self;
 }
 
-# It returns a DCC::Model::Concept instance
+# It returns a BP::Model::Concept instance
 sub concept {
 	return $_[0]->{concept};
 }
@@ -400,14 +400,14 @@ sub isSlave() {
 }
 
 # addCorrelatedConcept parameters:
-#	correlatedConcept: a DCC::Loader::CorrelatableConcept instance, of a concept which is identified by this
+#	correlatedConcept: a BP::Loader::CorrelatableConcept instance, of a concept which is identified by this
 sub addCorrelatedConcept($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $correlatedConcept = shift;
-	Carp::croak('Parameter must be a DCC::Loader::CorrelatableConcept')  unless(defined($correlatedConcept) && ref($correlatedConcept) && $correlatedConcept->isa('DCC::Loader::CorrelatableConcept'));
+	Carp::croak('Parameter must be a BP::Loader::CorrelatableConcept')  unless(defined($correlatedConcept) && ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
 	Carp::croak('You can only add correlated concepts')  unless(defined($correlatedConcept->concept->idConcept) && $correlatedConcept->concept->idConcept==$self->concept);
 	
 	$self->{correlatedConcepts} = []   unless(defined($self->{correlatedConcepts}));
@@ -417,8 +417,8 @@ sub addCorrelatedConcept($) {
 }
 
 # This method reads the line with the column order from the inputs files
-# and maps their positions to their corresponding DCC::Model::Column
-# instances from the DCC::Model::Concept used to create this instance
+# and maps their positions to their corresponding BP::Model::Column
+# instances from the BP::Model::Concept used to create this instance
 sub readColDesc() {
 	my $self = shift;
 	

@@ -20,12 +20,12 @@ use File::Spec;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
-use DCC::Model;
-use DCC::Loader::CorrelatableConcept;
-use DCC::Loader::Storage;
-# These are included so they self-register on DCC::Loader::Storage
-use DCC::Loader::Storage::Relational;
-use DCC::Loader::Storage::MongoDB;
+use BP::Model;
+use BP::Loader::CorrelatableConcept;
+use BP::Loader::Storage;
+# These are included so they self-register on BP::Loader::Storage
+use BP::Loader::Storage::Relational;
+use BP::Loader::Storage::MongoDB;
 
 use Time::HiRes;
 
@@ -55,7 +55,7 @@ if(scalar(@ARGV)>=2) {
 	
 	my $model = undef;
 	eval {
-		$model = DCC::Model->new($modelFile);
+		$model = BP::Model->new($modelFile);
 	};
 	
 	if($@) {
@@ -66,7 +66,7 @@ if(scalar(@ARGV)>=2) {
 	Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists('storage','load'));
 	my $loadModel = $ini->val('storage','load');
 	
-	my $loader = DCC::Loader::Storage->new($loadModel,$model,$ini);
+	my $loader = BP::Loader::Storage->new($loadModel,$model,$ini);
 	
 	my %storageModels = (
 		$loadModel => $loader
@@ -76,7 +76,7 @@ if(scalar(@ARGV)>=2) {
 	if($ini->exists('storage','model')) {
 		my $storageModelNames = $ini->val('storage','model');
 		foreach my $storageModelName (split(/,/,$storageModelNames)) {
-			$storageModels{$storageModelName} = DCC::Loader::Storage->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
+			$storageModels{$storageModelName} = BP::Loader::Storage->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
 			
 			print "Generating native model for $storageModelName... ";
 			$storageModels{$storageModelName}->generateNativeModel($workingDir);
@@ -126,7 +126,7 @@ if(scalar(@ARGV)>=2) {
 			my($concept,$matchedFileset) = @{$set};
 			
 			my $conceptKey = $concept+0;
-			$correlatableConcepts{$conceptKey} = DCC::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
+			$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
 			
 			# Save for later processing
 			if($loader->isHierarchical() && ! $concept->goesToCollection()) {

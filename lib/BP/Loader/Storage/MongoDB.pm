@@ -3,20 +3,20 @@
 use strict;
 use Carp;
 
-use DCC::Model;
+use BP::Model;
 
 use MongoDB;
 use Config::IniFiles;
 
-package DCC::Loader::Storage::MongoDB;
+package BP::Loader::Storage::MongoDB;
 
-use base qw(DCC::Loader::Storage);
+use base qw(BP::Loader::Storage);
 
 our $SECTION;
 
 BEGIN {
 	$SECTION = 'mongodb';
-	$DCC::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
+	$BP::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
 };
 
 my @DEFAULTS = (
@@ -27,7 +27,7 @@ my @DEFAULTS = (
 );
 
 # Constructor parameters:
-#	model: a DCC::Model instance
+#	model: a BP::Model instance
 #	config: a Config::IniFiles instance
 sub new($$) {
 	my $proto = shift;
@@ -76,8 +76,8 @@ sub generateNativeModel($) {
 }
 
 # loadConcepts parameters:
-#	p_mainCorrelatableConcepts: a reference to an array of DCC::Loader::CorrelatableConcept instances.
-#	p_otherCorrelatedConcepts: a reference to an array of DCC::Loader::CorrelatableConcept instances (the "free slaves" ones).
+#	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
+#	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
 sub loadConcepts(\@\@) {
 	my $self = shift;
 	

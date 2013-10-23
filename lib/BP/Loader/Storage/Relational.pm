@@ -6,13 +6,13 @@ use Carp;
 use Config::IniFiles;
 use File::Spec;
 
-use DCC::Model;
+use BP::Model;
 
 use MongoDB;
 
-package DCC::Loader::Storage::Relational;
+package BP::Loader::Storage::Relational;
 
-use base qw(DCC::Loader::Storage);
+use base qw(BP::Loader::Storage);
 
 # Global variable (using "my" because "our" could have too much scope)
 my $RELEASE = 1;
@@ -20,7 +20,7 @@ my $RELEASE = 1;
 our $SECTION;
 BEGIN {
 	$SECTION = 'relational';
-	$DCC::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
+	$BP::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
 };
 
 my @DEFAULTS = (
@@ -47,7 +47,7 @@ my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
 $ABSTYPE2SQLKEY{'string'} = 'VARCHAR(128)';
 
 # Constructor parameters:
-#	model: a DCC::Model instance
+#	model: a BP::Model instance
 #	config: a Config::IniFiles instance
 sub new($$) {
 	my $proto = shift;
@@ -114,7 +114,7 @@ sub generateNativeModel($) {
 	my $filePrefix = $self->{'file-prefix'};
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	
-#	model: a DCC::Model instance, with the parsed model.
+#	model: a BP::Model instance, with the parsed model.
 	my $model = $self->{model};
 #	the path to the SQL output file
 	my $outfileSQL = $fullFilePrefix.'.sql';
@@ -157,7 +157,7 @@ sub generateNativeModel($) {
 				print $SQL "\nCREATE TABLE $basename (";
 				
 				
-				my @colorder = DCC::Loader::Storage::_fancyColumnOrdering($concept);
+				my @colorder = BP::Loader::Storage::_fancyColumnOrdering($concept);
 				my $columnSet = $concept->columnSet;
 				my $gottable=undef;
 				
@@ -178,9 +178,9 @@ sub generateNativeModel($) {
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
-					my $SQLtype = ($columnType->use == DCC::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
+					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
 					# Registering CVs
-					if(defined($columnType->restriction) && $columnType->restriction->isa('DCC::Model::CV')) {
+					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
 						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
@@ -194,7 +194,7 @@ sub generateNativeModel($) {
 						# Second position is the SQL type
 						# Third position holds the columns which depend on this CV
 						unless(exists($cvdump{$cvname})) {
-							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
+							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
 							push(@cvorder,$cvname);
 						}
 						
@@ -203,10 +203,10 @@ sub generateNativeModel($) {
 					}
 					
 					print $SQL "\n\t",$column->name,' ',$SQLtype;
-					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
+					print $SQL ' NOT NULL'  if($columnType->use >= BP::Model::ColumnType::IDREF);
 					if(defined($columnType->default) && ref($columnType->default) eq '') {
 						my $default = $columnType->default;
-						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC]);
+						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;

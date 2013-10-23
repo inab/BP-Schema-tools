@@ -29,6 +29,7 @@ Documentation Generator (optional)
 
 The documentation generator relies on LaTeX document preparation system. So, the needed requisites are:
 
+* Perl package TeX::Encode
 * TeXLive 2012, with XeLaTeX and pdfLaTeX enabled.
 * graphviz, version 2.30.1 or above (graph layout program)
 * dot2tex, version 2.8.7 (https://code.google.com/p/dot2tex/)
@@ -46,6 +47,7 @@ If you want to populate a MongoDB database with tabular files which follow a mod
 
 * MongoDB 2.4.6 or later (earlier versions had corruption problems), 64 bit version, with V8 javascript engine
 *	MongoDB Perl module from CPAN, along with its dependences.
+*	Config::IniFiles.
 
 If you are lucky and you can install MongoDB by package, then most of the configuration work is done. In any case, you should take into account where the database files are going to be stored. Depending on the Linux distro you are using, either you will only have to set up the right paths on /etc/mongod.conf file, or you have to change a variables file which is used by the startup init script (like in Gentoo).
 

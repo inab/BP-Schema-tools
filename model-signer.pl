@@ -4,7 +4,7 @@ use strict;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
-use DCC::Model;
+use BP::Model;
 
 
 if(scalar(@ARGV)>=2) {
@@ -15,7 +15,7 @@ if(scalar(@ARGV)>=2) {
 	my $model = undef;
 	
 	eval {
-		$model = DCC::Model->new($modelFile);
+		$model = BP::Model->new($modelFile);
 	};
 	
 	if($@) {

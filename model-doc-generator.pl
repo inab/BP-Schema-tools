@@ -16,7 +16,7 @@ use File::Temp;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
-use DCC::Model;
+use BP::Model;
 
 use constant PDFLATEX => 'xelatex';
 #use constant TERMSLIMIT => 200;
@@ -162,14 +162,14 @@ my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
 $ABSTYPE2SQLKEY{'string'} = 'VARCHAR(128)';
 
 my %COLKIND2ABBR = (
-	DCC::Model::ColumnType::IDREF	=>	'I',
-	DCC::Model::ColumnType::REQUIRED	=>	'R',
-	DCC::Model::ColumnType::DESIRABLE	=>	'D',
-	DCC::Model::ColumnType::OPTIONAL	=>	'O'
+	BP::Model::ColumnType::IDREF	=>	'I',
+	BP::Model::ColumnType::REQUIRED	=>	'R',
+	BP::Model::ColumnType::DESIRABLE	=>	'D',
+	BP::Model::ColumnType::OPTIONAL	=>	'O'
 );
 
 # fancyColumnOrdering parameters:
-#	concept: a DCC::Concept instance
+#	concept: a BP::Concept instance
 # It returns an array with the column names from the concept in a fancy
 # order, based on several criteria, like annotations
 sub fancyColumnOrdering1($) {
@@ -199,10 +199,10 @@ sub parseOrderingHints($) {
 	
 	my $retvalBlock = undef;
 	if(ref($ordHints) && $ordHints->isa('XML::LibXML::Element')
-		&& $ordHints->namespaceURI eq DCC::Model::dccNamespace
+		&& $ordHints->namespaceURI eq BP::Model::dccNamespace
 		&& $ordHints->localname eq 'ordering-hints'
 	) {
-		foreach my $block ($ordHints->getChildrenByTagNameNS(DCC::Model::dccNamespace,'block')) {
+		foreach my $block ($ordHints->getChildrenByTagNameNS(BP::Model::dccNamespace,'block')) {
 			$retvalBlock = $block->textContent;
 			last;
 		}
@@ -212,7 +212,7 @@ sub parseOrderingHints($) {
 }
 
 # fancyColumnOrdering parameters:
-#	concept: a DCC::Concept instance
+#	concept: a BP::Concept instance
 # It returns an array with the column names from the concept in a fancy
 # order, based on several criteria, like annotations
 sub fancyColumnOrdering($) {
@@ -281,7 +281,7 @@ sub sql_escape($) {
 }
 
 # genSQL parameters:
-#	model: a DCC::Model instance, with the parsed model.
+#	model: a BP::Model instance, with the parsed model.
 #	the path to the SQL output file
 #	the path to the SQL script which joins 
 sub genSQL($$$) {
@@ -344,9 +344,9 @@ sub genSQL($$$) {
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
-					my $SQLtype = ($columnType->use == DCC::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
+					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
 					# Registering CVs
-					if(defined($columnType->restriction) && $columnType->restriction->isa('DCC::Model::CV')) {
+					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
 						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
@@ -360,7 +360,7 @@ sub genSQL($$$) {
 						# Second position is the SQL type
 						# Third position holds the columns which depend on this CV
 						unless(exists($cvdump{$cvname})) {
-							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
+							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
 							push(@cvorder,$cvname);
 						}
 						
@@ -369,10 +369,10 @@ sub genSQL($$$) {
 					}
 					
 					print $SQL "\n\t",$column->name,' ',$SQLtype;
-					print $SQL ' NOT NULL'  if($columnType->use >= DCC::Model::ColumnType::IDREF);
+					print $SQL ' NOT NULL'  if($columnType->use >= BP::Model::ColumnType::IDREF);
 					if(defined($columnType->default) && ref($columnType->default) eq '') {
 						my $default = $columnType->default;
-						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[DCC::Model::ColumnType::ISNOTNUMERIC]);
+						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
@@ -635,7 +635,7 @@ use constant {
 
 # assemblePDF parameters:
 #	templateDir: The LaTeX template dir to be used to generate the PDF
-#	model: DCC::Model instance
+#	model: BP::Model instance
 #	bpmodelFile: The model in bpmodel format
 #	bodyFile: The temporal file where the generated documentation has been written.
 #	outputFile: The output PDF file.
@@ -802,7 +802,7 @@ sub printDescription($$;$) {
 }
 
 # processInlineCVTable parameters:
-#	CV: a DCC::Model::CV instance
+#	CV: a BP::Model::CV instance
 # it returns a LaTeX formatted table
 sub processInlineCVTable($) {
 	my($CV)=@_;
@@ -814,7 +814,7 @@ sub processInlineCVTable($) {
 		$output .= latex_format($documentation)."\n";
 	}
 	# TODO: process the annotations
-	my $inline = $CV->kind ne DCC::Model::CV::URIFETCHED || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline');
+	my $inline = $CV->kind ne BP::Model::CV::URIFETCHED || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline');
 	
 	$output .= "\n";
 	# We have the values. Do we have to print them?
@@ -829,7 +829,7 @@ sub processInlineCVTable($) {
 		$output .= '\end{tabularx}';
 	}
 	
-	if($CV->kind eq DCC::Model::CV::URIFETCHED) {
+	if($CV->kind eq BP::Model::CV::URIFETCHED) {
 		# Is it an external CV
 		$output .= '\textit{(See ';
 		
@@ -860,7 +860,7 @@ sub processInlineCVTable($) {
 }
 
 # printCVTable parameters:
-#	CV: A named DCC::Model::CV instance (the controlled vocabulary)
+#	CV: A named BP::Model::CV instance (the controlled vocabulary)
 #	O: The output filehandle where the documentation about the
 #		controlled vocabulary is written.
 sub printCVTable($$) {
@@ -962,7 +962,7 @@ EOF
 EOF
 	}
 	
-	if($CV->kind() eq DCC::Model::CV::URIFETCHED){
+	if($CV->kind() eq BP::Model::CV::URIFETCHED){
 		# Remote CVs
 		# Is it an external CV
 		
@@ -1053,7 +1053,7 @@ sub parseColor($) {
 	my @colorComponents = ();
 	
 	if(ref($color) && $color->isa('XML::LibXML::Element')
-		&& $color->namespaceURI eq DCC::Model::dccNamespace
+		&& $color->namespaceURI eq BP::Model::dccNamespace
 		&& $color->localname eq 'color'
 	) {
 		my $colorText = $color->textContent();
@@ -1109,7 +1109,7 @@ sub readLaTeXTemplate($$) {
 }
 
 # genConceptGraphNode parameters:
-#	concept: a DCC::Model::Concept instance
+#	concept: a BP::Model::Concept instance
 #	p_defaultColorDef: a reference to the default color
 #	templateAbsDocDir: The absolute path to the template directory
 # It returns the DOT line of the node and the color of this concept
@@ -1147,10 +1147,10 @@ sub genConceptGraphNode($\@$) {
 		my $colType = $column->columnType->use;
 		my $isId = exists($idColumnNames{$column->name});
 		my $icon = undef;
-		if($colType eq DCC::Model::ColumnType::DESIRABLE || $colType eq DCC::Model::ColumnType::OPTIONAL) {
+		if($colType eq BP::Model::ColumnType::DESIRABLE || $colType eq BP::Model::ColumnType::OPTIONAL) {
 			$formattedColumnName = '\textcolor{gray}{'.$formattedColumnName.'}';
 		}
-		if($colType eq DCC::Model::ColumnType::DESIRABLE || $isId) {
+		if($colType eq BP::Model::ColumnType::DESIRABLE || $isId) {
 			$formattedColumnName = '\textbf{'.$formattedColumnName.'}';
 		}
 		# Hyperlinking only to concrete concepts
@@ -1185,8 +1185,8 @@ DEOF
 }
 
 # genConceptDomainGraph parameters:
-#	model: A DCC::Model instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	model: A BP::Model instance
+#	conceptDomain: A BP::Model::ConceptDomain instance, from the model
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
 #	p_colors: Hash of colors for each concept (to be filled)
@@ -1402,7 +1402,7 @@ DEOF
 }
 
 # genModelGraph parameters:
-#	model: A DCC::Model instance
+#	model: A BP::Model instance
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
 #	p_colors: Hash of colors for each concept (to be filled)
@@ -1638,8 +1638,8 @@ DEOF
 }
 
 # printConceptDomain parameters:
-#	model: A DCC::Model instance
-#	conceptDomain: A DCC::Model::ConceptDomain instance, from the model
+#	model: A BP::Model instance
+#	conceptDomain: A BP::Model::ConceptDomain instance, from the model
 #	figurePrefix: The prefix path for the generated figures (.dot, .latex, etc...)
 #	templateAbsDocDir: Directory of the template being used
 #	O: The filehandle where to print the documentation about the concept domain
@@ -1818,25 +1818,25 @@ EOF
 			
 			# Now the possible CV
 			my $restriction = $columnType->restriction;
-			if(ref($restriction) eq 'DCC::Model::CV') {
+			if(ref($restriction) eq 'BP::Model::CV') {
 				# Is it an anonymous CV?
 				my $numterms = scalar(@{$restriction->order});
 				if($numterms < 20 && (!defined($restriction->name) || (exists($restriction->annotations->hash->{'disposition'}) && $restriction->annotations->hash->{disposition} eq 'inline'))) {
 					$values .= processInlineCVTable($restriction);
 				} else {
 					my $cv = $restriction->name;
-					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne BP::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 				}
 			}
 			
 			### HACK ###
-			if(ref($restriction) eq 'DCC::Model::CompoundType') {
+			if(ref($restriction) eq 'BP::Model::CompoundType') {
 				my $rColumnSet = $restriction->columnSet;
 				foreach my $rColumnName (@{$rColumnSet->columnNames}) {
 					my $rColumn = $rColumnSet->columns->{$rColumnName};
 					my $rRestr = $rColumn->columnType->restriction;
 					
-					if(defined($rRestr) && ref($rRestr) eq 'DCC::Model::CV') {
+					if(defined($rRestr) && ref($rRestr) eq 'BP::Model::CV') {
 						$values .= "\n".'\textit{\texttt{\textbf{'.$rColumnName.'}}}';
 						# Is it an anonymous CV?
 						my $numterms = scalar(@{$rRestr->order});
@@ -1844,7 +1844,7 @@ EOF
 							$values .= "\n".processInlineCVTable($rRestr);
 						} else {
 							my $cv = $rRestr->name;
-							$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'.(($rRestr->kind() ne DCC::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+							$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'.(($rRestr->kind() ne BP::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
 						}
 					}
 				}
@@ -1855,7 +1855,7 @@ EOF
 			# What it goes to the column type column
 			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
 			
-			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'DCC::Model::CompoundType');
+			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
 			
 			push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'.latex_escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
 			
@@ -1873,7 +1873,7 @@ EOF
 			print $O join(' & ',
 				'\label{column:'.labelColumn($concept,$column).'}'.latex_escape($column->name),
 				$colTypeStr,
-				$COLKIND2ABBR{($columnType->use!=DCC::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:DCC::Model::ColumnType::REQUIRED},
+				$COLKIND2ABBR{($columnType->use!=BP::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:BP::Model::ColumnType::REQUIRED},
 				join("\n\n",@descriptionItems)
 			),'\\\\ \hline',"\n";
 		}
@@ -1929,7 +1929,7 @@ if(scalar(@ARGV)>=3) {
 	}
 	
 	eval {
-		$model = DCC::Model->new($modelFile);
+		$model = BP::Model->new($modelFile);
 	};
 	
 	if($@) {
