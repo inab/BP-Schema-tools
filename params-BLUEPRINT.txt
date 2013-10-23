@@ -1,5 +1,0 @@
-# Blueprint parameters
-cvKey	Key
-cvDesc	Description
-schemaVer	0.1.6
-EnsemblVer	68
