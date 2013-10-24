@@ -4,6 +4,7 @@ use strict;
 use Carp;
 
 use Config::IniFiles;
+use File::Basename;
 use File::Spec;
 
 use BP::Model;
@@ -102,6 +103,14 @@ sub __sql_escape($) {
 	return '\''.$par.'\'';
 }
 
+sub __entryName($;$) {
+	my($concept,$conceptDomainName)=@_;
+	
+	$conceptDomainName = $concept->conceptDomain->name  unless(defined($conceptDomainName));
+	
+	return $conceptDomainName.'_'.$concept->name;
+}
+
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
 # It returns a list of absolute paths to the generated files
@@ -129,7 +138,7 @@ sub generateNativeModel($) {
 	my $aliasType = $ABSTYPE2SQL{'boolean'};
 	
 	if(open(my $SQL,'>:utf8',$outfileSQL)) {
-		print $SQL '-- File '.basename($outfileSQL)."\n";
+		print $SQL '-- File '.File::Basename::basename($outfileSQL)."\n";
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
@@ -147,7 +156,7 @@ sub generateNativeModel($) {
 			my %pcon = ();
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				#my $conceptName = $concept->name;
-				my $basename = entryName($concept,$conceptDomainName);
+				my $basename = __entryName($concept,$conceptDomainName);
 
 				my %fkselemrefs = ();
 				my @fkselem = ($basename,$concept,\%fkselemrefs);
@@ -167,7 +176,7 @@ sub generateNativeModel($) {
 						$fksinit = 1;
 						
 						my $refConcept = $column->refConcept;
-						my $refBasename = entryName($refConcept);
+						my $refBasename = __entryName($refConcept);
 						
 						$fkselemrefs{$refBasename} = [$refConcept,[]]  unless(exists($fkselemrefs{$refBasename}));
 						
@@ -206,7 +215,7 @@ sub generateNativeModel($) {
 					print $SQL ' NOT NULL'  if($columnType->use >= BP::Model::ColumnType::IDREF);
 					if(defined($columnType->default) && ref($columnType->default) eq '') {
 						my $default = $columnType->default;
-						$default = sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
+						$default = __sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
@@ -227,11 +236,11 @@ sub generateNativeModel($) {
 			
 			## Now, the FK restrictions from inheritance
 			#foreach my $concept (@{$conceptDomain->concepts}) {
-			#	my $basename = entryName($concept,$conceptDomainName);
+			#	my $basename = __entryName($concept,$conceptDomainName);
 			#	if(defined($concept->idConcept)) {
 			#		my $idConcept = $concept->idConcept;
 			#		my $refColnames = $idConcept->columnSet->idColumnNames;
-			#		my $idBasename = entryName($idConcept,$conceptDomainName);
+			#		my $idBasename = __entryName($idConcept,$conceptDomainName);
 			#		
 			#		# Referencing only concepts with keys
 			#		if(exists($pcon{$idBasename})) {
@@ -245,7 +254,7 @@ sub generateNativeModel($) {
 		
 		# Now, the CVs and the columns using them
 		if(open(my $TSQL,'>:utf8',$outfileTranslateSQL)) {
-			print $TSQL '-- File '.basename($outfileTranslateSQL)."\n";
+			print $TSQL '-- File '.File::Basename::basename($outfileTranslateSQL)."\n";
 			print $TSQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 			print $TSQL '-- '.localtime()."\n";
 			
@@ -295,7 +304,7 @@ CVEOF
 INSERT INTO ${cvname}_CV VALUES
 CVEOF
 					}
-					print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?sql_escape($term->key):$term->key,sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
+					print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($term->key):$term->key,__sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
 					
 					$first++;
 					if($first>=$chunklines) {
@@ -308,7 +317,7 @@ CVEOF
 				$first = 0;
 				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
 					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 					
 					foreach my $akey (@{$term->keys}) {
 						if($first==0) {
@@ -316,7 +325,7 @@ CVEOF
 INSERT INTO ${cvname}_CVkeys VALUES
 CVEOF
 						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?sql_escape($akey):$akey,$ekey),')';
+						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($akey):$akey,$ekey),')';
 						
 						$first++;
 						if($first>=$chunklines) {
@@ -330,7 +339,7 @@ CVEOF
 				$first = 0;
 				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
 					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 					
 					next  unless(defined($term->parents) && scalar(@{$term->parents})>0);
 					
@@ -340,7 +349,7 @@ CVEOF
 INSERT INTO ${cvname}_CVparents VALUES
 CVEOF
 						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?sql_escape($pkey):$pkey),')';
+						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
 						
 						$first++;
 						if($first>=$chunklines) {
@@ -354,7 +363,7 @@ CVEOF
 				$first = 0;
 				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
 					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?sql_escape($term->key):$term->key;
+					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 					
 					next  unless(defined($term->ancestors) && scalar(@{$term->ancestors})>0);
 					
@@ -364,7 +373,7 @@ CVEOF
 INSERT INTO ${cvname}_CVancestors VALUES
 CVEOF
 						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?sql_escape($pkey):$pkey),')';
+						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
 						
 						$first++;
 						if($first>=$chunklines) {
@@ -429,7 +438,7 @@ TCVEOF
 			
 			foreach my $concept (@{$conceptDomain->concepts}) {
 				#my $conceptName = $concept->name;
-				my $basename = entryName($concept,$conceptDomainName);
+				my $basename = __entryName($concept,$conceptDomainName);
 				
 				# Let's visit each concept!
 				if(scalar(@{$concept->relatedConcepts})>0) {
@@ -439,7 +448,7 @@ TCVEOF
 						# Skipping foreign keys to abstract concepts
 						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
 						
-						my $refBasename = entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
+						my $refBasename = __entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
 						#print $SQL "\nCREATE INDEX ${basename}_FK${cycle}_${refBasename} ON $basename (",join(',',map { $_->name } @refColumns),");\n";
 						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
