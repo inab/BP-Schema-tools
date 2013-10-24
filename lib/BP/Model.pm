@@ -71,15 +71,26 @@ use constant {
 	DATATYPECHECKER	=>	3,
 };
 
+use constant {
+	STRING_TYPE	=> 'string',
+	TEXT_TYPE	=> 'text',
+	INTEGER_TYPE	=> 'integer',
+	DECIMAL_TYPE	=> 'decimal',
+	BOOLEAN_TYPE	=> 'boolean',
+	TIMESTAMP_TYPE	=> 'timestamp',
+	DURATION_TYPE	=> 'duration',
+	COMPOUND_TYPE	=> 'compound',
+};
+
 use constant ItemTypes => {
-	'string'	=> [1,1,\&__string,undef],	# With this we avoid costly checks
-	'text'		=> [1,1,\&__string,undef],	# With this we avoid costly checks
-	'integer'	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef,\&__integer,undef],
-	'decimal'	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef,\&__decimal,undef],
-	'boolean'	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1,\&__boolean,undef],
-	'timestamp'	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1,\&__timestamp,undef],
-	'duration'	=> [qr/^$/,1,\&__duration,undef],
-	'compound'	=> [undef,1,undef,undef]
+	BP::Model::ColumnType::STRING_TYPE	=> [1,1,\&__string,undef],	# With this we avoid costly checks
+	BP::Model::ColumnType::TEXT_TYPE	=> [1,1,\&__string,undef],	# With this we avoid costly checks
+	BP::Model::ColumnType::INTEGER_TYPE	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef,\&__integer,undef],
+	BP::Model::ColumnType::DECIMAL_TYPE	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef,\&__decimal,undef],
+	BP::Model::ColumnType::BOOLEAN_TYPE	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1,\&__boolean,undef],
+	BP::Model::ColumnType::TIMESTAMP_TYPE	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1,\&__timestamp,undef],
+	BP::Model::ColumnType::DURATION_TYPE	=> [qr/^$/,1,\&__duration,undef],
+	BP::Model::ColumnType::COMPOUND_TYPE	=> [undef,1,undef,undef]
 };
 
 # Always valid value

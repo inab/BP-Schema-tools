@@ -147,19 +147,19 @@ sub labelColumn($$) {
 }
 
 my %ABSTYPE2SQL = (
-	'string' => 'VARCHAR(1024)',
-	'text' => 'TEXT',
-	'integer' => 'INTEGER',
-	'decimal' => 'DOUBLE PRECISION',
-	'boolean' => 'BOOL',
-	'timestamp' => 'DATETIME',
-	'duration' => 'VARCHAR(128)',
-	'compound' => 'TEXT',
+	BP::Model::ColumnType::STRING_TYPE	=> 'VARCHAR(1024)',
+	BP::Model::ColumnType::TEXT_TYPE	=> 'TEXT',
+	BP::Model::ColumnType::INTEGER_TYPE	=> 'INTEGER',
+	BP::Model::ColumnType::DECIMAL_TYPE	=> 'DOUBLE PRECISION',
+	BP::Model::ColumnType::BOOLEAN_TYPE	=> 'BOOL',
+	BP::Model::ColumnType::TIMESTAMP_TYPE	=> 'DATETIME',
+	BP::Model::ColumnType::DURATION_TYPE	=> 'VARCHAR(128)',
+	BP::Model::ColumnType::COMPOUND_TYPE	=> 'TEXT',
 );
 
 my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
 
-$ABSTYPE2SQLKEY{'string'} = 'VARCHAR(128)';
+$ABSTYPE2SQLKEY{BP::Model::ColumnType::STRING_TYPE} = 'VARCHAR(128)';
 
 my %COLKIND2ABBR = (
 	BP::Model::ColumnType::IDREF	=>	'I',
@@ -291,8 +291,8 @@ sub genSQL($$$) {
 	my @cvorder = ();
 	my %cvdump = ();
 	my $chunklines = 4096;
-	my $descType = $ABSTYPE2SQL{'string'};
-	my $aliasType = $ABSTYPE2SQL{'boolean'};
+	my $descType = $ABSTYPE2SQL{BP::Model::ColumnType::STRING_TYPE};
+	my $aliasType = $ABSTYPE2SQL{BP::Model::ColumnType::BOOLEAN_TYPE};
 	
 	if(open(my $SQL,'>:utf8',$outfileSQL)) {
 		print $SQL '-- File '.basename($outfileSQL)."\n";
