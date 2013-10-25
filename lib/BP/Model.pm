@@ -14,9 +14,6 @@ use URI;
 use Archive::Zip;
 use Archive::Zip::MemberRead;
 
-# Needed for JSON::true and JSON::false declarations
-use JSON;
-
 # Early subpackage constant declarations
 package BP::Model::CV;
 
@@ -1019,28 +1016,6 @@ sub types() {
 	return $self->{TYPES};
 }
 
-# This method is called by JSON library, which gives the structure to
-# be translated into JSON
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	# We need collections by path, not by id
-	my %jsonColls = map { $_->path => $_ } values(%{$self->{COLLECTIONS}});
-	
-	# The main features
-	my %jsonModel=(
-		'project'	=> $self->{project},
-		'schemaVer'	=> $self->{schemaVer},
-		'annotations'	=> $self->{ANNOTATIONS},
-		'collections'	=> \%jsonColls,
-		'domains'	=> $self->{CDOMAINHASH},
-	);
-	
-	return \%jsonModel;
-}
-
 1;
 
 # And now, the helpers for the different pseudo-packages
@@ -1090,20 +1065,6 @@ sub indexes {
 }
 
 #my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my %jsonCollection = (
-		'name'	=> $self->name,
-		'path'	=> $self->path,
-		'indexes'	=> $self->indexes
-	);
-	
-	return \%jsonCollection;
-}
 
 1;
 
@@ -1157,17 +1118,6 @@ sub isUnique {
 # attributes (attribute name, ascending/descending)
 sub indexAttributes {
 	return $_[0]->[1];
-}
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	return {
-		'unique'	=> $self->isUnique ? JSON::true : JSON::false,
-		'attrs'	=> [map { { 'name' => $_->[0], 'ord' => $_->[1] } } @{$self->indexAttributes}],
-	};
 }
 
 1;
@@ -1238,28 +1188,6 @@ sub clone() {
 	my $retval = bless(\@cloneData,ref($self));
 	
 	return $retval;
-}
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	if(scalar(@{$self})>0) {
-		my @arrayRef = @{$self};
-		
-		foreach my $val (@arrayRef) {
-			if(ref($val) eq 'ARRAY') {
-				$val = join('',map { (ref($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
-			} elsif(ref($val) && $val->can('toString')) {
-				$val = $val->toString();
-			}
-		}
-		
-		return \@arrayRef;
-	} else {
-		return undef;
-	}
 }
 
 1;
@@ -1379,28 +1307,6 @@ sub clone() {
 	my $retval = bless([\%hash,\@order],ref($self));
 	
 	return $retval;
-}
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	if(scalar(keys(%{$self->hash}))>0) {
-		my %hashRes = %{$self->hash};
-		
-		foreach my $val (values(%hashRes)) {
-			if(ref($val) eq 'ARRAY') {
-				$val = join('',map { (ref($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
-			} elsif(ref($val) && $val->can('toString')) {
-				$val = $val->toString();
-			}
-		}
-		
-		return \%hashRes;
-	} else {
-		return undef;
-	}
 }
 
 1;
@@ -2177,13 +2083,6 @@ sub _jsonId() {
 	return 'cv:'.$self->id;
 }
 
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-}
-
 1;
 
 package BP::Model::ConceptType;
@@ -2838,38 +2737,6 @@ sub clone(;$) {
 	return $retval;
 }
 
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my %jsonColumnType = (
-		'type'	=> $self->type,
-		'use'	=> $self->use,
-		'isArray'	=> defined($self->arraySeps) ? JSON::true : JSON::false,
-	);
-	
-	if(defined($self->default)) {
-		if(ref($self->default)) {
-			$jsonColumnType{'defaultCol'} = $self->default->name;
-		} else {
-			$jsonColumnType{'default'} = $self->default;
-		}
-	}
-	
-	if(defined($self->restriction)) {
-		if($self->restriction->isa('BP::Model::CV')) {
-			$jsonColumnType{'cv'} = $self->restriction->_jsonId;
-		} elsif($self->restriction->isa('BP::Model::CompoundType')) {
-			$jsonColumnType{'columns'} = $self->restriction->columnSet->columns;
-		} elsif($self->restriction->isa('Pattern')) {
-			$jsonColumnType{'pattern'} = $self->restriction;
-		}
-	}
-	
-	return \%jsonColumnType;
-}
-
 1;
 
 
@@ -3033,23 +2900,6 @@ sub cloneRelated($;$$$) {
 	}
 	
 	return $retval;
-}
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my %jsonColumn = (
-		'name'	=> $self->name,
-		'description'	=> $self->description,
-		'annotations'	=> $self->annotations,
-		'restrictions'	=> $self->columnType
-	);
-	
-	$jsonColumn{'refers'} = join('.',$self->refConcept->conceptDomain->name, $self->refConcept->name, $self->refColumn->name)  if(defined($self->refColumn));
-	
-	return \%jsonColumn;
 }
 
 1;
@@ -3700,25 +3550,6 @@ sub registerConcept($) {
 	$self->conceptHash->{$concept->name} = $concept;
 }
 
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my %jsonConceptDomain = (
-		'_id'	=> $self->name,
-		'name'	=> $self->name,
-		'fullname'	=> $self->fullname,
-		'isAbstract'	=> $self-> isAbstract ? JSON::true : JSON::false,
-		'description'	=> $self->description,
-		'annotations'	=> $self->annotations,
-		# 'filenamePattern'
-		'concepts'	=> $self->conceptHash
-	);
-	
-	return \%jsonConceptDomain;
-}
-
 1;
 
 
@@ -4061,37 +3892,6 @@ sub _jsonId() {
 	my $id = join('.',$self->conceptDomain->name, $self->name);
 	
 	return $id;
-}
-
-sub TO_JSON() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $id = $self->_jsonId;
-	my %jsonConcept = (
-		'_id'	=> $id,
-		'name'	=> $self->name,
-		'fullname'	=> $self->fullname,
-		'description'	=> $self->description,
-		'annotations'	=> $self->annotations,
-		'columns'	=> $self->columnSet->columns,
-		# TOBEFINISHED
-	);
-	
-	$jsonConcept{'extends'} = $self->parentConcept->_jsonId   if(defined($self->parentConcept));
-	$jsonConcept{'identifiedBy'} = $self->idConcept->_jsonId   if(defined($self->idConcept));
-	if(scalar(@{$self->relatedConcepts})>0) {
-		my %relT = map { $_->concept->_jsonId => undef } @{$self->relatedConcepts};
-		$jsonConcept{'relatedTo'} = [ keys(%relT) ];
-	}
-	
-	# Now, giving absolute _id to the columns
-	#foreach my $val (values(%{$jsonConcept{'columns'}})) {
-	#	$val->{'_id'} = join('.',$id,$val->name);
-	#}
-	
-	return \%jsonConcept;
 }
 
 1;
