@@ -7,6 +7,10 @@ package BP::Loader::Storage;
 
 use BP::Model;
 
+# This constant is used by several storage models.
+# Therefore, it is better defined here.
+use constant FILE_PREFIX_KEY => 'file-prefix';
+
 # The registered storage models
 our %storage_names;
 

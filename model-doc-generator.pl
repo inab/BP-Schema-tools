@@ -19,6 +19,7 @@ use File::Temp;
 use FindBin;
 use lib "$FindBin::Bin/lib";
 use BP::Model;
+use BP::Loader::Storage;
 use BP::Loader::Storage::Relational;
 
 use constant PDFLATEX => 'xelatex';
@@ -1617,7 +1618,7 @@ if(scalar(@ARGV)>=3) {
 	# Generating the SQL file for BioMart
 	my $conf = Config::IniFiles->new();
 	# Setting up the 
-	$conf->newval($BP::Loader::Storage::Relational::SECTION,BP::Loader::Storage::Relational::FILE_PREFIX_KEY,$relOutfilePrefix);
+	$conf->newval($BP::Loader::Storage::Relational::SECTION,BP::Loader::Storage::FILE_PREFIX_KEY,$relOutfilePrefix);
 	my $relStor = BP::Loader::Storage::Relational->new($model,$conf);
 	$relStor->generateNativeModel($workingDir);
 	

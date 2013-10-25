@@ -10,6 +10,8 @@ use Config::IniFiles;
 
 package BP::Loader::Storage::MongoDB;
 
+use JSON;
+
 use base qw(BP::Loader::Storage);
 
 our $SECTION;
@@ -20,6 +22,7 @@ BEGIN {
 };
 
 my @DEFAULTS = (
+	[BP::Loader::Storage::FILE_PREFIX_KEY => 'model'],
 	['db' => undef],
 	['host' => undef],
 	['port' => 27017],
@@ -73,6 +76,22 @@ sub generateNativeModel($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $workingDir = shift;
+	
+	my $filePrefix = $self->{BP::Loader::Storage::FILE_PREFIX_KEY};
+	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
+	my $outfileJSON = $fullFilePrefix.'.json';
+	
+	if(open(my $JSON_H,'>:utf8',$outfileJSON)) {
+		my $JSON = JSON->new->convert_blessed;
+		$JSON->pretty;
+		print $JSON_H $JSON->encode($self->{model});
+		close($JSON_H);
+	} else {
+		Carp::croak("Unable to create output file $outfileJSON");
+	}
+	
+	return [$outfileJSON];
 }
 
 # loadConcepts parameters:
