@@ -24,8 +24,10 @@ BEGIN {
 	$BP::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
 };
 
+use constant FILE_PREFIX_KEY => 'file-prefix';
+
 my @DEFAULTS = (
-	['file-prefix' => 'model']
+	[BP::Loader::Storage::Relational::FILE_PREFIX_KEY => 'model']
 #	['db' => undef],
 #	['host' => undef],
 #	['port' => 27017],
@@ -94,7 +96,7 @@ sub setFilePrefix($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	$self->{'file-prefix'} = shift;
+	$self->{BP::Loader::Storage::Relational::FILE_PREFIX_KEY} = shift;
 }
 
 sub __sql_escape($) {
@@ -120,7 +122,7 @@ sub generateNativeModel($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $workingDir = shift;
-	my $filePrefix = $self->{'file-prefix'};
+	my $filePrefix = $self->{BP::Loader::Storage::Relational::FILE_PREFIX_KEY};
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	
 #	model: a BP::Model instance, with the parsed model.
