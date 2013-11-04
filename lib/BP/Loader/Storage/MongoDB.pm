@@ -317,6 +317,8 @@ sub loadConcepts(\@\@) {
 	my $MONGOPORT = $self->{port};
 	my $BMAX = $self->{'batch-size'};
 	
+	# We want MongoDB to return booleans as booleans, not as integers
+	$MongoDB::BSON::use_boolean = 1;
 	# Let's test the connection
 	my $connection = MongoDB::Connection->new(host => $MONGOHOST, port => $MONGOPORT);
 	my $db = $connection->get_database($MONGODB);
