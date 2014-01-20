@@ -1492,7 +1492,8 @@ EOF
 			push(@descriptionItems,$values)  if(length($values)>0);
 			
 			# What it goes to the column type column
-			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
+			my $arrayDecorators = defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'';
+			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.$arrayDecorators).'}');
 			
 			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
 			
