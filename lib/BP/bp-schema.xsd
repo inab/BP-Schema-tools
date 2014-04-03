@@ -193,7 +193,7 @@
                     <xs:element ref="bp:ordering-hints" />
                 </xs:choice>
             </xs:choice>
-            <xs:attribute name="key" type="bp:symbolType" use="required">
+        	<xs:attribute name="key" type="bp:conceptTypeNameType" use="required">
                 <xs:annotation>
                     <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
                 </xs:annotation>
@@ -380,11 +380,21 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                 </xs:annotation>
                             </xs:element>
                             <xs:choice minOccurs="0" maxOccurs="1">
-                                <xs:element name="cv" type="bp:cvType">
-                                    <xs:annotation>
-                                        <xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
-                                    </xs:annotation>
-                                </xs:element>
+								<xs:choice minOccurs="1" maxOccurs="unbounded">
+                            		<xs:element name="cv" type="bp:cvType">
+                            			<xs:annotation>
+                            				<xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                            			</xs:annotation>
+                            		</xs:element>
+                            		<xs:element name="cv-ref">
+                            			<xs:annotation>
+                            				<xs:documentation>One or more references to named, controlled vocabularies</xs:documentation>
+                            			</xs:annotation>
+                            			<xs:complexType>
+                            				<xs:attributeGroup ref="bp:nameGroup" />
+                            			</xs:complexType>
+                            		</xs:element>
+								</xs:choice>
                                 <xs:element name="pattern" type="bp:patternType">
                                     <xs:annotation>
                                         <xs:documentation>An anonymous regular expression used to validate tokens of data</xs:documentation>
@@ -1052,7 +1062,11 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath=".//bp:column-type"></xs:selector>
             <xs:field xpath="@cv"></xs:field>
         </xs:keyref>
-        <xs:keyref refer="bp:collection-key" name="collection-key-ref">
+    	<xs:keyref refer="bp:cv-name-key" name="cv-ref-keyref">
+    		<xs:selector xpath=".//bp:cv-ref"></xs:selector>
+    		<xs:field xpath="@name"></xs:field>
+    	</xs:keyref>
+    	<xs:keyref refer="bp:collection-key" name="collection-key-ref">
             <xs:selector xpath=".//bp:concept-type"/>
             <xs:field xpath="@collection"/>
         </xs:keyref>
