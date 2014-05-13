@@ -2046,6 +2046,8 @@ sub __parseOBO($$) {
 			# Global remarks are treated as descriptions of the controlled vocabulary
 			if($elem eq 'remark') {
 				$self->description->addDescription(fromOBO($val));
+			} elsif($elem eq 'data-version') {
+				$self->annotations->addAnnotation($elem,fromOBO($val));
 			#} else {
 			#	$self->annotations->addAnnotation($elem,$val);
 			}
@@ -2132,6 +2134,15 @@ sub OBOserialize($;$) {
 	printOboKeyVal($O,'date',sprintf('%02d:%02d:%04d %02d:%02d',$timetoks[3],$timetoks[4]+1,$timetoks[5]+1900,$timetoks[2],$timetoks[1]));
 	printOboKeyVal($O,'auto-generated-by','BP::Model $Id$');
 	
+	# Do we have a data version?
+	my $dataVersion = undef;
+	if(exists($self->annotations->hash->{'data-version'})) {
+		$dataVersion = $self->annotations->hash->{'data-version'};
+	} else {
+		$dataVersion = sprintf('%04d-%02d-%02d',$timetoks[5]+1900,$timetoks[4]+1,$timetoks[3]);
+	}
+	printOboKeyVal($O,'data-version',toOBO($dataVersion));
+	
 	# Are there descriptions?
 	foreach my $desc (@{$self->description}) {
 		printOboKeyVal($O,'remark',toOBO($desc));
@@ -2142,6 +2153,17 @@ sub OBOserialize($;$) {
 	foreach my $term (@{$self->order},@{$self->aliasOrder}) {
 		$CVhash->{$term}->OBOserialize($O);
 	}
+}
+
+sub version() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $dataVersion = undef;
+	$dataVersion = $self->annotations->hash->{'data-version'}  if(exists($self->annotations->hash->{'data-version'}));
+	
+	return $dataVersion;
 }
 
 1;
