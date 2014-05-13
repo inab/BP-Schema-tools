@@ -422,6 +422,7 @@ my %CVCOMMANDS = (
 	'header' => undef,
 	'disposition' => undef,
 	'version' => undef,
+	'data-version' => undef,
 );
 
 sub printDescription($$;$) {
@@ -519,7 +520,9 @@ sub printCVTable($$) {
 	}
 	print $O "\\section{",latex_escape($caption),"} \\label{cvsec:$cvname}\n";
 	
-	print $O "\\textit{This controlled vocabulary has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
+	my $dataVersion = $CV->version;
+	
+	print $O "\\textit{This controlled vocabulary ".(defined($dataVersion)?'(version '.latex_escape($dataVersion).')':'')."has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
 	
 	my @header = ();
 	
