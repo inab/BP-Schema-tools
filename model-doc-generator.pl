@@ -268,7 +268,8 @@ use constant {
 	COVER_TEMPLATE_FILE	=>	'cover.latex',
 	FRONTMATTER_TEMPLATE_FILE	=>	'frontmatter.latex',
 	ICONS_DIR	=>	'icons',
-	FIGURE_PREAMBLE_FILE	=>	'figure-preamble.latex'
+	FIGURE_PREAMBLE_FILE	=>	'figure-preamble.latex',
+	MASTER_TEMPLATE_FILE	=>	'model-doc-generator.latex'
 };
 
 # assemblePDF parameters:
@@ -281,7 +282,7 @@ use constant {
 sub assemblePDF($$$$$$) {
 	my($templateDir,$model,$bpmodelFile,$bodyFile,$outputFile,$outputSH) = @_;
 	
-	my $masterTemplate = File::Spec->catfile($FindBin::Bin,basename($0,'.pl').'.latex');
+	my $masterTemplate = File::Spec->catfile($FindBin::Bin,REL_TEMPLATES_DIR,MASTER_TEMPLATE_FILE);
 	unless(-f $masterTemplate && -r $masterTemplate) {
 		die "ERROR: Unable to find master template LaTeX file $masterTemplate\n";
 	}
@@ -1017,7 +1018,7 @@ DEOF
 	} keys(%{$p_colors}));
 	
 	# The moment to call dot2tex
-	my $docpreamble = readLaTeXTemplate($FindBin::Bin,FIGURE_PREAMBLE_FILE);
+	my $docpreamble = readLaTeXTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
 	$docpreamble =~ tr/\n/ /;
 	my $fontpreamble = readLaTeXTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
 	$fontpreamble =~ tr/\n/ /;
@@ -1253,7 +1254,7 @@ DEOF
 	} keys(%{$p_colors}));
 	
 	# The moment to call dot2tex
-	my $docpreamble = readLaTeXTemplate($FindBin::Bin,FIGURE_PREAMBLE_FILE);
+	my $docpreamble = readLaTeXTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
 	$docpreamble =~ tr/\n/ /;
 	my $fontpreamble = readLaTeXTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
 	$fontpreamble =~ tr/\n/ /;
@@ -1512,7 +1513,8 @@ EOF
 			push(@descriptionItems,$values)  if(length($values)>0);
 			
 			# What it goes to the column type column
-			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.(defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'')).'}');
+			my $arrayDecorators = defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'';
+			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.$arrayDecorators).'}');
 			
 			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
 			
@@ -1579,7 +1581,7 @@ if(scalar(@ARGV)>=3) {
 	# and checking whether it exists
 	my $templateAbsDocDir = $templateDocDir;
 	unless(File::Spec->file_name_is_absolute($templateDocDir)) {
-		$templateAbsDocDir = File::Spec->catfile($FindBin::Bin,REL_TEMPLATES_DIR,$templateDocDir);
+		$templateAbsDocDir = File::Spec->catfile(dirname(File::Spec->rel2abs($modelFile)),$templateDocDir);
 	}
 	
 	unless(-d $templateAbsDocDir) {
