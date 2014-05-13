@@ -193,7 +193,7 @@ sub BP::Model::ColumnType::TO_JSON() {
 	}
 	
 	if(defined($self->restriction)) {
-		if($self->restriction->isa('BP::Model::CV')) {
+		if($self->restriction->isa('BP::Model::CV::Abstract')) {
 			$jsonColumnType{'cv'} = $self->restriction->_jsonId;
 		} elsif($self->restriction->isa('BP::Model::CompoundType')) {
 			$jsonColumnType{'columns'} = $self->restriction->columnSet->columns;

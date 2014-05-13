@@ -1153,16 +1153,18 @@ sub parseDescriptions($) {
 	foreach my $description ($container->getChildrenByTagNameNS(BP::Model::dccNamespace,'description')) {
 		my @dChildren = $description->nonBlankChildNodes();
 		
-		my $value = undef;
+		my $values = 0;
 		# We only save the nodeset when 
 		foreach my $dChild (@dChildren) {
-			#next  unless($dChild->nodeType == XML::LibXML::XML_ELEMENT_NODE);
+			unless($dChild->nodeType == XML::LibXML::XML_TEXT_NODE || $dChild->nodeType == XML::LibXML::XML_CDATA_SECTION_NODE) {
+				$values = undef;
+				last;
+			}
 			
-			$value = \@dChildren;
-			last;
+			$values++;
 		}
 		
-		push(@{$self},defined($value)?$value:$description->textContent());
+		push(@{$self},defined($values)?$description->textContent():\@dChildren);
 	}
 	
 	return $self;
@@ -1492,7 +1494,7 @@ sub calculateAncestors($;$$) {
 	return $p_ancestors;
 }
 
-# This method serializes the BP::Model::CV instance into a OBO structure
+# This method serializes the BP::Model::CV::Term instance into a OBO structure
 # serialize parameters:
 #	O: the output file handle
 sub OBOserialize($) {
@@ -1566,8 +1568,71 @@ sub docURI {
 
 1;
 
+package BP::Model::CV::Abstract;
+
+# The anonymous controlled vocabulary counter, used for anonymous id generation
+my $_ANONCOUNTER = 0;
+
+# This is the empty constructor
+sub new() {
+	# Very special case for multiple inheritance handling
+	# This is the seed
+	my($facet)=shift;
+	my($class)=ref($facet) || $facet;
+	
+	return bless([],$class);
+}
+
+sub _anonId() {
+	my $anonId = '_anonCV_'.$_ANONCOUNTER;
+	$_ANONCOUNTER++;
+	
+	return $anonId;
+}
+
+sub id() {
+	Carp::croak("Unimplemented method!");
+}
+
+# With this method a term or a term-alias is validated
+sub isValid($) {
+	Carp::croak("Unimplemented method!");
+}
+
+# A instance of BP::Model::CV::Term
+sub getTerm($) {
+	Carp::croak("Unimplemented method!");
+}
+
+# With this method a reference to a validator is given
+sub dataChecker {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return sub($) {
+		$self->isValid($_[0]);
+	};
+}
+
+# It returns an array of instances of descendants of BP::Model::CV
+sub getEnclosedCVs() {
+	Carp::croak("Unimplemented method!");
+}
+
+sub _jsonId() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return 'cv:'.$self->id;
+}
+
+1;
 
 package BP::Model::CV;
+
+use base qw(BP::Model::CV::Abstract);
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
 use constant {
@@ -1585,25 +1650,25 @@ use constant {
 	CVID		=>	11	# The CV id (used by SQL and MongoDB uniqueness purposes)
 };
 
-# The anonymous controlled vocabulary counter, used for anonymous id generation
-my $_ANONCOUNTER = 0;
-
 # This is the empty constructor
 sub new() {
-	my $class = shift;
+	my($self)=shift;
+	my($class)=ref($self) || $self;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	$self = $class->SUPER::new()  unless(ref($self));
 	
 	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
 	my $cvAnnot = BP::Model::AnnotationSet->new();
 	my $cvDesc = BP::Model::DescriptionSet->new();
-	my @structCV=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef);
+	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef);
 	
-	$structCV[BP::Model::CV::CVKEYS] = [];
+	$self->[BP::Model::CV::CVKEYS] = [];
 	# Hash shared by terms and term-aliases
-	$structCV[BP::Model::CV::CVHASH] = {};
+	$self->[BP::Model::CV::CVHASH] = {};
 	
-	return bless(\@structCV,$class);
+	return $self;
 }
 
 # This is the constructor and/or the parser
@@ -1768,8 +1833,7 @@ sub id {
 		if(defined($_[0]->[BP::Model::CV::CVNAME])) {
 			$_[0]->[BP::Model::CV::CVID] = $_[0]->[BP::Model::CV::CVNAME];
 		} else {
-			$_[0]->[BP::Model::CV::CVID] = '_anonCV_'.$_ANONCOUNTER;
-			$_ANONCOUNTER++;
+			$_[0]->[BP::Model::CV::CVID] = $_[0]->_anonId;
 		}
 	}
 	
@@ -1799,15 +1863,20 @@ sub isValid($) {
 	return exists($self->CV->{$cvkey});
 }
 
-# With this method a reference to a validator is given
-sub dataChecker {
+# A instance of BP::Model::CV::Term
+sub getTerm($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return sub($) {
-		$self->isValid($_[0]);
-	};
+	my $cvkey = shift;
+	
+	return exists($self->CV->{$cvkey})?$self->CV->{$cvkey}:undef;
+}
+
+# It returns a self-contained array of instances of descendants of BP::Model::CV
+sub getEnclosedCVs() {
+	return [ $_[0] ];
 }
 
 # addTerm parameters:
@@ -1820,7 +1889,7 @@ sub addTerm($) {
 	my $term = shift;
 
 	# Let's initialize
-	foreach my $key (@{$term->keys}) {
+	foreach my $key (@{$term->isAlias?$term->keys:[$term->key]}) {
 		# There are collissions!!!!
 		if($self->isValid($key)) {
 			# The original term
@@ -2075,12 +2144,94 @@ sub OBOserialize($;$) {
 	}
 }
 
-sub _jsonId() {
+1;
+
+package BP::Model::CV::Meta;
+
+use base qw(BP::Model::CV::Abstract);
+
+use constant {
+	CVID		=>	0	# The CV id (used by SQL and MongoDB uniqueness purposes)
+};
+
+# This is the empty constructor
+sub new() {
+	my($self)=shift;
+	my($class)=ref($self) || $self;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	$self = $class->SUPER::new()  unless(ref($self));
+	$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
+	
+	return $self;
+}
+
+# This method add enclosed CVs to the meta-CV
+sub add(@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return 'cv:'.$self->id;
+	# It stores only the ones which are from BP::Model::CV
+	foreach my $p_cv (@_) {
+		if(ref($p_cv) && $p_cv->isa('BP::Model::CV::Abstract')) {
+			push(@{$self},@{$p_cv->getEnclosedCVs});
+		}
+	}
+}
+
+# The id
+sub id {
+	return $_[0]->[BP::Model::CV::Meta::CVID];
+}
+
+# With this method a term or a term-alias is validated
+# TODO: fetch on demand the CV is it is not materialized
+sub isValid($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $cvkey = shift;
+	
+	my $isValid = undef;
+	foreach my $p_cv (@{$self}[1..$#{$self}]) {
+		$isValid = $p_cv->isValid($cvkey);
+		
+		last  if($isValid);
+	}
+	
+	return $isValid;
+}
+
+# A instance of BP::Model::CV::Term
+sub getTerm($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $cvkey = shift;
+	
+	my $term = undef;
+	foreach my $p_cv (@{$self}[1..$#{$self}]) {
+		$term = $p_cv->getTerm($cvkey);
+		
+		last  if(defined($term));
+	}
+	
+	return $term;
+}
+
+# It returns an array of instances of descendants of BP::Model::CV
+sub getEnclosedCVs() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my @enclosedCVs = @{$self}[1..$#{$self}];
+	
+	return \@enclosedCVs;
 }
 
 1;
@@ -2486,20 +2637,39 @@ sub parseColumnType($$$) {
 				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
 			}
 		} else {
-			my @cvChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'cv');
-			if(scalar(@cvChildren)>0) {
-				$restriction = BP::Model::CV->parseCV($cvChildren[0],$model);
-			} elsif($colType->hasAttribute('cv')) {
-				my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
-				if(defined($namedCV)) {
-					$restriction = $namedCV;
-				} else {
-					Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
+			my @restrictChildren = $colType->childNodes();
+			foreach my $restrictChild (@restrictChildren) {
+				next  unless($restrictChild->nodeType == XML::LibXML::XML_ELEMENT_NODE && $restrictChild->namespaceURI() eq BP::Model::dccNamespace);
+				
+				if($restrictChild->localName eq 'cv') {
+					$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
+					
+					$restriction->add(BP::Model::CV->parseCV($restrictChild,$model));
+				} elsif($restrictChild->localName eq 'cv-ref') {
+					my $namedCV = $model->getNamedCV($restrictChild->getAttribute('name'));
+					if(defined($namedCV)) {
+						$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
+						
+						$restriction->add($namedCV);
+					} else {
+						Carp::croak("Element cv-ref tried to use undeclared CV ".$colType->getAttribute('name'));
+					}
+				} elsif($restrictChild->localName eq 'pattern') {
+					$restriction = BP::Model::__parse_pattern($restrictChild);
 				}
-			} else {
-				my @patChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'pattern');
-				if(scalar(@patChildren)>0) {
-					$restriction = BP::Model::__parse_pattern($patChildren[0]);
+			}
+			
+			# No children, so try using the attributes
+			unless(defined($restriction)) {
+				if($colType->hasAttribute('cv')) {
+					my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
+					if(defined($namedCV)) {
+						$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
+					
+						$restriction->add($namedCV);
+					} else {
+						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
+					}
 				} elsif($colType->hasAttribute('pattern')) {
 					my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
 					if(defined($PAT)) {
@@ -2507,7 +2677,7 @@ sub parseColumnType($$$) {
 					} else {
 						Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
 					}
-				}
+				} 
 			}
 		}
 		$columnType[BP::Model::ColumnType::RESTRICTION] = $restriction;
@@ -2647,7 +2817,7 @@ sub use {
 
 # content restrictions. Either
 # BP::Model::CompoundType
-# BP::Model::CV
+# BP::Model::CV::Meta
 # Pattern
 sub restriction {
 	return $_[0]->[BP::Model::ColumnType::RESTRICTION];

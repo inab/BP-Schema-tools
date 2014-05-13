@@ -497,12 +497,11 @@ sub processInlineCVTable($) {
 	return $output;
 }
 
-# printCVTable parameters:
+# getCVCaption parameters:
 #	CV: A named BP::Model::CV instance (the controlled vocabulary)
-#	O: The output filehandle where the documentation about the
-#		controlled vocabulary is written.
-sub printCVTable($$) {
-	my($CV,$O)=@_;
+#	It returns the LaTeX caption string
+sub getCVCaption($) {
+	my($CV)=@_;
 	
 	my $cvname = $CV->name;
 	
@@ -516,6 +515,24 @@ sub printCVTable($$) {
 	} else {
 		$caption = "CV Table $cvname";
 	}
+	
+	return $caption;
+}
+
+# printCVTable parameters:
+#	CV: A named BP::Model::CV instance (the controlled vocabulary)
+#	O: The output filehandle where the documentation about the
+#		controlled vocabulary is written.
+sub printCVTable($$) {
+	my($CV,$O)=@_;
+	
+	my $cvname = $CV->name;
+	
+	my $annotationSet = $CV->annotations;
+	my $annotations = $annotationSet->hash;
+	
+	# The caption
+	my $caption = getCVCaption($CV);
 	print $O "\\section{",latex_escape($caption),"} \\label{cvsec:$cvname}\n";
 	
 	print $O "\\textit{This controlled vocabulary has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
@@ -1454,16 +1471,18 @@ EOF
 				push(@descriptionItems,$related);
 			}
 			
-			# Now the possible CV
+			# Now the possible CV(s)
 			my $restriction = $columnType->restriction;
-			if(ref($restriction) eq 'BP::Model::CV') {
-				# Is it an anonymous CV?
-				my $numterms = scalar(@{$restriction->order});
-				if($numterms < 20 && (!defined($restriction->name) || (exists($restriction->annotations->hash->{'disposition'}) && $restriction->annotations->hash->{disposition} eq 'inline'))) {
-					$values .= processInlineCVTable($restriction);
-				} else {
-					my $cv = $restriction->name;
-					$values .= "\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.(($restriction->kind() ne BP::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+			if(ref($restriction) && $restriction->isa('BP::Model::CV::Abstract')) {
+				foreach my $CV (@{$restriction->getEnclosedCVs}) {
+					# Is it an anonymous CV?
+					my $numterms = scalar(@{$CV->order});
+					if($numterms < 20 && (!defined($CV->name) || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline'))) {
+						$values .= processInlineCVTable($CV);
+					} else {
+						my $cv = $CV->name;
+						$values .= "\n\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'.getCVCaption($CV).', CV \ref*{cvsec:'.$cv.'}})}';
+					}
 				}
 			}
 			
@@ -1474,15 +1493,17 @@ EOF
 					my $rColumn = $rColumnSet->columns->{$rColumnName};
 					my $rRestr = $rColumn->columnType->restriction;
 					
-					if(defined($rRestr) && ref($rRestr) eq 'BP::Model::CV') {
+					if(defined($rRestr) && ref($rRestr) && $rRestr->isa('BP::Model::CV::Abstract')) {
 						$values .= "\n".'\textit{\texttt{\textbf{'.$rColumnName.'}}}';
-						# Is it an anonymous CV?
-						my $numterms = scalar(@{$rRestr->order});
-						if($numterms < 20 && (!defined($rRestr->name) || (exists($rRestr->annotations->hash->{'disposition'}) && $rRestr->annotations->hash->{disposition} eq 'inline'))) {
-							$values .= "\n".processInlineCVTable($rRestr);
-						} else {
-							my $cv = $rRestr->name;
-							$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'.(($rRestr->kind() ne BP::Model::CV::URIFETCHED)?'CV':'external CV description').' \ref*{cvsec:'.$cv.'}})}';
+						foreach my $rCV (@{$rRestr->getEnclosedCVs}) {
+							# Is it an anonymous CV?
+							my $numterms = scalar(@{$rCV->order});
+							if($numterms < 20 && (!defined($rCV->name) || (exists($rCV->annotations->hash->{'disposition'}) && $rCV->annotations->hash->{disposition} eq 'inline'))) {
+								$values .= "\n".processInlineCVTable($rCV);
+							} else {
+								my $cv = $rCV->name;
+								$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'.getCVCaption($rCV).', CV \ref*{cvsec:'.$cv.'}})}';
+							}
 						}
 					}
 				}
@@ -1491,7 +1512,7 @@ EOF
 			push(@descriptionItems,$values)  if(length($values)>0);
 			
 			# What it goes to the column type column
-			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.('[]' x length($columnType->arraySeps))).'}');
+			my @colTypeLines = ('\textbf{'.latex_escape($columnType->type.(defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'')).'}');
 			
 			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'.latex_escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
 			

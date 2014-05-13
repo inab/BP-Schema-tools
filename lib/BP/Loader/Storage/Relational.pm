@@ -191,7 +191,7 @@ sub generateNativeModel($) {
 					my $columnType = $column->columnType;
 					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
 					# Registering CVs
-					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV')) {
+					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
 						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
@@ -299,88 +299,96 @@ CVEOF
 
 				# Second, the data
 				my $first = 0;
-				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
-					my $term = $CV->CV->{$key};
-					if($first==0) {
-						print $SQL <<CVEOF;
+				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
+					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						my $term = $enclosedCV->getTerm($key);
+						if($first==0) {
+							print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CV VALUES
 CVEOF
-					}
-					print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($term->key):$term->key,__sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
-					
-					$first++;
-					if($first>=$chunklines) {
-						print $SQL "\n;\n\n";
-						$first=0;
+						}
+						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($term->key):$term->key,__sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
+						
+						$first++;
+						if($first>=$chunklines) {
+							print $SQL "\n;\n\n";
+							$first=0;
+						}
 					}
 				}
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
-				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
-					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
-					
-					foreach my $akey (@{$term->keys}) {
-						if($first==0) {
-							print $SQL <<CVEOF;
+				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
+					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						my $term = $enclosedCV->getTerm($key);
+						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
+						
+						foreach my $akey (@{$term->keys}) {
+							if($first==0) {
+								print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVkeys VALUES
 CVEOF
-						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($akey):$akey,$ekey),')';
-						
-						$first++;
-						if($first>=$chunklines) {
-							print $SQL "\n;\n\n";
-							$first=0;
+							}
+							print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($akey):$akey,$ekey),')';
+							
+							$first++;
+							if($first>=$chunklines) {
+								print $SQL "\n;\n\n";
+								$first=0;
+							}
 						}
 					}
 				}
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
-				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
-					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
-					
-					next  unless(defined($term->parents) && scalar(@{$term->parents})>0);
-					
-					foreach my $pkey (@{$term->parents}) {
-						if($first==0) {
-							print $SQL <<CVEOF;
+				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
+					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						my $term = $enclosedCV->getTerm($key);
+						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
+						
+						next  unless(defined($term->parents) && scalar(@{$term->parents})>0);
+						
+						foreach my $pkey (@{$term->parents}) {
+							if($first==0) {
+								print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVparents VALUES
 CVEOF
-						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
-						
-						$first++;
-						if($first>=$chunklines) {
-							print $SQL "\n;\n\n";
-							$first=0;
+							}
+							print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
+							
+							$first++;
+							if($first>=$chunklines) {
+								print $SQL "\n;\n\n";
+								$first=0;
+							}
 						}
 					}
 				}
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
-				foreach my $key  (@{$CV->order},@{$CV->aliasOrder}) {
-					my $term = $CV->CV->{$key};
-					my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
-					
-					next  unless(defined($term->ancestors) && scalar(@{$term->ancestors})>0);
-					
-					foreach my $pkey (@{$term->ancestors}) {
-						if($first==0) {
-							print $SQL <<CVEOF;
+				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
+					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						my $term = $enclosedCV->getTerm($key);
+						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
+						
+						next  unless(defined($term->ancestors) && scalar(@{$term->ancestors})>0);
+						
+						foreach my $pkey (@{$term->ancestors}) {
+							if($first==0) {
+								print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVancestors VALUES
 CVEOF
-						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
-						
-						$first++;
-						if($first>=$chunklines) {
-							print $SQL "\n;\n\n";
-							$first=0;
+							}
+							print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
+							
+							$first++;
+							if($first>=$chunklines) {
+								print $SQL "\n;\n\n";
+								$first=0;
+							}
 						}
 					}
 				}
