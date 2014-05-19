@@ -355,16 +355,21 @@ sub assemblePDF($$$$$$) {
 
 	
 	# And now, let's prepare the command line
-	my @pdflatexParams = (
-		'-interaction=batchmode',
-#		'-synctex=1',
-#		'-shell-escape',
-		'-jobname',$jobName,
-		'-output-directory',$jobDir,
-		join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params).' \input{'.$masterTemplate.'}'
-	);
+	my $gdefs = join(' ',map { '\gdef\\'.$_->[0].'{'.$_->[1].'}' } @params);
 	
-	print STDERR "[DOCGEN] => ",join(' ',PDFLATEX,@pdflatexParams),"\n";
+	# Preparing gdefs for latexmk
+	$gdefs =~ s/'/'"'"'/g;
+	my @latexmkParams = (
+		'-recorder',
+		'-quiet',
+		'-jobname='.$jobName,
+		'-output-directory='.$jobDir,
+		'-pdf',
+		'-pdflatex='.PDFLATEX.' %O '."'".$gdefs.' \input{%S}'."'",
+		$masterTemplate
+	);
+
+	print STDERR "[DOCGEN] => ",join(' ','latexmk',@latexmkParams),"\n";
 	
 	if(defined($outputSH)) {
 		if(open(my $SH,'>',$outputSH)) {
@@ -382,10 +387,15 @@ sub assemblePDF($$$$$$) {
 				$workingDir = "'".$workingDir."'";
 			}
 			print $SH <<EOFSH;
-#!/bin/sh
+#!/bin/bash
+
+read -r LATEXGDEF <<'EOF'
+$gdefs \\input{%S}
+EOF
 
 cd $workingDir
-${\PDFLATEX} $commandLine
+
+latexmk -recorder -quiet -jobname=$jobName -output-directory=$jobDir -pdf -pdflatex="${\PDFLATEX} %O '\$LATEXGDEF'" $masterTemplate
 EOFSH
 			close($SH);
 		} else {
@@ -395,16 +405,7 @@ EOFSH
 	
 	# exit 0;
 	
-	my $follow = 1;
-	foreach my $it (1..5) {
-		if(system(PDFLATEX,'-draftmode',@pdflatexParams)!=0) {
-			$follow = undef;
-			last;
-		}
-	}
-	if(defined($follow)) {
-		system(PDFLATEX,@pdflatexParams);
-	}
+	system('latexmk',@latexmkParams);
 }
 
 my $TOCFilename = 'toc.latex';
