@@ -9,8 +9,6 @@ use File::Spec;
 
 use BP::Model;
 
-use MongoDB;
-
 package BP::Loader::Mapper::Relational;
 
 use base qw(BP::Loader::Mapper);
@@ -23,8 +21,6 @@ BEGIN {
 	$SECTION = 'relational';
 	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
 };
-
-use constant FILE_PREFIX_KEY => 'file-prefix';
 
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
@@ -96,7 +92,7 @@ sub setFilePrefix($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	$self->{BP::Loader::Mapper::Relational::FILE_PREFIX_KEY} = shift;
+	$self->{BP::Loader::Mapper::FILE_PREFIX_KEY} = shift;
 }
 
 sub __sql_escape($) {
