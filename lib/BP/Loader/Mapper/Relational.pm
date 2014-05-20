@@ -13,9 +13,6 @@ package BP::Loader::Mapper::Relational;
 
 use base qw(BP::Loader::Mapper);
 
-# Global variable (using "my" because "our" could have too much scope)
-my $RELEASE = 1;
-
 our $SECTION;
 BEGIN {
 	$SECTION = 'relational';
@@ -24,6 +21,7 @@ BEGIN {
 
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
+	['release' => 'true'],
 #	['db' => undef],
 #	['host' => undef],
 #	['port' => 27017],
@@ -77,6 +75,8 @@ sub new($$) {
 			Carp::croak("ERROR: Unable to read section $SECTION");
 		}
 	}
+	
+	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
 	
 	return $self;
 }
@@ -147,7 +147,7 @@ sub generateNativeModel($) {
 		my $p_TYPES = $model->types;
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
 			# Skipping abstract concept domains
-			next  if($RELEASE && $conceptDomain->isAbstract);
+			next  if($self->{release} && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -438,7 +438,7 @@ TCVEOF
 
 		# And now, the FK restrictions from related concepts
 		foreach my $conceptDomain (@{$model->conceptDomains}) {
-			next  if($RELEASE && $conceptDomain->isAbstract);
+			next  if($self->{release} && $conceptDomain->isAbstract);
 			
 			my $conceptDomainName = $conceptDomain->name;
 			
@@ -452,7 +452,7 @@ TCVEOF
 					my $cycle = 1;
 					foreach my $relatedConcept (@{$concept->relatedConcepts}) {
 						# Skipping foreign keys to abstract concepts
-						next  if($RELEASE && $relatedConcept->concept->conceptDomain->isAbstract);
+						next  if($self->{release} && $relatedConcept->concept->conceptDomain->isAbstract);
 						
 						my $refBasename = __entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
