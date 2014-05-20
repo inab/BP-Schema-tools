@@ -396,7 +396,7 @@ sub _LaTeX__CVTable($$$) {
 	
 	my $dataVersion = $CV->version;
 	
-	print $O "\\textit{This controlled vocabulary ".(defined($dataVersion)?'(version '._LaTeX__escape($dataVersion).')':'')."has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
+	print $O "\\textit{This controlled vocabulary ".(defined($dataVersion)?'(version '._LaTeX__escape($dataVersion).') ':'')."has ".scalar(@{$CV->order})." terms".((scalar(@{$CV->aliasOrder})>0)?(" and ".scalar(@{$CV->aliasOrder})." aliases"):"")."}\\\\[2ex]\n"  if($CV->isLocal);
 	
 	my @header = ();
 	
