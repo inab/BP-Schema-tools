@@ -8,22 +8,22 @@ use BP::Model;
 use MongoDB;
 use Config::IniFiles;
 
-package BP::Loader::Storage::MongoDB;
+package BP::Loader::Mapper::MongoDB;
 
 # Needed for JSON::true and JSON::false declarations
 use JSON;
 
-use base qw(BP::Loader::Storage);
+use base qw(BP::Loader::Mapper);
 
 our $SECTION;
 
 BEGIN {
 	$SECTION = 'mongodb';
-	$BP::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
+	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
 };
 
 my @DEFAULTS = (
-	[BP::Loader::Storage::FILE_PREFIX_KEY => 'model'],
+	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['db' => undef],
 	['host' => undef],
 	['port' => 27017],
@@ -285,7 +285,7 @@ sub generateNativeModel($) {
 	
 	my $workingDir = shift;
 	
-	my $filePrefix = $self->{BP::Loader::Storage::FILE_PREFIX_KEY};
+	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	my $outfileJSON = $fullFilePrefix.'.json';
 	

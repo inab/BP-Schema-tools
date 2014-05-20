@@ -3,7 +3,7 @@
 use strict;
 use Carp;
 
-package BP::Loader::Storage;
+package BP::Loader::Mapper;
 
 use BP::Model;
 
@@ -44,9 +44,16 @@ sub isHierarchical {
 }
 
 # generateNativeModel parameters:
-#	workingDir: The directory where the model files are going to be saved.
+#	workingDir: The directory where the native model files are going to be saved.
 # It returns a list of relative paths to the generated files
 sub generateNativeModel($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# generateNativeModel parameters:
+#	workingDir: The optional directory where the native model files are going to be saved.
+# It returns a list of relative paths to the generated files
+sub storeNativeModel(\$) {
 	Carp::croak('Unimplemented method!');
 }
 

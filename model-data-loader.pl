@@ -22,10 +22,10 @@ use FindBin;
 use lib "$FindBin::Bin/lib";
 use BP::Model;
 use BP::Loader::CorrelatableConcept;
-use BP::Loader::Storage;
-# These are included so they self-register on BP::Loader::Storage
-use BP::Loader::Storage::Relational;
-use BP::Loader::Storage::MongoDB;
+use BP::Loader::Mapper;
+# These are included so they self-register on BP::Loader::Mapper
+use BP::Loader::Mapper::Relational;
+use BP::Loader::Mapper::MongoDB;
 
 use Time::HiRes;
 
@@ -66,7 +66,7 @@ if(scalar(@ARGV)>=2) {
 	Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists('storage','load'));
 	my $loadModel = $ini->val('storage','load');
 	
-	my $loader = BP::Loader::Storage->new($loadModel,$model,$ini);
+	my $loader = BP::Loader::Mapper->new($loadModel,$model,$ini);
 	
 	my %storageModels = (
 		$loadModel => $loader
@@ -76,7 +76,7 @@ if(scalar(@ARGV)>=2) {
 	if($ini->exists('storage','model')) {
 		my $storageModelNames = $ini->val('storage','model');
 		foreach my $storageModelName (split(/,/,$storageModelNames)) {
-			$storageModels{$storageModelName} = BP::Loader::Storage->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
+			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
 			
 			print "Generating native model for $storageModelName... ";
 			$storageModels{$storageModelName}->generateNativeModel($workingDir);
@@ -173,6 +173,10 @@ if(scalar(@ARGV)>=2) {
 		}
 		
 		# Now, let's load!
+		# First, the metadata
+		$loader->storeNativeModel();
+		
+		# Then, the data
 		$loader->loadConcepts(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 	}
 } else{

@@ -11,9 +11,9 @@ use BP::Model;
 
 use MongoDB;
 
-package BP::Loader::Storage::Relational;
+package BP::Loader::Mapper::Relational;
 
-use base qw(BP::Loader::Storage);
+use base qw(BP::Loader::Mapper);
 
 # Global variable (using "my" because "our" could have too much scope)
 my $RELEASE = 1;
@@ -21,13 +21,13 @@ my $RELEASE = 1;
 our $SECTION;
 BEGIN {
 	$SECTION = 'relational';
-	$BP::Loader::Storage::storage_names{$SECTION}=__PACKAGE__;
+	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
 };
 
 use constant FILE_PREFIX_KEY => 'file-prefix';
 
 my @DEFAULTS = (
-	[BP::Loader::Storage::FILE_PREFIX_KEY => 'model'],
+	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 #	['db' => undef],
 #	['host' => undef],
 #	['port' => 27017],
@@ -96,7 +96,7 @@ sub setFilePrefix($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	$self->{BP::Loader::Storage::Relational::FILE_PREFIX_KEY} = shift;
+	$self->{BP::Loader::Mapper::Relational::FILE_PREFIX_KEY} = shift;
 }
 
 sub __sql_escape($) {
@@ -122,7 +122,7 @@ sub generateNativeModel($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $workingDir = shift;
-	my $filePrefix = $self->{BP::Loader::Storage::FILE_PREFIX_KEY};
+	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	
 #	model: a BP::Model instance, with the parsed model.
@@ -168,7 +168,7 @@ sub generateNativeModel($) {
 				print $SQL "\nCREATE TABLE $basename (";
 				
 				
-				my @colorder = BP::Loader::Storage::_fancyColumnOrdering($concept);
+				my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
 				my $columnSet = $concept->columnSet;
 				my $gottable=undef;
 				
