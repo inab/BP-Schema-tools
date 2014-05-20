@@ -57,10 +57,10 @@ sub storeNativeModel(\$) {
 	Carp::croak('Unimplemented method!');
 }
 
-# loadConcepts parameters:
+# mapData parameters:
 #	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
 #	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
-sub loadConcepts(\@\@) {
+sub mapData(\@\@) {
 	Carp::croak('Unimplemented method!');
 }
 

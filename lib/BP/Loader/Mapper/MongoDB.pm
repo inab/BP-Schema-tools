@@ -301,10 +301,10 @@ sub generateNativeModel($) {
 	return [$outfileJSON];
 }
 
-# loadConcepts parameters:
+# mapData parameters:
 #	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
 #	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
-sub loadConcepts(\@\@) {
+sub mapData(\@\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));

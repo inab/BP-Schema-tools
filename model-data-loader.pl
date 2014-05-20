@@ -177,7 +177,7 @@ if(scalar(@ARGV)>=2) {
 		$loader->storeNativeModel();
 		
 		# Then, the data
-		$loader->loadConcepts(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
+		$loader->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 	}
 } else{
 	print STDERR "ERROR: This program takes as input a INI file with the configuration pointing to the model, a working directory and, optionally, one or more files to store in the destination database.\n";
