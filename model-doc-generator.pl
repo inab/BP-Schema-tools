@@ -373,14 +373,6 @@ sub assemblePDF($$$$$$) {
 	
 	if(defined($outputSH)) {
 		if(open(my $SH,'>',$outputSH)) {
-			my $commandLine = join(' ',map {
-				my $res = $_;
-				if($res =~ /['" ()\$\\]/) {
-					$res =~ s/'/'"'"'/g;
-					$res = "'".$res."'";
-				}
-				$res
-			} @pdflatexParams);
 			my $workingDir = cwd();
 			if($workingDir =~ /['" ()\$\\]/) {
 				$workingDir =~ s/'/'"'"'/g;
