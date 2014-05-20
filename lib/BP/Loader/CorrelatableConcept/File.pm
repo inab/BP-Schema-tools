@@ -15,9 +15,7 @@ use DateTime::Format::ISO8601;
 
 package BP::Loader::CorrelatableConcept::File;
 
-my $SORT = 'sort';
 my $GREP = 'grep';
-my $NUMCPUS = Sys::CPU::cpu_count();
 #my $PHYSMEM = Sys::MemInfo::totalmem();
 
 # Constructor parameters:

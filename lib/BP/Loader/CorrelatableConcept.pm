@@ -17,6 +17,9 @@ use BP::Loader::CorrelatableConcept::File;
 
 package BP::Loader::CorrelatableConcept;
 
+my $SORT = 'sort';
+my $NUMCPUS = Sys::CPU::cpu_count();
+
 # Constructor parameters:
 #	concept: a BP::Model::Concept
 #	conceptFiles: the file(name)s with the content
