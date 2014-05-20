@@ -108,7 +108,7 @@ sub new($$) {
 	# "Digitalizing" release configuration variable
 	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
 	
-	$self->{relTemplateBaseDir} = defined($config->GetFileName)?File::Basename::dirname($config->GetFileName):cwd();
+	$self->{relTemplateBaseDir} = defined($config->GetFileName)?File::Spec->rel2abs(File::Basename::dirname($config->GetFileName)):Cwd::cwd();
 	
 	return $self;
 }
