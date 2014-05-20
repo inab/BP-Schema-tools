@@ -115,7 +115,7 @@ sub __entryName($;$) {
 
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
-# It returns a list of absolute paths to the generated files
+# It returns a reference to an array of absolute paths to the generated files, based on workingDir
 sub generateNativeModel($) {
 	my $self = shift;
 	

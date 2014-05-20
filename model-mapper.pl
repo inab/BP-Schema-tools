@@ -72,19 +72,7 @@ if(scalar(@ARGV)>=2) {
 		$loadModel => $loader
 	);
 	
-	# Setting up other storage models, and generate the native models
-	if($ini->exists('storage','model')) {
-		my $storageModelNames = $ini->val('storage','model');
-		foreach my $storageModelName (split(/,/,$storageModelNames)) {
-			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
-			
-			print "Generating native model for $storageModelName... ";
-			$storageModels{$storageModelName}->generateNativeModel($workingDir);
-			print "DONE!\n";
-		}
-	}
-	
-	# Is there any file to load to the database?
+	# Is there any file whose data has to be mapped?
 	if(scalar(@ARGV)>0) {
 		# Let's get the associated concepts
 		my %conceptMatch = ();
@@ -178,9 +166,27 @@ if(scalar(@ARGV)>=2) {
 		
 		# Then, the data
 		$loader->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
+	} elsif($ini->exists('storage','model')) {
+		# Setting up other storage models, and generate the native models
+	
+		my $storageModelNames = $ini->val('storage','model');
+		foreach my $storageModelName (split(/,/,$storageModelNames)) {
+			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
+			
+			print "Generating native model for $storageModelName... ";
+			my $p_list = $storageModels{$storageModelName}->generateNativeModel($workingDir);
+			foreach my $path (@{$p_list}) {
+				print "\t* $path\n";
+			}
+			print "DONE!\n";
+		}
 	}
 } else{
-	print STDERR "ERROR: This program takes as input a INI file with the configuration pointing to the model, a working directory and, optionally, one or more files to store in the destination database.\n";
+	print STDERR <<EOF ;
+ERROR: This program ($0) takes as input a INI file with the configuration pointing to the model and a working directory
+	* With no additional parameters, it generates the data model files.
+	* With one or more files, it stores them in the destination database.\n";
+EOF
 }
 
 

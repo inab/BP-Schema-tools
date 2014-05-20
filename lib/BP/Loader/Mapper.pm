@@ -52,7 +52,7 @@ sub generateNativeModel($) {
 
 # generateNativeModel parameters:
 #	workingDir: The optional directory where the native model files are going to be saved.
-# It returns a list of relative paths to the generated files
+# It returns a reference to an array of absolute paths to the generated files, based on workingDir
 sub storeNativeModel(\$) {
 	Carp::croak('Unimplemented method!');
 }
