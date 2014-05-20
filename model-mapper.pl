@@ -26,6 +26,7 @@ use BP::Loader::Mapper;
 # These are included so they self-register on BP::Loader::Mapper
 use BP::Loader::Mapper::Relational;
 use BP::Loader::Mapper::MongoDB;
+use BP::Loader::Mapper::DocumentationGenerator;
 
 use Time::HiRes;
 
@@ -43,16 +44,17 @@ if(scalar(@ARGV)>=2) {
 	my $workingDir = shift(@ARGV);
 	
 	# First, let's read the configuration
-	my $ini = Config::IniFiles->new(-file => $iniFile);
+	my $ini = Config::IniFiles->new(-file => $iniFile, -default => $BP::Loader::Mapper::SECTION);
 	
 	# And create the working directory
 	File::Path::make_path($workingDir);
 	
 	# Let's parse the model
-	my $modelFile = $ini->val('main','model');
+	my $modelFile = $ini->val($BP::Loader::Mapper::SECTION,'model');
 	# Setting up the right path on relative cases
 	$modelFile = File::Spec->catfile(File::Basename::dirname($iniFile),$modelFile)  unless(File::Spec->file_name_is_absolute($modelFile));
 	
+	print "Parsing model $modelFile...\n";
 	my $model = undef;
 	eval {
 		$model = BP::Model->new($modelFile);
@@ -61,6 +63,17 @@ if(scalar(@ARGV)>=2) {
 	if($@) {
 		Carp::croak('ERROR: Model parsing and validation failed. Reason: '.$@);
 	}
+	print "\tDONE!\n";
+	
+	# Setting up the file prefix
+	my (undef,undef,undef,$day,$month,$year) = localtime();
+	# Doing numerical adjustments
+	$year += 1900;
+	$month ++;
+	my $thisdate = sprintf("%d%.2d%.2d",$year,$month,$day);
+	
+	my $relOutfilePrefix=join('-',$model->projectName,'data_model',$model->versionString,$thisdate);
+	$ini->newval($BP::Loader::Mapper::SECTION,BP::Loader::Mapper::FILE_PREFIX_KEY,$relOutfilePrefix);
 	
 	# Setting up the loader storage model
 	Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists('storage','load'));
@@ -173,12 +186,12 @@ if(scalar(@ARGV)>=2) {
 		foreach my $storageModelName (split(/,/,$storageModelNames)) {
 			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
 			
-			print "Generating native model for $storageModelName... ";
+			print "Generating native model for $storageModelName...\n";
 			my $p_list = $storageModels{$storageModelName}->generateNativeModel($workingDir);
 			foreach my $path (@{$p_list}) {
 				print "\t* $path\n";
 			}
-			print "DONE!\n";
+			print "\tDONE!\n";
 		}
 	}
 } else{

@@ -11,6 +11,11 @@ use BP::Model;
 # Therefore, it is better defined here.
 use constant FILE_PREFIX_KEY => 'file-prefix';
 
+our $SECTION;
+BEGIN {
+	$SECTION = 'main';
+}
+
 # The registered storage models
 our %storage_names;
 
