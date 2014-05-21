@@ -15,6 +15,8 @@ use File::Copy;
 use File::Spec;
 use File::Temp;
 
+use Image::ExifTool;
+
 package BP::Loader::Mapper::DocumentationGenerator;
 
 use base qw(BP::Loader::Mapper);
@@ -1625,7 +1627,26 @@ EOFSH
 	# exit 0;
 	
 	system('latexmk',@latexmkParams);
-	$self->recordGeneratedFiles($outputFile);
+	if(-f $outputFile) {
+		my $annotations = $model->annotations->hash;
+		
+		# Annotating the PDF (if there is an available XMP sidecar file)
+		if(exists($annotations->{XMPsidecarDoc})) {
+			my $xmp = $annotations->{XMPsidecarDoc};
+			my $docsDir = $model->documentationDir();
+			unless(File::Spec->file_name_is_absolute($xmp)) {
+				$xmp = File::Spec->catfile($docsDir,$xmp);
+			}
+			my $exiftool = Image::ExifTool->new;
+			$exiftool->SetNewValuesFromFile($xmp,'*:*');
+			$exiftool->WriteInfo($outputFile);
+		}
+		
+		# TODO: Signing the PDF with portablesigner
+		# http://portablesigner.sourceforge.net/
+		
+		$self->recordGeneratedFiles($outputFile);
+	}
 }
 
 # generateNativeModel parameters:
