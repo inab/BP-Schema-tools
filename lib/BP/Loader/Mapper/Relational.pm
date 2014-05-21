@@ -22,10 +22,27 @@ BEGIN {
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['release' => 'true'],
+	['sql-dialect' => 'mysql'],
+	['batch-size' => 4096],
 #	['db' => undef],
 #	['host' => undef],
 #	['port' => 27017],
-#	['batch-size' => 20000]
+);
+
+sub _CV_SQL_UPDATE__mysql($$$);
+sub _CV_SQL_UPDATE__postgresql($$$);
+sub _CV_SQL_UPDATE__sqlite3($$$);
+
+my %SQLDIALECTS = (
+	'mysql'		=>	[
+					\&_CV_SQL_UPDATE__mysql,
+				],
+	'postgresql'	=>	[
+					\&_CV_SQL_UPDATE__postgresql,
+				],
+	'sqlite3'	=>	[
+					\&_CV_SQL_UPDATE__sqlite3,
+				],
 );
 
 my %ABSTYPE2SQL = (
@@ -75,6 +92,7 @@ sub new($$) {
 			Carp::croak("ERROR: Unable to read section $SECTION");
 		}
 	}
+	Carp::croak("ERROR: Unknown SQL dialect '$self->{'sql-dialect'}'. Valid ones are: ".join(', ',keys(%SQLDIALECTS)))  unless(exists($SQLDIALECTS{$self->{'sql-dialect'}}));
 	
 	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
 	
@@ -109,6 +127,56 @@ sub __entryName($;$) {
 	return $conceptDomainName.'_'.$concept->name;
 }
 
+sub _CV_SQL_UPDATE__mysql($$$) {
+	my($tableName,$columnName,$cvname)=@_;
+	
+	return <<TSQL;
+UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
+SET
+	${tableName}.${columnName}_term = ${cvname}_CV.descr
+WHERE
+	${tableName}.${columnName}_term IS NULL AND
+	${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
+	AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
+;
+TSQL
+}
+
+sub _CV_SQL_UPDATE__postgresql($$$) {
+	my($tableName,$columnName,$cvname)=@_;
+	
+	return <<TSQL;
+UPDATE $tableName
+SET
+	${columnName}_term = ${cvname}_CV.descr
+FROM ${cvname}_CVkeys , ${cvname}_CV
+WHERE
+	${tableName}.${columnName}_term IS NULL AND
+	${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
+	AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
+;
+TSQL
+}
+
+sub _CV_SQL_UPDATE__sqlite3($$$) {
+	my($tableName,$columnName,$cvname)=@_;
+	
+	return <<TSQL;
+UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
+SET
+	${columnName}_term = (
+		SELECT ${cvname}_CV.descr
+		FROM ${cvname}_CVkeys , ${cvname}_CV
+		WHERE ${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
+		AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
+		LIMIT 1
+	)
+WHERE
+	${columnName}_term IS NULL
+;
+TSQL
+}
+
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
 # It returns a reference to an array of absolute paths to the generated files, based on workingDir
@@ -128,10 +196,12 @@ sub generateNativeModel($) {
 #	the path to the SQL script which joins 
 	my $outfileTranslateSQL = $fullFilePrefix.'_CVtrans.sql';
 	
+	my $dialectFuncs = $SQLDIALECTS{$self->{'sql-dialect'}};
+	
 	# Needed later for CV dumping et al
 	my @cvorder = ();
 	my %cvdump = ();
-	my $chunklines = 4096;
+	my $chunklines = $self->{'batch-size'};
 	my $descType = $ABSTYPE2SQL{BP::Model::ColumnType::STRING_TYPE};
 	my $aliasType = $ABSTYPE2SQL{BP::Model::ColumnType::BOOLEAN_TYPE};
 	
@@ -404,15 +474,8 @@ CVEOF
 					print $TSQL <<TCVEOF;
 ALTER TABLE $tableName ADD COLUMN ${columnName}_term $descType;
 
-UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
-SET
-	${tableName}.${columnName}_term = ${cvname}_CV.descr
-WHERE
-	${tableName}.${columnName}_term IS NULL AND
-	${tableName}.${columnName} = ${cvname}_CVkeys.cvkey
-	AND ${cvname}_CVkeys.idkey = ${cvname}_CV.idkey
-;
 TCVEOF
+					print $TSQL $dialectFuncs->[0]->($tableName,$columnName,$cvname);
 				}
 			}
 			close($TSQL);
