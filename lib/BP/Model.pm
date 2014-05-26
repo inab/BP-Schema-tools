@@ -1424,7 +1424,7 @@ sub gotLineage {
 
 # The BP::Model::CV instance which defines the term
 sub parentCV {
-	return defined($_[0]->[PARENTCV]);
+	return $_[0]->[PARENTCV];
 }
 
 # The BP::Model::CV instance which defines the term
