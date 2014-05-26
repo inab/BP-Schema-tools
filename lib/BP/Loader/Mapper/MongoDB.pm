@@ -163,14 +163,74 @@ sub BP::Model::AnnotationSet::TO_JSON() {
 	}
 }
 
+sub BP::Model::CV::Term::_jsonId() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $cvPrefix = defined($self->parentCV)?$self->parentCV->id:'_null_';
+	
+	return join(':','t',$cvPrefix,$self->key);
+}
+
+sub BP::Model::CV::Term::TO_JSON() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my %hashRes = (
+		'_id'	=> $self->_jsonId,
+		'id'	=> $self->key,
+		'name'	=> $self->name,
+	);
+	
+	$hashRes{'alt-id'} = $self->keys  if(scalar(@{$self->keys})>1);
+	if($self->isAlias) {
+		$hashRes{'alias'} = JSON::true;
+		$hashRes{'union-of'} = $self->parents;
+	} elsif(defined($self->parents)) {
+		$hashRes{'parents'} = $self->parents;
+		$hashRes{'ancestors'} = $self->ancestors;
+	}
+	
+	return \%hashRes;
+}
+
+sub BP::Model::CV::Abstract::_jsonId() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return 'cv:'.$self->id;
+}
+
 sub BP::Model::CV::TO_JSON() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	# TOBESTARTED
-	# TOBEFINISHED
+	my %hashRes = (
+		'_id'	=> $self->_jsonId,
+		'name'	=> $self->name,
+		'description'	=> $self->description,
+		'annotations'	=> $self->annotations,
+		'terms'	=> [ values(%{$self->CV}) ]
+	);
 	
+	return \%hashRes;
+}
+
+sub BP::Model::CV::Meta::TO_JSON() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my %hashRes = (
+		'_id'	=> $self->_jsonId,
+		'includes'	=> [ map { $_->_jsonId } @{$self->getEnclosedCVs} ]
+	);
+	
+	return \%hashRes;
 }
 
 sub BP::Model::ColumnType::TO_JSON() {
@@ -241,6 +301,15 @@ sub BP::Model::ConceptDomain::TO_JSON() {
 	return \%jsonConceptDomain;
 }
 
+
+sub BP::Model::Concept::_jsonId() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->id();
+}
+
 sub BP::Model::Concept::TO_JSON() {
 	my $self = shift;
 	
@@ -290,14 +359,68 @@ sub generateNativeModel($) {
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	my $outfileJSON = $fullFilePrefix.'.json';
 	
+	my $JSON = JSON->new->convert_blessed;
+	$JSON->pretty;
 	if(open(my $JSON_H,'>:utf8',$outfileJSON)) {
-		my $JSON = JSON->new->convert_blessed;
-		$JSON->pretty;
 		print $JSON_H $JSON->encode($self->{model});
 		close($JSON_H);
 		push(@generatedFiles,$outfileJSON);
 	} else {
 		Carp::croak("Unable to create output file $outfileJSON");
+	}
+	
+	# Now, let's dump the used CVs
+	my %cvdump = ();
+	foreach my $conceptDomain (@{$self->{model}->conceptDomains}) {
+		foreach my $concept (@{$conceptDomain->concepts}) {
+			my $columnSet = $concept->columnSet;
+			foreach my $column (values(%{$columnSet->columns})) {
+				my $columnType = $column->columnType;
+				# Registering CVs
+				if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
+					my $CV = $columnType->restriction;
+					
+					my $cvname = $CV->id;
+					
+					# Second position is the SQL type
+					# Third position holds the columns which depend on this CV
+					unless(exists($cvdump{$cvname})) {
+						# First, the enclosed CVs
+						foreach my $subCV (@{$CV->getEnclosedCVs}) {
+							my $subcvname = $subCV->id;
+							
+							unless(exists($cvdump{$subcvname})) {
+								my $outfilesubCVJSON = $fullFilePrefix.'-CV-'.$subcvname.'.json';
+								if(open(my $JSON_CV,'>:utf8',$outfilesubCVJSON)) {
+									print $JSON_CV $JSON->encode($subCV);
+									close($JSON_CV);
+									push(@generatedFiles,$outfilesubCVJSON);
+									# If we find again this CV, we do not process it again
+									$cvdump{$subcvname} = undef;
+								} else {
+									Carp::croak("Unable to create output file $outfilesubCVJSON");
+								}
+							}
+						}
+						
+						# Second, the possible meta-CV
+						unless(exists($cvdump{$cvname})) {
+							my $outfileCVJSON = $fullFilePrefix.'-CV-'.$cvname.'.json';
+							if(open(my $JSON_CV,'>:utf8',$outfileCVJSON)) {
+								print $JSON_CV $JSON->encode($CV);
+								close($JSON_CV);
+								push(@generatedFiles,$outfileCVJSON);
+								# If we find again this CV, we do not process it again
+								$cvdump{$cvname} = undef;
+							} else {
+								Carp::croak("Unable to create output file $outfileCVJSON");
+							}
+						}
+					}
+				}
+				
+			}
+		}
 	}
 	
 	return \@generatedFiles;
