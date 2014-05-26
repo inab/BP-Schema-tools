@@ -1322,6 +1322,7 @@ use constant {
 	PARENTS	=>	3,
 	ANCESTORS	=>	4,
 	ISALIAS	=>	5,
+	PARENTCV	=>	6
 };
 
 # Constructor
@@ -1350,7 +1351,7 @@ sub new($$;$$) {
 	}
 	
 	# Ancestors will be resolved later
-	my @term=($key,$keys,$name,$parents,undef,$isAlias);
+	my @term=($key,$keys,$name,$parents,undef,$isAlias,undef);
 	
 	return bless(\@term,$class);
 }
@@ -1419,6 +1420,16 @@ sub isAlias {
 # calculated lineage
 sub gotLineage {
 	return defined($_[0]->[ANCESTORS]);
+}
+
+# The BP::Model::CV instance which defines the term
+sub parentCV {
+	return defined($_[0]->[PARENTCV]);
+}
+
+# The BP::Model::CV instance which defines the term
+sub _setParentCV {
+	$_[0]->[PARENTCV] = $_[1];
 }
 
 # calculateAncestors parameters:
@@ -1908,6 +1919,7 @@ sub addTerm($) {
 			}
 		}
 		$self->CV->{$key}=$term;
+		$term->_setParentCV($self);
 	}
 	# We save here only the main key, not the alternate ones
 	# and not the aliases!!!!!!
