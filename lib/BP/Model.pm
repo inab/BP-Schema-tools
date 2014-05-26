@@ -1620,14 +1620,6 @@ sub getEnclosedCVs() {
 	Carp::croak("Unimplemented method!");
 }
 
-sub _jsonId() {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	return 'cv:'.$self->id;
-}
-
 1;
 
 package BP::Model::CV;
@@ -4085,7 +4077,7 @@ sub idColumns(;$$) {
 	return $self->columnSet->idColumns($self,$doMask,$weakAnnotations);
 }
 
-sub _jsonId() {
+sub id() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));

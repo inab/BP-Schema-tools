@@ -236,7 +236,7 @@ sub openFiles() {
 			if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
 				$self->{H} = $H;
 			} else {
-				Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->_jsonId);
+				Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->id);
 			}
 		} elsif(scalar(@{$self->{conceptFiles}}) > 0) {
 			# Content is spread over several files. Reclaim pipe expressions
@@ -248,7 +248,7 @@ sub openFiles() {
 			if(open(my $H,'-|',$inpipeStr)) {
 				$self->{H} = $H;
 			} else {
-				Carp::croak('ERROR: Unable to open pipe '.$inpipeStr.' associated to concept '.$self->{concept}->_jsonId);
+				Carp::croak('ERROR: Unable to open pipe '.$inpipeStr.' associated to concept '.$self->{concept}->id);
 			}
 		} elsif(open(my $H,'<',$referenceConceptFile->filename())) {
 			# Single file

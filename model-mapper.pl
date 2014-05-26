@@ -138,7 +138,7 @@ if(scalar(@ARGV)>=2) {
 					$chainedConcepts{$idkey} = []  unless(exists($chainedConcepts{$idkey}));
 					push(@{$chainedConcepts{$idkey}},$correlatableConcepts{$conceptKey});
 				} else {
-					Carp::croak('FATAL ERROR: Concept '.$concept->_jsonId.' does not go to a collection and it does not have an identifying concept\n');
+					Carp::croak('FATAL ERROR: Concept '.$concept->id.' does not go to a collection and it does not have an identifying concept\n');
 				}
 				push(@otherCorrelatedConcepts,$correlatableConcepts{$conceptKey});
 			} else {
