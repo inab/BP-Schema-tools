@@ -2184,7 +2184,7 @@ sub new() {
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
 	$self = $class->SUPER::new()  unless(ref($self));
-	$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
+	$self->[BP::Model::CV::Meta::CVID] = undef;
 	
 	return $self;
 }
@@ -2198,7 +2198,16 @@ sub add(@) {
 	# It stores only the ones which are from BP::Model::CV
 	foreach my $p_cv (@_) {
 		if(ref($p_cv) && $p_cv->isa('BP::Model::CV::Abstract')) {
+			my $baseNumCV = scalar(@{$self})-1;
 			push(@{$self},@{$p_cv->getEnclosedCVs});
+			my $newNumCV = scalar(@{$self})-1;
+			
+			# When there is only one enclosed CV, be water my friend :P
+			if($baseNumCV==0 && $newNumCV==1) {
+				$self->[BP::Model::CV::Meta::CVID] = $self->[1]->id;
+			} elsif($baseNumCV<=1 && $newNumCV>1) {
+				$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
+			}
 		}
 	}
 }
