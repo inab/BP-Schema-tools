@@ -4,6 +4,7 @@ use strict;
 use Carp;
 
 use Config::IniFiles;
+use DBI;
 use File::Basename;
 use File::Spec;
 
@@ -17,6 +18,14 @@ our $SECTION;
 BEGIN {
 	$SECTION = 'relational';
 	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
+};
+
+use constant {
+	CONF_DB	=>	'db',
+	CONF_HOST	=>	'host',
+	CONF_PORT	=>	'port',
+	CONF_DBUSER	=>	'user',
+	CONF_DBPASS	=>	'pass',
 };
 
 my @DEFAULTS = (
@@ -33,14 +42,36 @@ sub _CV_SQL_UPDATE__mysql($$$);
 sub _CV_SQL_UPDATE__postgresql($$$);
 sub _CV_SQL_UPDATE__sqlite3($$$);
 
+use constant {
+	_SQLDIALECT_DRIVER	=>	0,
+	_SQLDIALECT_DSNPARAMS	=>	1,
+	_SQLDIALECT_UPDATE_CV	=>	2,
+};
+
 my %SQLDIALECTS = (
 	'mysql'		=>	[
+					'mysql',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'database',
+						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
+						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
+					},
 					\&_CV_SQL_UPDATE__mysql,
 				],
 	'postgresql'	=>	[
+					'Pg',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
+						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
+						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
+					},
 					\&_CV_SQL_UPDATE__postgresql,
 				],
 	'sqlite3'	=>	[
+					'SQLite',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
+					},
 					\&_CV_SQL_UPDATE__sqlite3,
 				],
 );
@@ -93,6 +124,7 @@ sub new($$) {
 		}
 	}
 	Carp::croak("ERROR: Unknown SQL dialect '$self->{'sql-dialect'}'. Valid ones are: ".join(', ',keys(%SQLDIALECTS)))  unless(exists($SQLDIALECTS{$self->{'sql-dialect'}}));
+	$self->{dialect} = $SQLDIALECTS{$self->{'sql-dialect'}};
 	
 	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
 	
@@ -196,7 +228,7 @@ sub generateNativeModel($) {
 #	the path to the SQL script which joins 
 	my $outfileTranslateSQL = $fullFilePrefix.'_CVtrans.sql';
 	
-	my $dialectFuncs = $SQLDIALECTS{$self->{'sql-dialect'}};
+	my $dialectFuncs = $self->{dialect};
 	
 	# Needed later for CV dumping et al
 	my @cvorder = ();
@@ -475,7 +507,7 @@ CVEOF
 ALTER TABLE $tableName ADD COLUMN ${columnName}_term $descType;
 
 TCVEOF
-					print $TSQL $dialectFuncs->[0]->($tableName,$columnName,$cvname);
+					print $TSQL $dialectFuncs->[_SQLDIALECT_UPDATE_CV]->($tableName,$columnName,$cvname);
 				}
 			}
 			close($TSQL);
@@ -534,6 +566,39 @@ TCVEOF
 	}
 	
 	return [$outfileSQL, $outfileTranslateSQL];
+}
+
+# This method returns the dsn string, according to the dialect
+sub _dsn() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my @dsnValues=();
+	
+	foreach my $key (CONF_DB,CONF_HOST,CONF_PORT) {
+		if(exists($self->{$key}) && exists($self->{dialect}[_SQLDIALECT_DSNPARAMS]{$key})) {
+			push(@dsnValues,$self->{dialect}[_SQLDIALECT_DSNPARAMS]{$key} .'='.$self->{$key});
+		}
+	}
+	
+	return join(':','dbi',$self->{dialect}[_SQLDIALECT_DRIVER],join(';',@dsnValues));
+}
+
+
+sub connect() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $dsn = $self->_dsn;
+	
+	my $user = exists($self->{BP::Loader::Mapper::Relational::CONF_DBUSER})?$self->{BP::Loader::Mapper::Relational::CONF_DBUSER}:'';
+	my $pass = exists($self->{BP::Loader::Mapper::Relational::CONF_DBPASS})?$self->{BP::Loader::Mapper::Relational::CONF_DBPASS}:'';
+	
+	my $dbh = DBI->connect($dsn,$user,$pass,{RaiseError=>0,AutoCommit=>0});
+	
+	return $dbh;
 }
 
 1;

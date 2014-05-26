@@ -49,9 +49,15 @@ sub isHierarchical {
 }
 
 # generateNativeModel parameters:
-#	workingDir: The directory where the native model files are going to be saved.
-# It returns a list of relative paths to the generated files
+#	workingDir: The optional directory where the native model files are going to be saved.
+# It returns a reference to an array of absolute paths to the generated files, based on workingDir
 sub generateNativeModel($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# This method connects to the database and returns the handler. The connection
+# is persistent so next calls to the method should return the same instance.
+sub connect() {
 	Carp::croak('Unimplemented method!');
 }
 

@@ -426,6 +426,24 @@ sub generateNativeModel($) {
 	return \@generatedFiles;
 }
 
+sub connect {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $MONGODB = $self->{db};
+	my $MONGOHOST = $self->{host};
+	my $MONGOPORT = $self->{port};
+	
+	# We want MongoDB to return booleans as booleans, not as integers
+	$MongoDB::BSON::use_boolean = 1;
+	# Let's test the connection
+	my $connection = MongoDB::Connection->new(host => $MONGOHOST, port => $MONGOPORT);
+	my $db = $connection->get_database($MONGODB);
+	
+	return $db;
+}
+
 # mapData parameters:
 #	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
 #	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
@@ -437,16 +455,9 @@ sub mapData(\@\@) {
 	my $p_mainCorrelatableConcepts = shift;
 	my $p_otherCorrelatedConcepts = shift;
 	
-	my $MONGODB = $self->{db};
-	my $MONGOHOST = $self->{host};
-	my $MONGOPORT = $self->{port};
 	my $BMAX = $self->{'batch-size'};
 	
-	# We want MongoDB to return booleans as booleans, not as integers
-	$MongoDB::BSON::use_boolean = 1;
-	# Let's test the connection
-	my $connection = MongoDB::Connection->new(host => $MONGOHOST, port => $MONGOPORT);
-	my $db = $connection->get_database($MONGODB);
+	my $db = $self->connect();
 	
 	# Phase1: iterate over the main ones
 	foreach my $correlatedConcept (@{$p_mainCorrelatableConcepts}) {
