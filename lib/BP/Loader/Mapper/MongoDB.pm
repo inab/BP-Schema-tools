@@ -285,6 +285,7 @@ sub generateNativeModel($) {
 	
 	my $workingDir = shift;
 	
+	my @generatedFiles = ();
 	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
 	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 	my $outfileJSON = $fullFilePrefix.'.json';
@@ -294,11 +295,12 @@ sub generateNativeModel($) {
 		$JSON->pretty;
 		print $JSON_H $JSON->encode($self->{model});
 		close($JSON_H);
+		push(@generatedFiles,$outfileJSON);
 	} else {
 		Carp::croak("Unable to create output file $outfileJSON");
 	}
 	
-	return [$outfileJSON];
+	return \@generatedFiles;
 }
 
 # mapData parameters:
