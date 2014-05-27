@@ -58,6 +58,17 @@ sub generateNativeModel($) {
 # This method connects to the database and returns the handler. The connection
 # is persistent so next calls to the method should return the same instance.
 sub connect() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	$self->{conn} = $self->_connect()  unless(exists($self->{conn}));
+	
+	return $self->{conn};
+}
+
+# This method returns a connection to the database
+sub _connect() {
 	Carp::croak('Unimplemented method!');
 }
 

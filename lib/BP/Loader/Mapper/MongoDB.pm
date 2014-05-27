@@ -426,7 +426,8 @@ sub generateNativeModel($) {
 	return \@generatedFiles;
 }
 
-sub connect {
+# This method returns a connection to the database
+sub _connect {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));

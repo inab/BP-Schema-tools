@@ -585,8 +585,8 @@ sub _dsn() {
 	return join(':','dbi',$self->{dialect}[_SQLDIALECT_DRIVER],join(';',@dsnValues));
 }
 
-
-sub connect() {
+# This method returns a connection to the database
+sub _connect() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
