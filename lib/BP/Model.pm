@@ -1021,6 +1021,15 @@ sub types() {
 	return $self->{TYPES};
 }
 
+# It returns a BP::Model::Collection instance
+sub metadataCollection() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{_metaColl};
+}
+
 1;
 
 # And now, the helpers for the different pseudo-packages
