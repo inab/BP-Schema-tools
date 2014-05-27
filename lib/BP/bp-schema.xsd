@@ -836,7 +836,19 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
-                <xs:element name="cv-declarations">
+            	<xs:element name="metadata">
+            		<xs:annotation>
+            			<xs:documentation>The reference to the collection which is going to hold the metadata from the model</xs:documentation>
+            		</xs:annotation>
+            		<xs:complexType>
+            			<xs:attribute name="collection" type="bp:symbolType" use="required">
+            				<xs:annotation>
+            					<xs:documentation>The collection which is going to hold the metadata</xs:documentation>
+            				</xs:annotation>
+            			</xs:attribute>
+            		</xs:complexType>
+            	</xs:element>
+            	<xs:element name="cv-declarations">
                     <xs:annotation>
                         <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
                     </xs:annotation>
@@ -865,11 +877,6 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:attribute name="dir" use="optional" type="bp:nonEmptyStringType">
                             <xs:annotation>
                                 <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
-                            </xs:annotation>
-                        </xs:attribute>
-                        <xs:attribute name="collection" type="bp:symbolType" use="required">
-                            <xs:annotation>
-                                <xs:documentation>The collection which is going to hold the CVs.</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
                     </xs:complexType>

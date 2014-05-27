@@ -507,6 +507,17 @@ sub digestModel($) {
 		last;
 	}
 	
+	# Let's register the collection which holds the metadata
+	foreach my $metaDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'metadata')) {
+		my $destMetaCol = $metaDecl->getAttribute('collection');
+		if(exists($p_collections->{$destMetaCol})) {
+			$self->{_metaColl} = $p_collections->{$destMetaCol};
+		} else {
+			Carp::croak("Destination collection $destMetaCol for CV has not been declared");
+		}
+		last;
+	}
+	
 	# Next stop, controlled vocabulary
 	my %cv = ();
 	my @cvArray = ();
@@ -527,12 +538,6 @@ sub digestModel($) {
 		
 		$self->{_cvDir} = $cvdir;
 		
-		my $destCVCol = $cvDecl->getAttribute('collection');
-		if(exists($p_collections->{$destCVCol})) {
-			$self->{_cvColl} = $p_collections->{$destCVCol};
-		} else {
-			Carp::croak("Destination collection $destCVCol for CV has not been declared");
-		}
 		foreach my $cv ($cvDecl->childNodes()) {
 			next  unless($cv->nodeType == XML::LibXML::XML_ELEMENT_NODE && $cv->localname eq 'cv');
 			
