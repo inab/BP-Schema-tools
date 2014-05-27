@@ -341,13 +341,38 @@ sub BP::Model::Concept::TO_JSON() {
 	return \%jsonConcept;
 }
 
+sub _TO_JSON($);
 
+sub _TO_JSON($) {
+	my($val)=@_;
+	
+	# First step
+	$val = $val->TO_JSON()  if(ref($val) && $val->can('TO_JSON'));
+	
+	if(ref($val) eq 'ARRAY') {
+		# This is needed to avoid memory structures corruption
+		my @newval = @{$val};
+		foreach my $elem (@newval) {
+			$elem = _TO_JSON($elem);
+		}
+		$val = \@newval;
+	} elsif(ref($val) eq 'HASH') {
+		# This is needed to avoid memory structures corruption
+		my %newval = %{$val};
+		foreach my $elem (values(%newval)) {
+			$elem = _TO_JSON($elem);
+		}
+		$val = \%newval;
+	}
+	
+	return $val;
+}
 
 
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
 # It returns a reference to an array of absolute paths to the generated files, based on workingDir
-sub generateNativeModel($) {
+sub generateNativeModel(\$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -355,18 +380,25 @@ sub generateNativeModel($) {
 	my $workingDir = shift;
 	
 	my @generatedFiles = ();
-	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
-	my $fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
-	my $outfileJSON = $fullFilePrefix.'.json';
-	
 	my $JSON = JSON->new->convert_blessed;
 	$JSON->pretty;
-	if(open(my $JSON_H,'>:utf8',$outfileJSON)) {
-		print $JSON_H $JSON->encode($self->{model});
-		close($JSON_H);
-		push(@generatedFiles,$outfileJSON);
+	
+	my $filePrefix = undef;
+	my $fullFilePrefix = undef;
+	if(defined($workingDir)) {
+		$filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
+		$fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
+		my $outfileJSON = $fullFilePrefix.'.json';
+		
+		if(open(my $JSON_H,'>:utf8',$outfileJSON)) {
+			print $JSON_H $JSON->encode($self->{model});
+			close($JSON_H);
+			push(@generatedFiles,$outfileJSON);
+		} else {
+			Carp::croak("Unable to create output file $outfileJSON");
+		}
 	} else {
-		Carp::croak("Unable to create output file $outfileJSON");
+		push(@generatedFiles,_TO_JSON($self->{model}));
 	}
 	
 	# Now, let's dump the used CVs
@@ -390,30 +422,42 @@ sub generateNativeModel($) {
 							my $subcvname = $subCV->id;
 							
 							unless(exists($cvdump{$subcvname})) {
-								my $outfilesubCVJSON = $fullFilePrefix.'-CV-'.$subcvname.'.json';
-								if(open(my $JSON_CV,'>:utf8',$outfilesubCVJSON)) {
-									print $JSON_CV $JSON->encode($subCV);
-									close($JSON_CV);
-									push(@generatedFiles,$outfilesubCVJSON);
+								if(defined($fullFilePrefix)) {
+									my $outfilesubCVJSON = $fullFilePrefix.'-CV-'.$subcvname.'.json';
+									if(open(my $JSON_CV,'>:utf8',$outfilesubCVJSON)) {
+										print $JSON_CV $JSON->encode($subCV);
+										close($JSON_CV);
+										push(@generatedFiles,$outfilesubCVJSON);
+										# If we find again this CV, we do not process it again
+										$cvdump{$subcvname} = undef;
+									} else {
+										Carp::croak("Unable to create output file $outfilesubCVJSON");
+									}
+								} else {
+									push(@generatedFiles,_TO_JSON($subCV));
 									# If we find again this CV, we do not process it again
 									$cvdump{$subcvname} = undef;
-								} else {
-									Carp::croak("Unable to create output file $outfilesubCVJSON");
 								}
 							}
 						}
 						
 						# Second, the possible meta-CV
 						unless(exists($cvdump{$cvname})) {
-							my $outfileCVJSON = $fullFilePrefix.'-CV-'.$cvname.'.json';
-							if(open(my $JSON_CV,'>:utf8',$outfileCVJSON)) {
-								print $JSON_CV $JSON->encode($CV);
-								close($JSON_CV);
-								push(@generatedFiles,$outfileCVJSON);
+							if(defined($fullFilePrefix)) {
+								my $outfileCVJSON = $fullFilePrefix.'-CV-'.$cvname.'.json';
+								if(open(my $JSON_CV,'>:utf8',$outfileCVJSON)) {
+									print $JSON_CV $JSON->encode($CV);
+									close($JSON_CV);
+									push(@generatedFiles,$outfileCVJSON);
+									# If we find again this CV, we do not process it again
+									$cvdump{$cvname} = undef;
+								} else {
+									Carp::croak("Unable to create output file $outfileCVJSON");
+								}
+							} else {
+								push(@generatedFiles,$CV);
 								# If we find again this CV, we do not process it again
 								$cvdump{$cvname} = undef;
-							} else {
-								Carp::croak("Unable to create output file $outfileCVJSON");
 							}
 						}
 					}
@@ -427,7 +471,7 @@ sub generateNativeModel($) {
 }
 
 # This method returns a connection to the database
-sub _connect {
+sub _connect() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -443,6 +487,20 @@ sub _connect {
 	my $db = $connection->get_database($MONGODB);
 	
 	return $db;
+}
+
+# storeNativeModel parameters:
+sub storeNativeModel() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_generatedObjects = $self->generateNativeModel();
+	
+	my $db = $self->connect();
+	my $metacollPath = $self->{model}->metadataCollection->path;
+	my $metacoll = $db->get_collection($metacollPath);
+	$metacoll->batch_insert($p_generatedObjects,{safe=>1});
 }
 
 # mapData parameters:
@@ -478,8 +536,7 @@ sub mapData(\@\@) {
 		};
 		
 		if($@) {
-			print STDERR "ERROR: While storing the main concepts\n";
-			exit 1;
+			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
 		}
 	}
 	
@@ -505,8 +562,7 @@ sub mapData(\@\@) {
 		};
 		
 		if($@) {
-			print STDERR "ERROR: While storing the main concepts\n";
-			exit 1;
+			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
 		}
 	}
 }

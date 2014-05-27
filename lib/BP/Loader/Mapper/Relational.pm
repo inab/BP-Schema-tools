@@ -601,4 +601,43 @@ sub _connect() {
 	return $dbh;
 }
 
+sub storeNativeModel() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $workingDir = File::Temp::tempdir();
+	
+	# First, the native model in file
+	my $p_nativeModelFiles = $self->generateNativeModel($workingDir);
+	
+	# Second, reading the file by ;
+	my $dbh = $self->connect();
+	$dbh->begin_work();
+	eval {
+		foreach my $nativeModelFile (@{$p_nativeModelFiles}) {
+			local $/ = ";\n";
+			if(open(my $SQL,'<',$nativeModelFile)) {
+				while(my $sentence = <$SQL>) {
+					chomp($sentence);
+					$dbh->do($sentence);
+				}
+				
+				close($SQL);
+			}
+		}
+	};
+	
+	my $croakmsg = undef;
+	if($@) {
+		$dbh->rollback();
+		$croakmsg = "ERROR: unable to load metadata model. Reason: $@\n";
+	} else {
+		$dbh->commit();
+	}
+	
+	File::Path::remove_tree($workingDir);
+	Carp::croak($croakmsg)  if(defined($croakmsg));
+}
+
 1;
