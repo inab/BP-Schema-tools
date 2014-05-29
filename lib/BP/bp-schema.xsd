@@ -799,7 +799,26 @@ If if starts as $$, it tells the required or idref column with the value for thi
         </xs:annotation>
         <xs:complexType>
             <xs:sequence>
-                <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+            	<xs:element name="metadata">
+            		<xs:annotation>
+            			<xs:documentation>The reference to the collection which is going to hold the metadata from the model</xs:documentation>
+            		</xs:annotation>
+            		<xs:complexType>
+            			<xs:sequence>
+            				<xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+            			</xs:sequence>
+            			<xs:attribute name="documentation-dir" type="bp:nonEmptyStringType" use="required">
+            				<xs:annotation>
+            					<xs:documentation>The directory which holds the additional documentation for this model, used to generated the PDF</xs:documentation>
+            				</xs:annotation>
+            			</xs:attribute>
+            			<xs:attribute name="collection" type="bp:symbolType" use="optional">
+            				<xs:annotation>
+            					<xs:documentation>The collection which is going to hold the metadata</xs:documentation>
+            				</xs:annotation>
+            			</xs:attribute>
+            		</xs:complexType>
+            	</xs:element>
                 <xs:element name="collection-domain">
                     <xs:annotation>
                         <xs:documentation>The domain of collections to be used by BLUEPRINT inside the NoSQL database</xs:documentation>
@@ -836,18 +855,6 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
-            	<xs:element name="metadata">
-            		<xs:annotation>
-            			<xs:documentation>The reference to the collection which is going to hold the metadata from the model</xs:documentation>
-            		</xs:annotation>
-            		<xs:complexType>
-            			<xs:attribute name="collection" type="bp:symbolType" use="required">
-            				<xs:annotation>
-            					<xs:documentation>The collection which is going to hold the metadata</xs:documentation>
-            				</xs:annotation>
-            			</xs:attribute>
-            		</xs:complexType>
-            	</xs:element>
             	<xs:element name="cv-declarations">
                     <xs:annotation>
                         <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
@@ -1040,11 +1047,6 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
                         <xs:pattern value="(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+" />
                     </xs:restriction>
                 </xs:simpleType>
-            </xs:attribute>
-            <xs:attribute name="docsDir" type="bp:nonEmptyStringType" use="required">
-                <xs:annotation>
-                    <xs:documentation>The directory which holds the additional documentation for this model, used to generated the PDF</xs:documentation>
-                </xs:annotation>
             </xs:attribute>
         </xs:complexType>
         <xs:key name="filename-format-key">

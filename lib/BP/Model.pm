@@ -491,14 +491,24 @@ sub digestModel($) {
 	$self->{project} = $modelRoot->getAttribute('project');
 	$self->{schemaVer} = $modelRoot->getAttribute('schemaVer');
 	
-	# The documentation directory, which complements this model
-	my $docsDir = $modelRoot->getAttribute('docsDir');
-	# We need to translate relative paths to absolute ones
-	$docsDir = File::Spec->rel2abs($docsDir,$self->{_modelDir})  unless(File::Spec->file_name_is_absolute($docsDir));
-	$self->{_docsDir} = $docsDir;
+	# Let's register the metadata
+	my $destMetaCol = undef;
+	foreach my $metaDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'metadata')) {
+		# The documentation directory, which complements this model
+		my $docsDir = $metaDecl->getAttribute('documentation-dir');
+		# We need to translate relative paths to absolute ones
+		$docsDir = File::Spec->rel2abs($docsDir,$self->{_modelDir})  unless(File::Spec->file_name_is_absolute($docsDir));
+		$self->{_docsDir} = $docsDir;
+		
+		# The optional collection where mapped metadata is going to be stored
+		$destMetaCol = $metaDecl->getAttribute('collection')  if($metaDecl->hasAttribute('collection'));
+		
+		# Now, let's store the annotations
+		$self->{ANNOTATIONS} = BP::Model::AnnotationSet->parseAnnotations($metaDecl);
+
+		last;
+	}
 	
-	# Now, let's store the annotations
-	$self->{ANNOTATIONS} = BP::Model::AnnotationSet->parseAnnotations($modelRoot);
 	
 	# Now, the collection domain
 	my $p_collections = undef;
@@ -507,17 +517,16 @@ sub digestModel($) {
 		last;
 	}
 	
-	# Let's register the collection which holds the metadata
-	foreach my $metaDecl ($modelRoot->getChildrenByTagNameNS(BP::Model::dccNamespace,'metadata')) {
-		my $destMetaCol = $metaDecl->getAttribute('collection');
+	if(defined($destMetaCol)) {
 		if(exists($p_collections->{$destMetaCol})) {
 			$self->{_metaColl} = $p_collections->{$destMetaCol};
 		} else {
-			Carp::croak("Destination collection $destMetaCol for CV has not been declared");
+			Carp::croak("Destination collection $destMetaCol for metadata has not been declared");
 		}
-		last;
+	} else {
+		$self->{_metaColl} = undef;
 	}
-	
+
 	# Next stop, controlled vocabulary
 	my %cv = ();
 	my @cvArray = ();
