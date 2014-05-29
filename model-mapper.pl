@@ -44,7 +44,7 @@ if(scalar(@ARGV)>=2) {
 	my $workingDir = shift(@ARGV);
 	
 	# First, let's read the configuration
-	my $ini = Config::IniFiles->new(-file => $iniFile, -default => $BP::Loader::Mapper::SECTION);
+	my $ini = Config::IniFiles->new(-file => $iniFile, -default => $BP::Loader::Mapper::DEFAULTSECTION);
 	
 	# And create the working directory
 	File::Path::make_path($workingDir);
@@ -75,18 +75,29 @@ if(scalar(@ARGV)>=2) {
 	my $relOutfilePrefix=join('-',$model->projectName,'data_model',$model->versionString,$thisdate);
 	$ini->newval($BP::Loader::Mapper::SECTION,BP::Loader::Mapper::FILE_PREFIX_KEY,$relOutfilePrefix);
 	
-	# Setting up the loader storage model
-	Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists('storage','load'));
-	my $loadModel = $ini->val('storage','load');
-	
-	my $loader = BP::Loader::Mapper->new($loadModel,$model,$ini);
-	
-	my %storageModels = (
-		$loadModel => $loader
-	);
+	my %storageModels = ();
 	
 	# Is there any file whose data has to be mapped?
 	if(scalar(@ARGV)>0) {
+		# Setting up the loader storage model(s)
+		Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists($BP::Loader::Mapper::SECTION,'loaders'));
+		my $loadModelNames = $ini->val($BP::Loader::Mapper::SECTION,'loaders');
+		
+		my @loadModels = ();
+		foreach my $loadModelName (split(/,/,$loadModelNames)) {
+			unless(exists($storageModels{$loadModelName})) {
+				$storageModels{$loadModelName} = BP::Loader::Mapper->new($loadModelName,$model,$ini);
+				push(@loadModels,$loadModelName);
+			}
+		}
+		
+		# Now, do we need to push the metadata there?
+		if(!$ini->exists($BP::Loader::Mapper::SECTION,'metadata-loaders') || $ini->val($BP::Loader::Mapper::SECTION,'metadata-loaders') eq 'true') {
+			foreach my $loader (@storageModels{@loadModels}) {
+				$loader->storeNativeModel();
+			}
+		}
+		
 		# Let's get the associated concepts
 		my %conceptMatch = ();
 		my @conceptMatchArray = ();
@@ -117,79 +128,77 @@ if(scalar(@ARGV)>=2) {
 			exit 1;
 		}
 		
-		# Now, let's create the possibly correlatable concepts
-		# and check which of them can be correlated
-		my @mainCorrelatableConcepts = ();
-		my @otherCorrelatedConcepts = ();
-		my %correlatableConcepts = ();
-		my %chainedConcepts = ();
-		foreach my $set (@conceptMatchArray) {
-			my($concept,$matchedFileset) = @{$set};
-			
-			my $conceptKey = $concept+0;
-			$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
-			
-			# Save for later processing
-			if($loader->isHierarchical() && ! $concept->goesToCollection()) {
-				my $idConcept = $concept->idConcept;
+		foreach my $loader (@storageModels{@loadModels}) {
+			# Now, let's create the possibly correlatable concepts
+			# and check which of them can be correlated
+			my @mainCorrelatableConcepts = ();
+			my @otherCorrelatedConcepts = ();
+			my %correlatableConcepts = ();
+			my %chainedConcepts = ();
+			foreach my $set (@conceptMatchArray) {
+				my($concept,$matchedFileset) = @{$set};
 				
-				if(defined($idConcept)) {
-					my $idkey = $idConcept+0;
-					$chainedConcepts{$idkey} = []  unless(exists($chainedConcepts{$idkey}));
-					push(@{$chainedConcepts{$idkey}},$correlatableConcepts{$conceptKey});
+				my $conceptKey = $concept+0;
+				$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
+				
+				# Save for later processing
+				if($loader->isHierarchical() && ! $concept->goesToCollection()) {
+					my $idConcept = $concept->idConcept;
+					
+					if(defined($idConcept)) {
+						my $idkey = $idConcept+0;
+						$chainedConcepts{$idkey} = []  unless(exists($chainedConcepts{$idkey}));
+						push(@{$chainedConcepts{$idkey}},$correlatableConcepts{$conceptKey});
+					} else {
+						Carp::croak('FATAL ERROR: Concept '.$concept->id.' does not go to a collection and it does not have an identifying concept\n');
+					}
+					push(@otherCorrelatedConcepts,$correlatableConcepts{$conceptKey});
 				} else {
-					Carp::croak('FATAL ERROR: Concept '.$concept->id.' does not go to a collection and it does not have an identifying concept\n');
+					push(@mainCorrelatableConcepts,$correlatableConcepts{$conceptKey});
 				}
-				push(@otherCorrelatedConcepts,$correlatableConcepts{$conceptKey});
-			} else {
-				push(@mainCorrelatableConcepts,$correlatableConcepts{$conceptKey});
 			}
-		}
-		
-		my @freeSlavesCorrelatableConcepts = ();
-		
-		if($loader->isHierarchical()) {
-			# Let's visit the possible correlations
-			my %disabledCorrelatedConcepts = ();
-			foreach my $idkey (keys(%chainedConcepts)) {
-				if(exists($correlatableConcepts{$idkey})) {
-					# First, register them as correlatable
-					my $correlatableConcept = $correlatableConcepts{$idkey};
-					foreach my $correlatedConcept (@{$chainedConcepts{$idkey}}) {
-						$correlatableConcept->addCorrelatedConcept($correlatedConcept);
-						
-						# Then, save their keys, to be disabled when they are processed
-						$disabledCorrelatedConcepts{$correlatedConcept+0} = undef;
+			
+			my @freeSlavesCorrelatableConcepts = ();
+			
+			if($loader->isHierarchical()) {
+				# Let's visit the possible correlations
+				my %disabledCorrelatedConcepts = ();
+				foreach my $idkey (keys(%chainedConcepts)) {
+					if(exists($correlatableConcepts{$idkey})) {
+						# First, register them as correlatable
+						my $correlatableConcept = $correlatableConcepts{$idkey};
+						foreach my $correlatedConcept (@{$chainedConcepts{$idkey}}) {
+							$correlatableConcept->addCorrelatedConcept($correlatedConcept);
+							
+							# Then, save their keys, to be disabled when they are processed
+							$disabledCorrelatedConcepts{$correlatedConcept+0} = undef;
+						}
 					}
 				}
+				
+				foreach my $correlatedConcept (@otherCorrelatedConcepts) {
+					# Skip the ones which are already chained
+					next  if(exists($disabledCorrelatedConcepts{$correlatedConcept+0}));
+					push(@freeSlavesCorrelatableConcepts,$correlatedConcept);
+				}
+			} else {
+				@freeSlavesCorrelatableConcepts = @otherCorrelatedConcepts;
 			}
 			
-			foreach my $correlatedConcept (@otherCorrelatedConcepts) {
-				# Skip the ones which are already chained
-				next  if(exists($disabledCorrelatedConcepts{$correlatedConcept+0}));
-				push(@freeSlavesCorrelatableConcepts,$correlatedConcept);
-			}
-		} else {
-			@freeSlavesCorrelatableConcepts = @otherCorrelatedConcepts;
+			# Now, let's load!
+			$loader->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 		}
-		
-		# Now, let's load!
-		# First, the metadata
-		$loader->storeNativeModel();
-		
-		# Then, the data
-		$loader->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
-	} elsif($ini->exists('storage','model')) {
+	} elsif($ini->exists($BP::Loader::Mapper::SECTION,'metadata-models')) {
 		# Setting up other storage models, and generate the native models
 	
-		my $storageModelNames = $ini->val('storage','model');
+		my $storageModelNames = $ini->val($BP::Loader::Mapper::SECTION,'metadata-models');
 		foreach my $storageModelName (split(/,/,$storageModelNames)) {
 			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
 			
 			print "Generating native model for $storageModelName...\n";
 			my $p_list = $storageModels{$storageModelName}->generateNativeModel($workingDir);
-			foreach my $path (@{$p_list}) {
-				print "\t* $path\n";
+			foreach my $p_path (@{$p_list}) {
+				print "\t* ",$p_path->[0]," (",($p_path->[1]?"required":"optional"),")\n";
 			}
 			print "\tDONE!\n";
 		}

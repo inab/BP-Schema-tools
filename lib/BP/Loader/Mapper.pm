@@ -12,8 +12,10 @@ use BP::Model;
 use constant FILE_PREFIX_KEY => 'file-prefix';
 
 our $SECTION;
+our $DEFAULTSECTION;
 BEGIN {
-	$SECTION = 'main';
+	$DEFAULTSECTION = 'main';
+	$SECTION = 'mapper';
 }
 
 # The registered storage models
@@ -49,8 +51,9 @@ sub isHierarchical {
 }
 
 # generateNativeModel parameters:
-#	workingDir: The optional directory where the native model files are going to be saved.
-# It returns a reference to an array of absolute paths to the generated files, based on workingDir
+#	workingDir: The directory where the native model files are going to be saved.
+# It returns a reference to an array of pairs
+#	[absolute paths to the generated files (based on workingDir),is essential]
 sub generateNativeModel($) {
 	Carp::croak('Unimplemented method!');
 }
