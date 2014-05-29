@@ -371,7 +371,8 @@ sub _TO_JSON($) {
 
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
-# It returns a reference to an array of absolute paths to the generated files, based on workingDir
+# It returns a reference to an array of pairs
+#	[absolute paths to the generated files (based on workingDir),is essential]
 sub generateNativeModel(\$) {
 	my $self = shift;
 	
@@ -393,7 +394,7 @@ sub generateNativeModel(\$) {
 		if(open(my $JSON_H,'>:utf8',$outfileJSON)) {
 			print $JSON_H $JSON->encode($self->{model});
 			close($JSON_H);
-			push(@generatedFiles,$outfileJSON);
+			push(@generatedFiles,[$outfileJSON,1]);
 		} else {
 			Carp::croak("Unable to create output file $outfileJSON");
 		}
@@ -427,7 +428,7 @@ sub generateNativeModel(\$) {
 									if(open(my $JSON_CV,'>:utf8',$outfilesubCVJSON)) {
 										print $JSON_CV $JSON->encode($subCV);
 										close($JSON_CV);
-										push(@generatedFiles,$outfilesubCVJSON);
+										push(@generatedFiles,[$outfilesubCVJSON,1]);
 										# If we find again this CV, we do not process it again
 										$cvdump{$subcvname} = undef;
 									} else {
@@ -448,14 +449,14 @@ sub generateNativeModel(\$) {
 								if(open(my $JSON_CV,'>:utf8',$outfileCVJSON)) {
 									print $JSON_CV $JSON->encode($CV);
 									close($JSON_CV);
-									push(@generatedFiles,$outfileCVJSON);
+									push(@generatedFiles,[$outfileCVJSON,1]);
 									# If we find again this CV, we do not process it again
 									$cvdump{$cvname} = undef;
 								} else {
 									Carp::croak("Unable to create output file $outfileCVJSON");
 								}
 							} else {
-								push(@generatedFiles,$CV);
+								push(@generatedFiles,_TO_JSON($CV));
 								# If we find again this CV, we do not process it again
 								$cvdump{$cvname} = undef;
 							}
@@ -495,12 +496,14 @@ sub storeNativeModel() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $p_generatedObjects = $self->generateNativeModel();
-	
-	my $db = $self->connect();
-	my $metacollPath = $self->{model}->metadataCollection->path;
-	my $metacoll = $db->get_collection($metacollPath);
-	$metacoll->batch_insert($p_generatedObjects,{safe=>1});
+	if(defined($self->{model}->metadataCollection)) {
+		my $p_generatedObjects = $self->generateNativeModel(undef);
+		
+		my $db = $self->connect();
+		my $metacollPath = $self->{model}->metadataCollection->path;
+		my $metacoll = $db->get_collection($metacollPath);
+		$metacoll->batch_insert($p_generatedObjects,{safe=>1});
+	}
 }
 
 # mapData parameters:

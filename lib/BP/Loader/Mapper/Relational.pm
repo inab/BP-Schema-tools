@@ -33,48 +33,13 @@ my @DEFAULTS = (
 	['release' => 'true'],
 	['sql-dialect' => 'mysql'],
 	['batch-size' => 4096],
-#	['db' => undef],
-#	['host' => undef],
-#	['port' => 27017],
+	[BP::Loader::Mapper::Relational::CONF_DB	=> undef ],
+	[BP::Loader::Mapper::Relational::CONF_HOST	=> '' ],
+	[BP::Loader::Mapper::Relational::CONF_PORT	=> '' ],
+	[BP::Loader::Mapper::Relational::CONF_DBUSER	=> '' ],
+	[BP::Loader::Mapper::Relational::CONF_DBPASS	=> '' ],
 );
 
-sub _CV_SQL_UPDATE__mysql($$$);
-sub _CV_SQL_UPDATE__postgresql($$$);
-sub _CV_SQL_UPDATE__sqlite3($$$);
-
-use constant {
-	_SQLDIALECT_DRIVER	=>	0,
-	_SQLDIALECT_DSNPARAMS	=>	1,
-	_SQLDIALECT_UPDATE_CV	=>	2,
-};
-
-my %SQLDIALECTS = (
-	'mysql'		=>	[
-					'mysql',
-					{
-						BP::Loader::Mapper::Relational::CONF_DB	=> 'database',
-						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
-						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
-					},
-					\&_CV_SQL_UPDATE__mysql,
-				],
-	'postgresql'	=>	[
-					'Pg',
-					{
-						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
-						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
-						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
-					},
-					\&_CV_SQL_UPDATE__postgresql,
-				],
-	'sqlite3'	=>	[
-					'SQLite',
-					{
-						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
-					},
-					\&_CV_SQL_UPDATE__sqlite3,
-				],
-);
 
 my %ABSTYPE2SQL = (
 	BP::Model::ColumnType::STRING_TYPE	=> 'VARCHAR(1024)',
@@ -88,8 +53,62 @@ my %ABSTYPE2SQL = (
 );
 
 my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
-
 $ABSTYPE2SQLKEY{BP::Model::ColumnType::STRING_TYPE} = 'VARCHAR(128)';
+
+my @FALSE_TRUE = ('FALSE','TRUE');
+my @FALSE_TRUE_FAKE = (0,1);
+
+sub _CV_SQL_UPDATE__mysql($$$);
+sub _CV_SQL_UPDATE__postgresql($$$);
+sub _CV_SQL_UPDATE__sqlite3($$$);
+
+use constant {
+	_SQLDIALECT_DRIVER	=>	0,
+	_SQLDIALECT_DSNPARAMS	=>	1,
+	_SQLDIALECT_TYPE2SQL	=>	2,
+	_SQLDIALECT_TYPE2SQLKEY	=>	3,
+	_SQLDIALECT_UPDATE_CV	=>	4,
+	_SQLDIALECT_FALSE_TRUE	=>	5,
+};
+
+
+my %SQLDIALECTS = (
+	'mysql'		=>	[
+					'mysql',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'database',
+						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
+						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
+					},
+					\%ABSTYPE2SQL,
+					\%ABSTYPE2SQLKEY,
+					\&_CV_SQL_UPDATE__mysql,
+					\@FALSE_TRUE,
+				],
+	'postgresql'	=>	[
+					'Pg',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
+						BP::Loader::Mapper::Relational::CONF_HOST	=> 'host',
+						BP::Loader::Mapper::Relational::CONF_PORT	=> 'port'
+					},
+					\%ABSTYPE2SQL,
+					\%ABSTYPE2SQLKEY,
+					\&_CV_SQL_UPDATE__postgresql,
+					\@FALSE_TRUE,
+				],
+	'sqlite3'	=>	[
+					'SQLite',
+					{
+						BP::Loader::Mapper::Relational::CONF_DB	=> 'dbname',
+					},
+					\%ABSTYPE2SQL,
+					\%ABSTYPE2SQLKEY,
+					\&_CV_SQL_UPDATE__sqlite3,
+					\@FALSE_TRUE_FAKE,
+				],
+);
+
 
 # Constructor parameters:
 #	model: a BP::Model instance
@@ -194,7 +213,7 @@ sub _CV_SQL_UPDATE__sqlite3($$$) {
 	my($tableName,$columnName,$cvname)=@_;
 	
 	return <<TSQL;
-UPDATE $tableName , ${cvname}_CVkeys , ${cvname}_CV
+UPDATE $tableName
 SET
 	${columnName}_term = (
 		SELECT ${cvname}_CV.descr
@@ -211,7 +230,8 @@ TSQL
 
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
-# It returns a reference to an array of absolute paths to the generated files, based on workingDir
+# It returns a reference to an array of pairs
+#	[absolute paths to the generated files (based on workingDir),is essential]
 sub generateNativeModel($) {
 	my $self = shift;
 	
@@ -224,21 +244,24 @@ sub generateNativeModel($) {
 #	model: a BP::Model instance, with the parsed model.
 	my $model = $self->{model};
 #	the path to the SQL output file
-	my $outfileSQL = $fullFilePrefix.'.sql';
+	my $outfileSQL = $fullFilePrefix.'-'.$self->{'sql-dialect'}.'.sql';
 #	the path to the SQL script which joins 
-	my $outfileTranslateSQL = $fullFilePrefix.'_CVtrans.sql';
+	my $outfileTranslateSQL = $fullFilePrefix.'_CVtrans'.'-'.$self->{'sql-dialect'}.'.sql';
 	
 	my $dialectFuncs = $self->{dialect};
+	my $p_TYPE2SQL = $dialectFuncs->[_SQLDIALECT_TYPE2SQL];
+	my $p_TYPE2SQLKEY = $dialectFuncs->[_SQLDIALECT_TYPE2SQLKEY];
+	my($FALSE_VAL,$TRUE_VAL) = @{$dialectFuncs->[_SQLDIALECT_FALSE_TRUE]};
 	
 	# Needed later for CV dumping et al
 	my @cvorder = ();
 	my %cvdump = ();
 	my $chunklines = $self->{'batch-size'};
-	my $descType = $ABSTYPE2SQL{BP::Model::ColumnType::STRING_TYPE};
-	my $aliasType = $ABSTYPE2SQL{BP::Model::ColumnType::BOOLEAN_TYPE};
+	my $descType = $p_TYPE2SQL->{BP::Model::ColumnType::STRING_TYPE};
+	my $aliasType = $p_TYPE2SQL->{BP::Model::ColumnType::BOOLEAN_TYPE};
 	
 	if(open(my $SQL,'>:utf8',$outfileSQL)) {
-		print $SQL '-- File '.File::Basename::basename($outfileSQL)."\n";
+		print $SQL '-- File '.File::Basename::basename($outfileSQL)." (".$self->{'sql-dialect'}." dialect)\n";
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
@@ -287,12 +310,12 @@ sub generateNativeModel($) {
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
-					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$ABSTYPE2SQLKEY{$columnType->type}:$ABSTYPE2SQL{$columnType->type};
+					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}:$p_TYPE2SQL->{$columnType->type};
 					# Registering CVs
 					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
-						$SQLtype = $ABSTYPE2SQLKEY{$columnType->type};
+						$SQLtype = $p_TYPE2SQLKEY->{$columnType->type};
 						my $CV = $columnType->restriction;
 						
 						my $cvname = $CV->id;
@@ -354,7 +377,7 @@ sub generateNativeModel($) {
 		
 		# Now, the CVs and the columns using them
 		if(open(my $TSQL,'>:utf8',$outfileTranslateSQL)) {
-			print $TSQL '-- File '.File::Basename::basename($outfileTranslateSQL)."\n";
+			print $TSQL '-- File '.File::Basename::basename($outfileTranslateSQL)." (".$self->{'sql-dialect'}." dialect)\n";
 			print $TSQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 			print $TSQL '-- '.localtime()."\n";
 			
@@ -372,40 +395,49 @@ CREATE TABLE ${cvname}_CV (
 	PRIMARY KEY (idkey)
 );
 
+CREATE TABLE ${cvname}_CVkeys_u (
+	cvkey $SQLtype NOT NULL,
+	PRIMARY KEY (cvkey)
+);
+
 CREATE TABLE ${cvname}_CVkeys (
 	cvkey $SQLtype NOT NULL,
 	idkey $SQLtype NOT NULL,
-	PRIMARY KEY (cvkey),
-	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey)
+	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CREATE TABLE ${cvname}_CVparents (
 	idkey $SQLtype NOT NULL,
 	cvkey $SQLtype NOT NULL,
 	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
-	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys(cvkey)
+	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CREATE TABLE ${cvname}_CVancestors (
 	idkey $SQLtype NOT NULL,
 	cvkey $SQLtype NOT NULL,
 	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
-	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys(cvkey)
+	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CVEOF
 
 				# Second, the data
 				my $first = 0;
+				my %cvseen = ();
 				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
 					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						next  if(exists($cvseen{$key}));
+						$cvseen{$key}=undef;
+						
 						my $term = $enclosedCV->getTerm($key);
 						if($first==0) {
 							print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CV VALUES
 CVEOF
 						}
-						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($term->key):$term->key,__sql_escape($term->name),($term->isAlias)?'TRUE':'FALSE'),')';
+						print $SQL (($first>0)?",\n":''),'(',join(',',($doEscape)?__sql_escape($term->key):$term->key,__sql_escape($term->name),($term->isAlias)?$TRUE_VAL:$FALSE_VAL),')';
 						
 						$first++;
 						if($first>=$chunklines) {
@@ -417,8 +449,40 @@ CVEOF
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
+				%cvseen = ();
 				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
 					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						my $term = $enclosedCV->getTerm($key);
+						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
+						
+						foreach my $akey (@{$term->keys}) {
+							next  if(exists($cvseen{$akey}));
+							$cvseen{$akey}=undef;
+							
+							if($first==0) {
+								print $SQL <<CVEOF;
+INSERT INTO ${cvname}_CVkeys_u VALUES
+CVEOF
+							}
+							print $SQL (($first>0)?",\n":''),'(',(($doEscape)?__sql_escape($akey):$akey),')';
+							
+							$first++;
+							if($first>=$chunklines) {
+								print $SQL "\n;\n\n";
+								$first=0;
+							}
+						}
+					}
+				}
+				print $SQL "\n;\n\n"  if($first>0);
+				
+				$first = 0;
+				%cvseen = ();
+				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
+					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						next  if(exists($cvseen{$key}));
+						$cvseen{$key}=undef;
+						
 						my $term = $enclosedCV->getTerm($key);
 						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 						
@@ -441,8 +505,12 @@ CVEOF
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
+				%cvseen = ();
 				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
 					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						next  if(exists($cvseen{$key}));
+						$cvseen{$key}=undef;
+						
 						my $term = $enclosedCV->getTerm($key);
 						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 						
@@ -467,8 +535,12 @@ CVEOF
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
+				%cvseen = ();
 				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
 					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
+						next  if(exists($cvseen{$key}));
+						$cvseen{$key}=undef;
+						
 						my $term = $enclosedCV->getTerm($key);
 						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 						
@@ -500,7 +572,7 @@ CVEOF
 #
 					print $SQL <<CVEOF;
 ALTER TABLE $tableName ADD FOREIGN KEY ($columnName)
-REFERENCES ${cvname}_CVkeys(cvkey);
+REFERENCES ${cvname}_CVkeys_u(cvkey);
 
 CVEOF
 					print $TSQL <<TCVEOF;
@@ -565,7 +637,7 @@ TCVEOF
 		Carp::croak("Unable to create output file $outfileSQL");
 	}
 	
-	return [$outfileSQL, $outfileTranslateSQL];
+	return [[$outfileSQL,1], [$outfileTranslateSQL,undef]];
 }
 
 # This method returns the dsn string, according to the dialect
@@ -577,7 +649,7 @@ sub _dsn() {
 	my @dsnValues=();
 	
 	foreach my $key (CONF_DB,CONF_HOST,CONF_PORT) {
-		if(exists($self->{$key}) && exists($self->{dialect}[_SQLDIALECT_DSNPARAMS]{$key})) {
+		if(exists($self->{$key}) && defined($self->{$key}) && $self->{$key} ne '' && exists($self->{dialect}[_SQLDIALECT_DSNPARAMS]{$key})) {
 			push(@dsnValues,$self->{dialect}[_SQLDIALECT_DSNPARAMS]{$key} .'='.$self->{$key});
 		}
 	}
@@ -596,7 +668,7 @@ sub _connect() {
 	my $user = exists($self->{BP::Loader::Mapper::Relational::CONF_DBUSER})?$self->{BP::Loader::Mapper::Relational::CONF_DBUSER}:'';
 	my $pass = exists($self->{BP::Loader::Mapper::Relational::CONF_DBPASS})?$self->{BP::Loader::Mapper::Relational::CONF_DBPASS}:'';
 	
-	my $dbh = DBI->connect($dsn,$user,$pass,{RaiseError=>0,AutoCommit=>0});
+	my $dbh = DBI->connect($dsn,$user,$pass,{RaiseError=>0,AutoCommit=>1});
 	
 	return $dbh;
 }
@@ -606,38 +678,41 @@ sub storeNativeModel() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $workingDir = File::Temp::tempdir();
-	
-	# First, the native model in file
-	my $p_nativeModelFiles = $self->generateNativeModel($workingDir);
-	
-	# Second, reading the file by ;
-	my $dbh = $self->connect();
-	$dbh->begin_work();
-	eval {
-		foreach my $nativeModelFile (@{$p_nativeModelFiles}) {
-			local $/ = ";\n";
-			if(open(my $SQL,'<',$nativeModelFile)) {
-				while(my $sentence = <$SQL>) {
-					chomp($sentence);
-					$dbh->do($sentence);
+	if(defined($self->{model}->metadataCollection)) {
+		my $workingDir = File::Temp::tempdir();
+		
+		# First, the native model in file
+		my $p_nativeModelFiles = $self->generateNativeModel($workingDir);
+		
+		# Second, reading the file by ;
+		my $dbh = $self->connect();
+		$dbh->begin_work();
+		eval {
+			foreach my $p_nativeModelFile (@{$p_nativeModelFiles}) {
+				next  unless($p_nativeModelFile->[1]);
+				local $/ = ";\n";
+				if(open(my $SQL,'<:utf8',$p_nativeModelFile->[0])) {
+					while(my $sentence = <$SQL>) {
+						chomp($sentence);
+						$dbh->do($sentence) || Carp::croak("Failed sentence: $sentence");
+					}
+					
+					close($SQL);
 				}
-				
-				close($SQL);
 			}
+		};
+		
+		my $croakmsg = undef;
+		if($@) {
+			$dbh->rollback();
+			$croakmsg = "ERROR: unable to load metadata model. Reason: $@\n";
+		} else {
+			$dbh->commit();
 		}
-	};
-	
-	my $croakmsg = undef;
-	if($@) {
-		$dbh->rollback();
-		$croakmsg = "ERROR: unable to load metadata model. Reason: $@\n";
-	} else {
-		$dbh->commit();
+		
+		File::Path::remove_tree($workingDir);
+		Carp::croak($croakmsg)  if(defined($croakmsg));
 	}
-	
-	File::Path::remove_tree($workingDir);
-	Carp::croak($croakmsg)  if(defined($croakmsg));
 }
 
 1;
