@@ -1091,8 +1091,24 @@ sub path {
 }
 
 # index declarations
+# It returns a reference to an array filled with BP::Model::Index instances
 sub indexes {
 	return $_[0]->[2];
+}
+
+# addIndex parameters:
+#	index: A BP::Model::Index instance
+# It adds this index declaration to the collection (needed to patch the metadata collection)
+sub addIndex($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $index = shift;
+	
+	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($index) && $index->isa('BP::Model::Index'));
+	
+	push(@{$self->[2]},$index);
 }
 
 #my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
@@ -1139,6 +1155,21 @@ sub parseIndex($) {
 	}
 
 	return bless(\@index,$class);
+}
+
+# This is the constructor
+# new parameters:
+#	isUnique: Whether the index is unique or not
+#	indexColumns: The columns, i.e. an array of pairs [column name,ascending(1)/descending(-1) ordering]
+sub new($\@) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $isUnique = shift;
+	my $indexColumns = shift;
+	
+	return bless([$isUnique,$indexColumns],$class);
 }
 
 # Is index unique?
