@@ -799,6 +799,14 @@ sub parsePatterns($) {
 	return \%PATTERN;
 }
 
+sub collections() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{COLLECTIONS};
+}
+
 sub getCollection($) {
 	my $self = shift;
 	
