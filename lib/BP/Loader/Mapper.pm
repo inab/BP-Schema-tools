@@ -58,6 +58,14 @@ sub generateNativeModel($) {
 	Carp::croak('Unimplemented method!');
 }
 
+# createCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it is created, along with its indexes
+sub createCollection($) {
+	Carp::croak('Unimplemented method!');
+}
+
+
 # This method connects to the database and returns the handler. The connection
 # is persistent so next calls to the method should return the same instance.
 sub connect() {
