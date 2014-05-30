@@ -7,6 +7,7 @@ use BP::Model;
 
 use MongoDB;
 use Config::IniFiles;
+use Tie::IxHash;
 
 package BP::Loader::Mapper::MongoDB;
 
@@ -26,7 +27,9 @@ my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['db' => undef],
 	['host' => undef],
-	['port' => 27017],
+	['port' => ''],
+	['user' => ''],
+	['pass' => ''],
 	['batch-size' => 20000]
 );
 
@@ -180,7 +183,7 @@ sub BP::Model::CV::Term::TO_JSON() {
 	
 	my %hashRes = (
 		'_id'	=> $self->_jsonId,
-		'id'	=> $self->key,
+		'term'	=> $self->key,
 		'name'	=> $self->name,
 	);
 	
@@ -347,7 +350,7 @@ sub _TO_JSON($) {
 	my($val)=@_;
 	
 	# First step
-	$val = $val->TO_JSON()  if(ref($val) && $val->can('TO_JSON'));
+	$val = $val->TO_JSON()  if(ref($val) && UNIVERSAL::can($val,'TO_JSON'));
 	
 	if(ref($val) eq 'ARRAY') {
 		# This is needed to avoid memory structures corruption
@@ -479,15 +482,52 @@ sub _connect() {
 	
 	my $MONGODB = $self->{db};
 	my $MONGOHOST = $self->{host};
-	my $MONGOPORT = $self->{port};
+	my $hostString = 'mongodb://'.$MONGOHOST;
+	$hostString .= ':'.$self->{port}  if(defined($self->{port} && $self->{port} ne ''));
+	
+	my @clientParams = ('host' => $hostString);
+	push(@clientParams,'username' => $self->{user},'password' => $self->{pass})  if(defined($self->{user}) && $self->{user} ne '');
 	
 	# We want MongoDB to return booleans as booleans, not as integers
 	$MongoDB::BSON::use_boolean = 1;
 	# Let's test the connection
-	my $connection = MongoDB::Connection->new(host => $MONGOHOST, port => $MONGOPORT);
-	my $db = $connection->get_database($MONGODB);
+	my $client = MongoDB::MongoClient->new(@clientParams);
+	my $db = $client->get_database($MONGODB);
 	
 	return $db;
+}
+
+# _EnsureIndexes parameters:
+#	coll: a MongoDB::Collection instance
+#	indexes: An array of BP::Model::Index instances
+sub _EnsureIndexes($@) {
+	my($coll,@indexes) = @_;
+	foreach my $index  (@indexes) {
+		my $idxDecl = Tie::IxHash->new();
+		foreach my $p_colIdx (@{$index->indexAttributes}) {
+			$idxDecl->Push(@{$p_colIdx});
+		}
+		$coll->ensure_index($idxDecl,{'unique'=>($index->isUnique?1:0)});
+	}
+}
+
+# createCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it is created, along with its indexes
+sub createCollection($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
+	
+	if(ref($collection->indexes) eq 'ARRAY' && scalar(@{$collection->indexes})>0) {
+		my $db = $self->connect();
+		my $coll = $db->get_collection($collection->path);
+		_EnsureIndexes($coll,@{$collection->indexes});
+	}
 }
 
 # storeNativeModel parameters:
@@ -496,13 +536,26 @@ sub storeNativeModel() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	# First, let's create the collections and their indexes
+	foreach my $collection (values(%{$self->{model}->collections})) {
+		$self->createCollection($collection);
+	}
+	
+	# Do we have to store the JSON description of the model?
 	if(defined($self->{model}->metadataCollection)) {
 		my $p_generatedObjects = $self->generateNativeModel(undef);
 		
 		my $db = $self->connect();
+	
 		my $metacollPath = $self->{model}->metadataCollection->path;
 		my $metacoll = $db->get_collection($metacollPath);
-		$metacoll->batch_insert($p_generatedObjects,{safe=>1});
+		
+		# Let's add the needed meta-indexes for CV terms
+		_EnsureIndexes($metacoll,BP::Model::Index->new(undef,['term',1]),BP::Model::Index->new(undef,['parents',1]),BP::Model::Index->new(undef,['ancestors',1]));
+		
+		foreach my $p_generatedObject (@{$p_generatedObjects}) {
+			$metacoll->insert($p_generatedObject,{safe=>1});
+		}
 	}
 }
 
