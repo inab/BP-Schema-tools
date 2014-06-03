@@ -30,7 +30,6 @@ my @DEFAULTS = (
 	['port' => ''],
 	['user' => ''],
 	['pass' => ''],
-	['batch-size' => 20000]
 );
 
 # Constructor parameters:
@@ -344,13 +343,22 @@ sub BP::Model::Concept::TO_JSON() {
 	return \%jsonConcept;
 }
 
-sub _TO_JSON($);
+my $DEBUGgroupcounter = 0;
 
-sub _TO_JSON($) {
-	my($val)=@_;
+# _TO_JSON parameters:
+#	val: The value to be 'json-ified' in memory
+#	bsonsize: The max size of a BSON object
+#	colpath: The putative collection where it is going to be stored
+# It returns an array of objects
+sub _TO_JSON($;$$);
+
+sub _TO_JSON($;$$) {
+	my($val,$bsonsize,$colpath)=@_;
 	
 	# First step
 	$val = $val->TO_JSON()  if(ref($val) && UNIVERSAL::can($val,'TO_JSON'));
+	
+	my @results = ();
 	
 	if(ref($val) eq 'ARRAY') {
 		# This is needed to avoid memory structures corruption
@@ -358,17 +366,67 @@ sub _TO_JSON($) {
 		foreach my $elem (@newval) {
 			$elem = _TO_JSON($elem);
 		}
-		$val = \@newval;
+		push(@results,\@newval);
+		print STDERR "DEBUG: array\n"  if(defined($bsonsize));
 	} elsif(ref($val) eq 'HASH') {
 		# This is needed to avoid memory structures corruption
 		my %newval = %{$val};
 		foreach my $elem (values(%newval)) {
 			$elem = _TO_JSON($elem);
 		}
-		$val = \%newval;
+		
+		if(defined($bsonsize) && defined($colpath)) {
+			my ($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1);
+			print STDERR "DEBUG: BSON size $DEBUGgroupcounter => ",length($insert),"\n";
+			if(length($insert) > $bsonsize) {
+				my $numSubs = int(length($insert) / $bsonsize)+1;
+				
+				my $offset = 0;
+				my $segsize = int(scalar(@{$newval{terms}}) / $numSubs);
+				foreach my $i (0..($numSubs-1)) {
+					my %i_subCV = %newval;
+					my $newOffset = $offset + $segsize;
+					my @terms=@{$i_subCV{terms}}[$offset..($newOffset-1)];
+					$i_subCV{terms} = \@terms;
+					
+					if($i == 0) {
+						$i_subCV{'num-segments'} = $numSubs;
+						
+						# Avoiding redundant information
+						foreach my $key ('_id','description','annotations') {
+							delete($newval{$key});
+						}
+					}
+					
+					push(@results,\%i_subCV);
+					if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'-'.$i.'.json')) {
+						print $SUB encode_json(\%i_subCV);
+						close($SUB);
+					}
+					$offset = $newOffset;
+				}
+				
+				print STDERR "DEBUG: fragmented hash\n";
+			} else {
+				push(@results,\%newval);
+				print STDERR "DEBUG: hash\n";
+				if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'.json')) {
+					print $SUB encode_json(\%newval);
+					close($SUB);
+				}
+			}
+		} else {
+			push(@results,\%newval);
+		}
+		
+	} else {
+		push(@results,$val);
+		print STDERR "DEBUG: other\n"  if(defined($bsonsize));
 	}
+				
+	$DEBUGgroupcounter++  if(defined($bsonsize));
 	
-	return $val;
+	return wantarray? @results : $results[0];
 }
 
 
@@ -384,12 +442,18 @@ sub generateNativeModel(\$) {
 	my $workingDir = shift;
 	
 	my @generatedFiles = ();
-	my $JSON = JSON->new->convert_blessed;
-	$JSON->pretty;
+	my $JSON = undef;
+	
+	my $BSONSIZE = exists($self->{_BSONSIZE})?$self->{_BSONSIZE}:undef;
+	my $metacollPath = defined($self->{model}->metadataCollection)?$self->{model}->metadataCollection->path:undef;
 	
 	my $filePrefix = undef;
 	my $fullFilePrefix = undef;
 	if(defined($workingDir)) {
+		# Initializing JSON serializer
+		$JSON = JSON->new->convert_blessed;
+		$JSON->pretty;
+		
 		$filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
 		$fullFilePrefix = File::Spec->catfile($workingDir,$filePrefix);
 		my $outfileJSON = $fullFilePrefix.'.json';
@@ -401,8 +465,10 @@ sub generateNativeModel(\$) {
 		} else {
 			Carp::croak("Unable to create output file $outfileJSON");
 		}
-	} else {
+	} elsif(defined($metacollPath)) {
 		push(@generatedFiles,_TO_JSON($self->{model}));
+	} else {
+		Carp::croak("ERROR: Rejecting to generate native model objects with no destination metadata collection");
 	}
 	
 	# Now, let's dump the used CVs
@@ -438,14 +504,14 @@ sub generateNativeModel(\$) {
 										Carp::croak("Unable to create output file $outfilesubCVJSON");
 									}
 								} else {
-									push(@generatedFiles,_TO_JSON($subCV));
+									push(@generatedFiles,_TO_JSON($subCV,$BSONSIZE,$metacollPath));
 									# If we find again this CV, we do not process it again
 									$cvdump{$subcvname} = undef;
 								}
 							}
 						}
 						
-						# Second, the possible meta-CV
+						# Second, the possible meta-CV, which could have been already printed.
 						unless(exists($cvdump{$cvname})) {
 							if(defined($fullFilePrefix)) {
 								my $outfileCVJSON = $fullFilePrefix.'-CV-'.$cvname.'.json';
@@ -459,7 +525,7 @@ sub generateNativeModel(\$) {
 									Carp::croak("Unable to create output file $outfileCVJSON");
 								}
 							} else {
-								push(@generatedFiles,_TO_JSON($CV));
+								push(@generatedFiles,_TO_JSON($CV,$BSONSIZE,$metacollPath));
 								# If we find again this CV, we do not process it again
 								$cvdump{$cvname} = undef;
 							}
@@ -493,6 +559,8 @@ sub _connect() {
 	# Let's test the connection
 	my $client = MongoDB::MongoClient->new(@clientParams);
 	my $db = $client->get_database($MONGODB);
+	# This is needed to fragment the insertions
+	$self->{_BSONSIZE} = $client->max_bson_size;
 	
 	return $db;
 }
@@ -551,76 +619,47 @@ sub storeNativeModel() {
 		my $metacoll = $db->get_collection($metacollPath);
 		
 		# Let's add the needed meta-indexes for CV terms
-		_EnsureIndexes($metacoll,BP::Model::Index->new(undef,['term',1]),BP::Model::Index->new(undef,['parents',1]),BP::Model::Index->new(undef,['ancestors',1]));
+		_EnsureIndexes($metacoll,BP::Model::Index->new(undef,['terms.term',1]),BP::Model::Index->new(undef,['terms.parents',1]),BP::Model::Index->new(undef,['terms.ancestors',1]));
 		
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
-			$metacoll->insert($p_generatedObject,{safe=>1});
+			$metacoll->save($p_generatedObject,{safe=>1});
 		}
 	}
 }
 
-# mapData parameters:
-#	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
-#	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
-sub mapData(\@\@) {
+# getDestination parameters:
+#	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
+#	isTemp: should it be a temporary destination?
+sub getDestination($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $p_mainCorrelatableConcepts = shift;
-	my $p_otherCorrelatedConcepts = shift;
+	my $correlatedConcept = shift;
+	my $isTemp = shift;
 	
-	my $BMAX = $self->{'batch-size'};
+	Carp::croak("ERROR: getDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
 	
+	my $destColl = $isTemp?'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1)):$correlatedConcept->concept->collection->path;
 	my $db = $self->connect();
 	
-	# Phase1: iterate over the main ones
-	foreach my $correlatedConcept (@{$p_mainCorrelatableConcepts}) {
-		eval {
-			# Any needed sort happens here
-			$correlatedConcept->openFiles();
-			
-			# The destination collection
-			my $destColl = $correlatedConcept->concept->collection->path;
-			my $mongoColl = $db->get_collection($destColl);
-			
-			# Let's store!!!!
-			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
-				$mongoColl->batch_insert($entorp->[0]);
-			}
-			$correlatedConcept->closeFiles();
-		};
-		
-		if($@) {
-			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
-		}
-	}
+	return $db->get_collection($destColl);
+}
+
+# bulkInsert parameters:
+#	destination: The destination of the bulk insertion.
+#	p_batch: a reference to an array of hashes which contain the values to store.
+sub bulkInsert($\@) {
+	my $self = shift;
 	
-	# Phase2: iterate over the other ones which could have chained, but aren't
-	foreach my $correlatedConcept (@{$p_otherCorrelatedConcepts}) {
-		# Main storage on a fake collection
-		eval {
-			# Any needed sort happens here
-			$correlatedConcept->openFiles();
-			
-			# The destination 'fake' collection
-			my $destColl = 'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1));
-			my $mongoColl = $db->get_collection($destColl);
-			
-			# Let's store!!!!
-			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
-				$mongoColl->batch_insert($entorp->[0]);
-			}
-			$correlatedConcept->closeFiles();
-		
-			# TODO: Send the mapReduce sentence to join inside the database
-			
-		};
-		
-		if($@) {
-			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
-		}
-	}
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $destination = shift;
+	my $p_batch = shift;
+	
+	Carp::croak("ERROR: bulkInsert needs a MongoDB::Collection instance")  unless(ref($destination) && $destination->isa('MongoDB::Collection'));
+	
+	return $destination->batch_insert($p_batch);
 }
 
 1;

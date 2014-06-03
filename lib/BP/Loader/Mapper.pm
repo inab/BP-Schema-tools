@@ -23,6 +23,7 @@ our %storage_names;
 
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
+	['batch-size' => 20000],
 );
 
 # Constructor parameters:
@@ -130,10 +131,16 @@ sub storeNativeModel(\$) {
 	Carp::croak('Unimplemented method!');
 }
 
-# mapData parameters:
-#	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
-#	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
-sub mapData(\@\@) {
+# getDestination parameters:
+#	corrConcept: An instance of BP::Loader::CorrelatableConcept
+sub getDestination($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# bulkInsert parameters:
+#	destination: The destination of the bulk insertion.
+#	batch: a reference to an array of hashes which contain the values to store.
+sub bulkInsert($\@) {
 	Carp::croak('Unimplemented method!');
 }
 
@@ -218,6 +225,68 @@ sub _fancyColumnOrdering($) {
 	
 	
 	return (@idcolorder,@colorder);
+}
+
+# mapData parameters:
+#	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
+#	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
+sub mapData(\@\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_mainCorrelatableConcepts = shift;
+	my $p_otherCorrelatedConcepts = shift;
+	
+	my $BMAX = $self->{'batch-size'};
+	
+	my $db = $self->connect();
+	
+	# Phase1: iterate over the main ones
+	foreach my $correlatedConcept (@{$p_mainCorrelatableConcepts}) {
+		eval {
+			# Any needed sort happens here
+			$correlatedConcept->openFiles();
+			
+			# The destination collection
+			my $destination = $self->getDestination($correlatedConcept);
+			
+			# Let's store!!!!
+			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
+				$self->bulkInsert($destination,$entorp->[0]);
+			}
+			$correlatedConcept->closeFiles();
+		};
+		
+		if($@) {
+			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
+		}
+	}
+	
+	# Phase2: iterate over the other ones which could have chained, but aren't
+	foreach my $correlatedConcept (@{$p_otherCorrelatedConcepts}) {
+		# Main storage on a fake collection
+		eval {
+			# Any needed sort happens here
+			$correlatedConcept->openFiles();
+			
+			# The destination 'fake' collection
+			my $destination = $self->getDestination($correlatedConcept,1);
+			
+			# Let's store!!!!
+			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
+				$self->bulkInsert($destination,$entorp->[0]);
+			}
+			$correlatedConcept->closeFiles();
+		
+			# TODO: Send the mapReduce sentence to join inside the database
+			
+		};
+		
+		if($@) {
+			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
+		}
+	}
 }
 
 1;
