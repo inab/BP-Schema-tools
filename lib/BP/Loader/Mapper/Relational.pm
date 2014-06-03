@@ -29,7 +29,6 @@ use constant {
 };
 
 my @DEFAULTS = (
-	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['release' => 'true'],
 	['sql-dialect' => 'mysql'],
 	['batch-size' => 4096],
@@ -117,13 +116,12 @@ sub new($$) {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	
-	# my $self  = $class->SUPER::new();
-	my $self = {};
-	bless($self,$class);
 	
-	$self->{model} = shift;
-	
+	my $model = shift;
 	my $config = shift;
+	
+	my $self  = $class->SUPER::new($model,$config);
+	bless($self,$class);
 	
 	if(scalar(@DEFAULTS)>0) {
 		if($config->SectionExists($SECTION)) {
@@ -152,16 +150,6 @@ sub new($$) {
 
 sub isHierarchical {
 	return undef;
-}
-
-# setFilePrefix parameters:
-#	newPrefix: the new prefix for the generated files
-sub setFilePrefix($) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	$self->{BP::Loader::Mapper::FILE_PREFIX_KEY} = shift;
 }
 
 sub __sql_escape($) {

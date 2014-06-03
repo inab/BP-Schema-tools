@@ -24,7 +24,6 @@ BEGIN {
 };
 
 my @DEFAULTS = (
-	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['db' => undef],
 	['host' => undef],
 	['port' => ''],
@@ -39,13 +38,11 @@ sub new($$) {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	
-	# my $self  = $class->SUPER::new();
-	my $self = {};
-	bless($self,$class);
-	
-	$self->{model} = shift;
-	
+	my $model = shift;
 	my $config = shift;
+	
+	my $self  = $class->SUPER::new($model,$config);
+	bless($self,$class);
 	
 	if($config->SectionExists($SECTION)) {
 		foreach my $param (@DEFAULTS) {
