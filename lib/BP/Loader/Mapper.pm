@@ -64,7 +64,11 @@ sub new($$) {
 	
 	$self->{model} = shift;
 	
+	Carp::croak("ERROR: model must be an instance of BP::Model")  unless(ref($self->{model}) && $self->{model}->isa('BP::Model'));
+	
 	my $config = shift;
+	
+	Carp::croak("ERROR: config must be an instance of Config::IniFiles")  unless(ref($config) && $config->isa('Config::IniFiles'));
 	
 	if(scalar(@DEFAULTS)>0) {
 		if($config->SectionExists($SECTION)) {
@@ -87,6 +91,15 @@ sub new($$) {
 	return $self;
 }
 
+# setFilePrefix parameters:
+#	newPrefix: the new prefix for the generated files
+sub setFilePrefix($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	$self->{BP::Loader::Mapper::FILE_PREFIX_KEY} = shift;
+}
 
 sub isHierarchical {
 	Carp::croak('Unimplemented method!');
