@@ -86,7 +86,7 @@ if(scalar(@ARGV)>=2) {
 		my @loadModels = ();
 		foreach my $loadModelName (split(/,/,$loadModelNames)) {
 			unless(exists($storageModels{$loadModelName})) {
-				$storageModels{$loadModelName} = BP::Loader::Mapper->new($loadModelName,$model,$ini);
+				$storageModels{$loadModelName} = BP::Loader::Mapper->newInstance($loadModelName,$model,$ini);
 				push(@loadModels,$loadModelName);
 			}
 		}
@@ -193,7 +193,7 @@ if(scalar(@ARGV)>=2) {
 	
 		my $storageModelNames = $ini->val($BP::Loader::Mapper::SECTION,'metadata-models');
 		foreach my $storageModelName (split(/,/,$storageModelNames)) {
-			$storageModels{$storageModelName} = BP::Loader::Mapper->new($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
+			$storageModels{$storageModelName} = BP::Loader::Mapper->newInstance($storageModelName,$model,$ini)  unless(exists($storageModels{$storageModelName}));
 			
 			print "Generating native model for $storageModelName...\n";
 			my $p_list = $storageModels{$storageModelName}->generateNativeModel($workingDir);

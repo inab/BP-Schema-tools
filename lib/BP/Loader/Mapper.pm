@@ -21,11 +21,15 @@ BEGIN {
 # The registered storage models
 our %storage_names;
 
+my @DEFAULTS = (
+	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
+);
+
 # Constructor parameters:
 #	storageModel: the key identifying the storage model
 #	model: a BP::Model instance
 #	other parameters
-sub new($$;@) {
+sub newInstance($$;@) {
 	# Very special case for multiple inheritance handling
 	# This is the seed
 	my($self)=shift;
@@ -45,6 +49,43 @@ sub new($$;@) {
 		Carp::croak("ERROR: unregistered storage model $storageModel\n");
 	}
 }
+
+# Constructor parameters:
+#	model: a BP::Model instance
+#	config: a Config::IniFiles instance
+sub new($$) {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
+	
+	# my $self  = $class->SUPER::new();
+	my $self = {};
+	bless($self,$class);
+	
+	$self->{model} = shift;
+	
+	my $config = shift;
+	
+	if(scalar(@DEFAULTS)>0) {
+		if($config->SectionExists($SECTION)) {
+			foreach my $param (@DEFAULTS) {
+				my($key,$defval) = @{$param};
+				
+				if(defined($defval)) {
+					$self->{$key} = $config->val($SECTION,$key,$defval);
+				} elsif($config->exists($SECTION,$key)) {
+					$self->{$key} = $config->val($SECTION,$key);
+				} else {
+					Carp::croak("ERROR: required parameter $key not found in section $SECTION");
+				}
+			}
+		} else {
+			Carp::croak("ERROR: Unable to read section $SECTION");
+		}
+	}
+	
+	return $self;
+}
+
 
 sub isHierarchical {
 	Carp::croak('Unimplemented method!');
