@@ -5,14 +5,17 @@ use Carp;
 
 use BP::Model;
 
-use MongoDB;
+use MongoDB 0.704.0.0;
 use Config::IniFiles;
 use Tie::IxHash;
 
 package BP::Loader::Mapper::MongoDB;
 
-# Needed for JSON::true and JSON::false declarations
+# Needed for metadata model serialization
 use JSON;
+
+# Better using something agnostic than JSON::true or JSON::false inside TO_JSON
+use boolean 0.32;
 
 use base qw(BP::Loader::Mapper);
 
@@ -29,6 +32,7 @@ my @DEFAULTS = (
 	['port' => ''],
 	['user' => ''],
 	['pass' => ''],
+	['timeout' => '']
 );
 
 # Constructor parameters:
@@ -113,7 +117,7 @@ sub BP::Model::Index::TO_JSON() {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	return {
-		'unique'	=> $self->isUnique ? JSON::true : JSON::false,
+		'unique'	=> boolean::boolean($self->isUnique),
 		'attrs'	=> [map { { 'name' => $_->[0], 'ord' => $_->[1] } } @{$self->indexAttributes}],
 	};
 }
@@ -185,7 +189,7 @@ sub BP::Model::CV::Term::TO_JSON() {
 	
 	$hashRes{'alt-id'} = $self->keys  if(scalar(@{$self->keys})>1);
 	if($self->isAlias) {
-		$hashRes{'alias'} = JSON::true;
+		$hashRes{'alias'} = boolean::true;
 		$hashRes{'union-of'} = $self->parents;
 	} elsif(defined($self->parents)) {
 		$hashRes{'parents'} = $self->parents;
@@ -240,7 +244,7 @@ sub BP::Model::ColumnType::TO_JSON() {
 	my %jsonColumnType = (
 		'type'	=> $self->type,
 		'use'	=> $self->use,
-		'isArray'	=> defined($self->arraySeps) ? JSON::true : JSON::false,
+		'isArray'	=> boolean::boolean(defined($self->arraySeps)),
 	);
 	
 	if(defined($self->default)) {
@@ -290,7 +294,7 @@ sub BP::Model::ConceptDomain::TO_JSON() {
 		'_id'	=> $self->name,
 		'name'	=> $self->name,
 		'fullname'	=> $self->fullname,
-		'isAbstract'	=> $self-> isAbstract ? JSON::true : JSON::false,
+		'isAbstract'	=> boolean::boolean($self->isAbstract),
 		'description'	=> $self->description,
 		'annotations'	=> $self->annotations,
 		# 'filenamePattern'
@@ -373,13 +377,18 @@ sub _TO_JSON($;$$) {
 		}
 		
 		if(defined($bsonsize) && defined($colpath)) {
-			my ($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1);
-			print STDERR "DEBUG: BSON size $DEBUGgroupcounter => ",length($insert),"\n";
-			if(length($insert) > $bsonsize) {
-				my $numSubs = int(length($insert) / $bsonsize)+1;
+			my $maxterms = 256;
+			
+			my $numterms = (exists($newval{terms}) && ref($newval{terms}) eq 'ARRAY')?scalar(@{$newval{terms}}):0;
+			my ($insert, $ids) = (undef,undef); 
+			
+			($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1)  if($numterms<=$maxterms);
+			print STDERR "DEBUG: BSON $DEBUGgroupcounter terms $numterms\n";
+			if($numterms > $maxterms || length($insert) > $bsonsize ) {
+				my $numSubs = int(($numterms > $maxterms) ? ($numterms / $maxterms) : (length($insert) / $bsonsize))+1;
+				my $segsize = ($numterms > $maxterms) ? $maxterms : int($numterms / $numSubs);
 				
 				my $offset = 0;
-				my $segsize = int(scalar(@{$newval{terms}}) / $numSubs);
 				foreach my $i (0..($numSubs-1)) {
 					my %i_subCV = %newval;
 					my $newOffset = $offset + $segsize;
@@ -555,6 +564,8 @@ sub _connect() {
 	$MongoDB::BSON::use_boolean = 1;
 	# Let's test the connection
 	my $client = MongoDB::MongoClient->new(@clientParams);
+	
+	$client->query_timeout($self->{'timeout'})  if(defined($self->{'timeout'}) && $self->{'timeout'} ne '');
 	my $db = $client->get_database($MONGODB);
 	# This is needed to fragment the insertions
 	$self->{_BSONSIZE} = $client->max_bson_size;
