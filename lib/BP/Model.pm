@@ -32,7 +32,8 @@ use constant {
 package BP::Model::ColumnType;
 
 # These two are to prepare the values to be inserted
-use boolean;
+# Better using something agnostic than JSON::true or JSON::false inside TO_JSON
+use boolean 0.32;
 use DateTime::Format::ISO8601;
 
 # Static methods to prepare the data once read (data mangling)
@@ -49,7 +50,7 @@ sub __string($) {
 }
 
 sub __boolean($) {
-	($_[0] =~ /^1|[tT](?:rue)?|[yY](?:es)?$/)?boolean::true:boolean::false
+	defined($_[0])?(($_[0] =~ /^1|[tT](?:rue)?|[yY](?:es)?$/)?boolean::true:boolean::false):boolean::false
 }
 
 sub __timestamp($) {
@@ -83,10 +84,10 @@ use constant ItemTypes => {
 	BP::Model::ColumnType::STRING_TYPE	=> [1,1,\&__string,undef],	# With this we avoid costly checks
 	BP::Model::ColumnType::TEXT_TYPE	=> [1,1,\&__string,undef],	# With this we avoid costly checks
 	BP::Model::ColumnType::INTEGER_TYPE	=> [qr/^0|(?:-?[1-9][0-9]*)$/,undef,\&__integer,undef],
-	BP::Model::ColumnType::DECIMAL_TYPE	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?$/,undef,\&__decimal,undef],
+	BP::Model::ColumnType::DECIMAL_TYPE	=> [qr/^(?:0|(?:-?[1-9][0-9]*))(?:\.[0-9]+)?(?:e(?:0|(?:-?[1-9][0-9]*)))?$/,undef,\&__decimal,undef],
 	BP::Model::ColumnType::BOOLEAN_TYPE	=> [qr/^[10]|[tT](?:rue)?|[fF](?:alse)?|[yY](?:es)?|[nN]o?$/,1,\&__boolean,undef],
 	BP::Model::ColumnType::TIMESTAMP_TYPE	=> [qr/^[1-9][0-9][0-9][0-9](?:(?:1[0-2])|(?:0[1-9]))(?:(?:[0-2][0-9])|(?:3[0-1]))$/,1,\&__timestamp,undef],
-	BP::Model::ColumnType::DURATION_TYPE	=> [qr/^$/,1,\&__duration,undef],
+	BP::Model::ColumnType::DURATION_TYPE	=> [qr/^P(?:(?:0|[1-9][0-9]*)W|(?:(?:0|[1-9][0-9]*)Y)(?:(?:0|[1-9][0-9]*)M)(?:(?:0|[1-9][0-9]*)D)(?:T(?:(?:0|[1-9][0-9]*)H)(?:(?:0|[1-9][0-9]*)M)(?:(?:0|[1-9][0-9]*)S))?)$/,1,\&__duration,undef],
 	BP::Model::ColumnType::COMPOUND_TYPE	=> [undef,1,undef,undef]
 };
 
