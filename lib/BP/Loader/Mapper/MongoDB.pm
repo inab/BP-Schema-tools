@@ -68,7 +68,8 @@ sub new($$) {
 	return $self;
 }
 
-sub isHierarchical {
+# As there are no native relations, try nesting the correlated concepts
+sub nestedCorrelatedConcepts {
 	return 1;
 }
 

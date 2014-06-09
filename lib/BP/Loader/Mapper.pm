@@ -101,7 +101,8 @@ sub setFilePrefix($) {
 	$self->{BP::Loader::Mapper::FILE_PREFIX_KEY} = shift;
 }
 
-sub isHierarchical {
+# This method tells whether we follow a nesting strategy or not for correlated concepts
+sub nestedCorrelatedConcepts {
 	Carp::croak('Unimplemented method!');
 }
 

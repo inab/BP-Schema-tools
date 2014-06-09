@@ -148,7 +148,7 @@ sub new($$) {
 	return $self;
 }
 
-sub isHierarchical {
+sub nestedCorrelatedConcepts {
 	return undef;
 }
 

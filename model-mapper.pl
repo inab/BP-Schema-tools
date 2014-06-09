@@ -93,8 +93,8 @@ if(scalar(@ARGV)>=2) {
 		
 		# Now, do we need to push the metadata there?
 		if(!$ini->exists($BP::Loader::Mapper::SECTION,'metadata-loaders') || $ini->val($BP::Loader::Mapper::SECTION,'metadata-loaders') eq 'true') {
-			foreach my $loader (@storageModels{@loadModels}) {
-				$loader->storeNativeModel();
+			foreach my $mapper (@storageModels{@loadModels}) {
+				$mapper->storeNativeModel();
 			}
 		}
 		
@@ -128,7 +128,7 @@ if(scalar(@ARGV)>=2) {
 			exit 1;
 		}
 		
-		foreach my $loader (@storageModels{@loadModels}) {
+		foreach my $mapper (@storageModels{@loadModels}) {
 			# Now, let's create the possibly correlatable concepts
 			# and check which of them can be correlated
 			my @mainCorrelatableConcepts = ();
@@ -142,7 +142,7 @@ if(scalar(@ARGV)>=2) {
 				$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
 				
 				# Save for later processing
-				if($loader->isHierarchical() && ! $concept->goesToCollection()) {
+				if($mapper->nestedCorrelatedConcepts() && ! $concept->goesToCollection()) {
 					my $idConcept = $concept->idConcept;
 					
 					if(defined($idConcept)) {
@@ -160,7 +160,7 @@ if(scalar(@ARGV)>=2) {
 			
 			my @freeSlavesCorrelatableConcepts = ();
 			
-			if($loader->isHierarchical()) {
+			if($mapper->nestedCorrelatedConcepts()) {
 				# Let's visit the possible correlations
 				my %disabledCorrelatedConcepts = ();
 				foreach my $idkey (keys(%chainedConcepts)) {
@@ -186,7 +186,7 @@ if(scalar(@ARGV)>=2) {
 			}
 			
 			# Now, let's load!
-			$loader->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
+			$mapper->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 		}
 	} elsif($ini->exists($BP::Loader::Mapper::SECTION,'metadata-models')) {
 		# Setting up other storage models, and generate the native models
