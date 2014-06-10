@@ -639,6 +639,7 @@ sub storeNativeModel() {
 # getDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
 #	isTemp: should it be a temporary destination?
+# It returns a MongoDB::Collection instance
 sub getDestination($;$) {
 	my $self = shift;
 	
@@ -655,8 +656,30 @@ sub getDestination($;$) {
 	return $db->get_collection($destColl);
 }
 
+# freeDestination parameters:
+#	destination: An instance of MongoDB::Collection
+#	errflag: The error flag
+# As it is not needed to explicitly free them, it is an empty method.
+sub freeDestination($) {
+}
+
+# bulkPrepare parameters:
+#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+# It returns the bulkData to be used for the load
+sub bulkPrepare($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $correlatedConcept = shift;
+	my $entorp = shift;
+	
+	return $entorp->[0];
+}
+
 # bulkInsert parameters:
-#	destination: The destination of the bulk insertion.
+#	destination: The destination of the bulk insertion (a MongoDB::Collection instance)
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub bulkInsert($\@) {
 	my $self = shift;

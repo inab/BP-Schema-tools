@@ -39,20 +39,34 @@ my @DEFAULTS = (
 	[BP::Loader::Mapper::Relational::CONF_DBPASS	=> '' ],
 );
 
+# Static methods to prepare the data to write (data mangling)
+sub __bypass($) {
+	$_[0]
+}
+
+sub __boolean2dbi($) {
+	defined($_[0])?($_[0]?1:0):undef;
+}
+
+# It should be set in ODBC TIMESTAMP format
+sub __timestamp2dbi($) {
+	defined($_[0])?($_[0]->ymd.' '.$_[0]->hms):undef;
+}
 
 my %ABSTYPE2SQL = (
-	BP::Model::ColumnType::STRING_TYPE	=> 'VARCHAR(1024)',
-	BP::Model::ColumnType::TEXT_TYPE	=> 'TEXT',
-	BP::Model::ColumnType::INTEGER_TYPE	=> 'INTEGER',
-	BP::Model::ColumnType::DECIMAL_TYPE	=> 'DOUBLE PRECISION',
-	BP::Model::ColumnType::BOOLEAN_TYPE	=> 'BOOL',
-	BP::Model::ColumnType::TIMESTAMP_TYPE	=> 'DATETIME',
-	BP::Model::ColumnType::DURATION_TYPE	=> 'VARCHAR(128)',
-	BP::Model::ColumnType::COMPOUND_TYPE	=> 'TEXT',
+	BP::Model::ColumnType::STRING_TYPE	=> ['VARCHAR(1024)',DBI::SQL_VARCHAR,\&__bypass],
+	BP::Model::ColumnType::TEXT_TYPE	=> ['TEXT',DBI::SQL_VARCHAR,\&__bypass],
+	BP::Model::ColumnType::INTEGER_TYPE	=> ['INTEGER',DBI::SQL_INTEGER,\&__bypass],
+	BP::Model::ColumnType::DECIMAL_TYPE	=> ['DOUBLE PRECISION',DBI::SQL_DOUBLE,\&__bypass],
+	BP::Model::ColumnType::BOOLEAN_TYPE	=> ['BOOL',DBI::SQL_BOOLEAN,\&__boolean2dbi],
+	BP::Model::ColumnType::TIMESTAMP_TYPE	=> ['DATETIME',DBI::SQL_DATETIME,\&__timestamp2dbi],
+	BP::Model::ColumnType::DURATION_TYPE	=> ['VARCHAR(128)',DBI::SQL_VARCHAR,\&__bypass],
+	BP::Model::ColumnType::COMPOUND_TYPE	=> ['TEXT',DBI::SQL_VARCHAR,undef],
 );
 
 my %ABSTYPE2SQLKEY = %ABSTYPE2SQL;
-$ABSTYPE2SQLKEY{BP::Model::ColumnType::STRING_TYPE} = 'VARCHAR(128)';
+$ABSTYPE2SQLKEY{BP::Model::ColumnType::STRING_TYPE} = ['VARCHAR(128)',DBI::SQL_VARCHAR];
+
 
 my @FALSE_TRUE = ('FALSE','TRUE');
 my @FALSE_TRUE_FAKE = (0,1);
@@ -245,8 +259,8 @@ sub generateNativeModel($) {
 	my @cvorder = ();
 	my %cvdump = ();
 	my $chunklines = $self->{'batch-size'};
-	my $descType = $p_TYPE2SQL->{BP::Model::ColumnType::STRING_TYPE};
-	my $aliasType = $p_TYPE2SQL->{BP::Model::ColumnType::BOOLEAN_TYPE};
+	my $descType = $p_TYPE2SQL->{BP::Model::ColumnType::STRING_TYPE}[0];
+	my $aliasType = $p_TYPE2SQL->{BP::Model::ColumnType::BOOLEAN_TYPE}[0];
 	
 	if(open(my $SQL,'>:utf8',$outfileSQL)) {
 		print $SQL '-- File '.File::Basename::basename($outfileSQL)." (".$self->{'sql-dialect'}." dialect)\n";
@@ -298,12 +312,12 @@ sub generateNativeModel($) {
 					print $SQL ','  if(defined($gottable));
 					
 					my $columnType = $column->columnType;
-					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}:$p_TYPE2SQL->{$columnType->type};
+					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}[0]:$p_TYPE2SQL->{$columnType->type}[0];
 					# Registering CVs
 					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
-						$SQLtype = $p_TYPE2SQLKEY->{$columnType->type};
+						$SQLtype = $p_TYPE2SQLKEY->{$columnType->type}[0];
 						my $CV = $columnType->restriction;
 						
 						my $cvname = $CV->id;
@@ -701,6 +715,145 @@ sub storeNativeModel() {
 		File::Path::remove_tree($workingDir);
 		Carp::croak($croakmsg)  if(defined($croakmsg));
 	}
+}
+
+# getDestination parameters:
+#	corrConcept: An instance of BP::Loader::CorrelatableConcept
+# It returns a DBI prepared statement
+sub getDestination($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $correlatedConcept = shift;
+	
+	Carp::croak("ERROR: getDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	
+	my $concept = $correlatedConcept->concept;
+	my $desttable = __entryName($concept);
+	
+	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
+	my $columnSet = $concept->columnSet;
+	
+	my $insertSentence = 'INSERT INTO '.$desttable.'('.join(',',map { $_->name } @{$columnSet->columns}{@colorder}).') VALUES ('.join(',', map { '?' } @colorder).')';
+	
+	my $dbh = $self->connect();
+	
+	my $destination = $dbh->prepare($insertSentence);
+	
+	# Starting a transaction so it is all or nothing
+	$dbh->begin_work();
+	
+	return $destination;
+}
+
+# freeDestination parameters:
+#	destination: A DBI prepared statement
+# It calls the finish 
+sub freeDestination($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $destination = shift;
+	
+	my $dbh = $self->connect();
+	# Finishing the transaction
+	if($errflag) {
+		$dbh->rollback();
+	} else {
+		$dbh->commit();
+	}
+	
+	# Freeing the sentence
+	$destination->finish();
+}
+
+# bulkPrepare parameters:
+#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+# It returns the bulkData to be used for the load
+sub bulkPrepare($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $correlatedConcept = shift;
+	my $entorp = shift;
+	
+	my $dialectFuncs = $self->{dialect};
+	my $p_TYPE2SQL = $dialectFuncs->[_SQLDIALECT_TYPE2SQL];
+	my $p_TYPE2SQLKEY = $dialectFuncs->[_SQLDIALECT_TYPE2SQLKEY];
+	
+	my @coldata = ();
+	my %colhash = ();
+	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
+	my $columnSet = $concept->columnSet;
+	foreach my $colname (@colorder) {
+		my $column = $columnSet->columns->{$colname};
+		my $columnType = $column->columnType;
+		my $DBItype = undef;
+		my $mangler = undef;
+		if($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn)) {
+			$DBItype = $p_TYPE2SQLKEY->{$columnType->type}[1];
+			$mangler = $p_TYPE2SQLKEY->{$columnType->type}[2];
+		} else {
+			$DBItype = $p_TYPE2SQL->{$columnType->type}[1];
+			$mangler = $p_TYPE2SQLKEY->{$columnType->type}[2];
+		}
+		
+		# FUTURE: improve these two cases, based on non-standard database features
+		# The default case when we don't know to do, serialize in json
+		$mangler = \&JSON::encode_json  unless(defined($mangler));
+		
+		# And the array case is the same
+		$mangler = \&JSON::encode_json  if($columnType->arrayDimensions() > 0);
+		
+		my @preparedData = ();
+		# Setting up optimized pusher, based on what we know about the mangler
+		my $pusher = ($mangler == \&__bypass) ?
+		sub {
+			push(@preparedData,$_[0]);
+		}
+		:
+		sub {
+			push(@preparedData,$mangler->($_[0]));
+		}
+		;
+		push(@coldata,[\@preparedData,$DBItype]);
+		$colhash{$colname} = $pusher;
+	}
+	
+	# Now, let's fill the data arrays for each entry and column
+	foreach my $entry (@{$entorp->[0]}) {
+		foreach my $pusher (@colhash{@colorder}) {
+			$pusher->($entry->{$colname});
+		}
+	}
+	
+	return \@coldata;
+}
+
+# bulkInsert parameters:
+#	destination: The destination of the bulk insertion, which is a DBI prepared statement.
+#	bulkData: a reference to an array of hashes which contain the values to store.
+sub bulkInsert($\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $destination = shift;
+	my $bulkData = shift;
+	
+	Carp::croak("ERROR: bulkInsert needs a prepared statemtent")  unless(ref($destination) && $destination->can('execute'));
+	
+	my $colnum = 1;
+	foreach my $p_column (@{$bulkData}) {
+		$destination->bind_param_array($colnum,$p_column->[0],$p_column->[1]);
+		$colnum++;
+	}
+	
+	$destination->execute_array();
 }
 
 1;
