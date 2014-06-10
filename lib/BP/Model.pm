@@ -2931,6 +2931,11 @@ sub arraySeps {
 	return $_[0]->[BP::Model::ColumnType::ARRAYSEPS];
 }
 
+# array separators
+sub arrayDimensions {
+	defined($_[0]->[BP::Model::ColumnType::ARRAYSEPS])?length($_[0]->[BP::Model::ColumnType::ARRAYSEPS]):0;
+}
+
 # An array of allowed null values
 sub allowedNulls {
 	return $_[0]->[BP::Model::ColumnType::ALLOWEDNULLS];
