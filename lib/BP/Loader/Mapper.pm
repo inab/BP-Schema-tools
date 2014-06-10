@@ -147,13 +147,33 @@ sub storeNativeModel(\$) {
 
 # getDestination parameters:
 #	corrConcept: An instance of BP::Loader::CorrelatableConcept
+# It returns a destination, which dependes on the Mapper implementation,
+# to be used in bulkInsert calls. It can also start a transaction.
 sub getDestination($) {
 	Carp::croak('Unimplemented method!');
 }
 
+# freeDestination parameters:
+#	destination: What it is returned by getDestination
+#	errflag: The error flag
+# It frees a destination, which dependes on the Mapper implementation.
+# It can also finish a transaction, based on the error flag
+sub freeDestination($$) {
+	Carp::croak('Unimplemented method!');
+}
+
+# bulkPrepare parameters:
+#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+# It returns the bulkData to be used for the load
+sub bulkPrepare($$) {
+	Carp::croak('Unimplemented method!');
+}
+
+
 # bulkInsert parameters:
 #	destination: The destination of the bulk insertion.
-#	batch: a reference to an array of hashes which contain the values to store.
+#	bulkData: a reference to an array of hashes which contain the values to store.
 sub bulkInsert($\@) {
 	Carp::croak('Unimplemented method!');
 }
@@ -241,6 +261,23 @@ sub _fancyColumnOrdering($) {
 	return (@idcolorder,@colorder);
 }
 
+# readEntry parameters:
+#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
+#	BMAX: The max number of entries to fetch
+# It returns a reference to a bulk of data which can be managed by bulkInsert
+sub readEntry($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $correlatedConcept = shift;
+	my $BMAX = shift;
+	
+	my $entorp = $correlatedConcept->readEntry($BMAX);
+	
+	return $self->bulkPrepare($correlatedConcept,$entorp);
+}
+
 # mapData parameters:
 #	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
 #	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
@@ -266,9 +303,12 @@ sub mapData(\@\@) {
 			my $destination = $self->getDestination($correlatedConcept);
 			
 			# Let's store!!!!
-			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
-				$self->bulkInsert($destination,$entorp->[0]);
+			my $errflag = undef;
+			while(my $bulkData = $self->readEntry($correlatedConcept,$BMAX)) {
+				$self->bulkInsert($destination,$bulkData);
 			}
+			$self->freeDestination($destination,$errflag);
+			
 			$correlatedConcept->closeFiles();
 		};
 		
@@ -288,9 +328,11 @@ sub mapData(\@\@) {
 			my $destination = $self->getDestination($correlatedConcept,1);
 			
 			# Let's store!!!!
-			while(my $entorp = $correlatedConcept->readEntry($BMAX)) {
-				$self->bulkInsert($destination,$entorp->[0]);
+			my $errflag = undef;
+			while(my $entorp = $self->readEntry($correlatedConcept,$BMAX)) {
+				$self->bulkInsert($destination,$bulkData);
 			}
+			$self->freeDestination($destination,$errflag);
 			$correlatedConcept->closeFiles();
 		
 			# TODO: Send the mapReduce sentence to join inside the database
