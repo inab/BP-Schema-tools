@@ -749,14 +749,17 @@ sub getDestination($) {
 }
 
 # freeDestination parameters:
-#	destination: A DBI prepared statement
-# It calls the finish 
+#	destination: What it is returned by getDestination
+#	errflag: The error flag
+# It frees a destination, which dependes on the Mapper implementation.
+# It can also finish a transaction, based on the error flag
 sub freeDestination($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $destination = shift;
+	my $errflag = shift;
 	
 	my $dbh = $self->connect();
 	# Finishing the transaction
@@ -782,12 +785,13 @@ sub bulkPrepare($$) {
 	my $correlatedConcept = shift;
 	my $entorp = shift;
 	
+	my $concept = $correlatedConcept->concept();
 	my $dialectFuncs = $self->{dialect};
 	my $p_TYPE2SQL = $dialectFuncs->[_SQLDIALECT_TYPE2SQL];
 	my $p_TYPE2SQLKEY = $dialectFuncs->[_SQLDIALECT_TYPE2SQLKEY];
 	
 	my @coldata = ();
-	my %colhash = ();
+	my @pushorder = ();
 	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
 	my $columnSet = $concept->columnSet;
 	foreach my $colname (@colorder) {
@@ -822,13 +826,15 @@ sub bulkPrepare($$) {
 		}
 		;
 		push(@coldata,[\@preparedData,$DBItype]);
-		$colhash{$colname} = $pusher;
+		push(@pushorder,$pusher);
 	}
 	
 	# Now, let's fill the data arrays for each entry and column
 	foreach my $entry (@{$entorp->[0]}) {
-		foreach my $pusher (@colhash{@colorder}) {
-			$pusher->($entry->{$colname});
+		my $colnum = 0;
+		foreach my $colname (@colorder) {
+			$pushorder[$colnum]->($entry->{$colname});
+			$colnum++;
 		}
 	}
 	
