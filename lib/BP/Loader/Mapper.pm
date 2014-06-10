@@ -329,7 +329,7 @@ sub mapData(\@\@) {
 			
 			# Let's store!!!!
 			my $errflag = undef;
-			while(my $entorp = $self->readEntry($correlatedConcept,$BMAX)) {
+			while(my $bulkData = $self->readEntry($correlatedConcept,$BMAX)) {
 				$self->bulkInsert($destination,$bulkData);
 			}
 			$self->freeDestination($destination,$errflag);
