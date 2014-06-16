@@ -1,4 +1,4 @@
-#!/usr/bin/perl -W
+#!/usr/bin/perl -w
 
 # Steps to follow on loading
 # 1. Parse model
@@ -26,6 +26,7 @@ use BP::Loader::Mapper;
 # These are included so they self-register on BP::Loader::Mapper
 use BP::Loader::Mapper::Relational;
 use BP::Loader::Mapper::MongoDB;
+use BP::Loader::Mapper::Elasticsearch;
 use BP::Loader::Mapper::DocumentationGenerator;
 
 use Time::HiRes;
