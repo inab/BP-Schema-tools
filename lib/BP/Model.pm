@@ -1097,19 +1097,30 @@ sub indexes {
 	return $_[0]->[2];
 }
 
-# addIndex parameters:
-#	index: A BP::Model::Index instance
-# It adds this index declaration to the collection (needed to patch the metadata collection)
-sub addIndex($) {
+# addIndexes parameters:
+#	index: one or more BP::Model::Index instance
+# It adds these index declarations to the collection (needed to patch the metadata collection)
+sub addIndexes(@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $index = shift;
+	while(scalar(@_)>0) {
+		my $index = shift;
+		
+		Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($index) && $index->isa('BP::Model::Index'));
+		
+		push(@{$self->[2]},$index);
+	}
+}
+
+# This method is mainly here for metadata collection, where the index is more or less dynamic
+sub clearIndexes() {
+	my $self = shift;
 	
-	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($index) && $index->isa('BP::Model::Index'));
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	push(@{$self->[2]},$index);
+	$self->[2] = [];
 }
 
 #my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),[]);
