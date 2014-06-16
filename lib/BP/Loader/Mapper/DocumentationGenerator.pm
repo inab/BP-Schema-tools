@@ -104,9 +104,6 @@ sub new($$) {
 		}
 	}
 	
-	# "Digitalizing" release configuration variable
-	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
-	
 	$self->{relTemplateBaseDir} = defined($config->GetFileName)?File::Spec->rel2abs(File::Basename::dirname($config->GetFileName)):Cwd::cwd();
 	
 	return $self;
@@ -1415,7 +1412,7 @@ EOF
 			}
 			
 			### HACK ###
-			if(ref($restriction) eq 'BP::Model::CompoundType') {
+			if(ref($restriction) && $restriction->isa('BP::Model::CompoundType')) {
 				my $rColumnSet = $restriction->columnSet;
 				foreach my $rColumnName (@{$rColumnSet->columnNames}) {
 					my $rColumn = $rColumnSet->columns->{$rColumnName};

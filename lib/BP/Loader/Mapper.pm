@@ -24,6 +24,7 @@ our %storage_names;
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['batch-size' => 20000],
+	['release' => 'true'],
 );
 
 # Constructor parameters:
@@ -88,6 +89,9 @@ sub new($$) {
 		}
 	}
 	
+	# "Digitalizing" release configuration variable
+	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
+	
 	return $self;
 }
 
@@ -114,14 +118,6 @@ sub generateNativeModel($) {
 	Carp::croak('Unimplemented method!');
 }
 
-# createCollection parameters:
-#	collection: A BP::Model::Collection instance
-# Given a BP::Model::Collection instance, it is created, along with its indexes
-sub createCollection($) {
-	Carp::croak('Unimplemented method!');
-}
-
-
 # This method connects to the database and returns the handler. The connection
 # is persistent so next calls to the method should return the same instance.
 sub connect() {
@@ -141,7 +137,7 @@ sub _connect() {
 
 # storeNativeModel parameters:
 #	workingDir: The optional directory where the native model files are going to be saved.
-sub storeNativeModel(\$) {
+sub storeNativeModel(;\$) {
 	Carp::croak('Unimplemented method!');
 }
 

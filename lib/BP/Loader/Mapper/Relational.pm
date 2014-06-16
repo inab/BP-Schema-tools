@@ -30,7 +30,6 @@ use constant {
 };
 
 my @DEFAULTS = (
-	['release' => 'true'],
 	['sql-dialect' => 'mysql'],
 	['batch-size' => 4096],
 	[BP::Loader::Mapper::Relational::CONF_DB	=> undef ],
@@ -157,8 +156,6 @@ sub new($$) {
 	}
 	Carp::croak("ERROR: Unknown SQL dialect '$self->{'sql-dialect'}'. Valid ones are: ".join(', ',keys(%SQLDIALECTS)))  unless(exists($SQLDIALECTS{$self->{'sql-dialect'}}));
 	$self->{dialect} = $SQLDIALECTS{$self->{'sql-dialect'}};
-	
-	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
 	
 	return $self;
 }
@@ -661,6 +658,7 @@ sub _dsn() {
 }
 
 # This method returns a connection to the database
+# In this case, a DBI database handler
 sub _connect() {
 	my $self = shift;
 	
