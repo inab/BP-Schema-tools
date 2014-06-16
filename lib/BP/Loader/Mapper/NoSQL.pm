@@ -505,4 +505,26 @@ sub generateNativeModel(\$) {
 	return \@generatedFiles;
 }
 
+# getNativeDestination parameters:
+#	collection: a BP::Model::Collection instance
+# It returns a native collection object, to be used by bulkInsert, for instance
+sub getNativeDestination($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# createCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it is created its native correspondence,
+# along with its indexes. It also returns it.
+sub createCollection($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# freeDestination parameters:
+#	destination: An instance of MongoDB::Collection
+#	errflag: The error flag
+# As it is not needed to explicitly free them, it is an empty method.
+sub freeDestination($$) {
+}
+
 1;

@@ -67,6 +67,7 @@ sub nestedCorrelatedConcepts {
 }
 
 # This method returns a connection to the database
+# In this case, it returns a MongoDB::MongoClient instance
 sub _connect() {
 	my $self = shift;
 	
@@ -93,8 +94,26 @@ sub _connect() {
 	return $db;
 }
 
+# getNativeDestination parameters:
+#	collection: a BP::Model::Collection instance
+# It returns a native collection object, to be used by bulkInsert, for instance
+sub getNativeDestination($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $db = $self->connect();
+	my $coll = $db->get_collection($collection->path);
+	
+	return $coll;
+}
+
 # _EnsureIndexes parameters:
-#	coll: a MongoDB::Collection instance
+#	coll: a native instance of the concept of collection
 #	indexes: An array of BP::Model::Index instances
 sub _EnsureIndexes($@) {
 	my($coll,@indexes) = @_;
@@ -119,11 +138,12 @@ sub createCollection($) {
 	
 	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
 	
+	my $coll = $self->getNativeDestination($collection);
 	if(ref($collection->indexes) eq 'ARRAY' && scalar(@{$collection->indexes})>0) {
-		my $db = $self->connect();
-		my $coll = $db->get_collection($collection->path);
 		_EnsureIndexes($coll,@{$collection->indexes});
 	}
+	
+	return $coll;
 }
 
 # storeNativeModel parameters:
@@ -138,19 +158,18 @@ sub storeNativeModel() {
 	}
 	
 	# Do we have to store the JSON description of the model?
-	if(defined($self->{model}->metadataCollection)) {
+	if(defined($self->{model}->metadataCollection())) {
 		my $p_generatedObjects = $self->generateNativeModel(undef);
 		
-		my $db = $self->connect();
-	
-		my $metacollPath = $self->{model}->metadataCollection->path;
-		my $metacoll = $db->get_collection($metacollPath);
-		
+		my $metadataCollection = $self->{model}->metadataCollection();
+		$metadataCollection->clearIndexes();
 		# Let's add the needed meta-indexes for CV terms
-		_EnsureIndexes($metacoll,BP::Model::Index->new(undef,['terms.term',1]),BP::Model::Index->new(undef,['terms.parents',1]),BP::Model::Index->new(undef,['terms.ancestors',1]));
+		$metadataCollection->addIndexes(BP::Model::Index->new(undef,['terms.term',1]),BP::Model::Index->new(undef,['terms.parents',1]),BP::Model::Index->new(undef,['terms.ancestors',1]));
+		
+		my $metaColl = $self->createCollection($metadataCollection);
 		
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
-			$metacoll->save($p_generatedObject,{safe=>1});
+			$self->bulkInsert($metaColl,[$p_generatedObject]);
 		}
 	}
 }
@@ -173,13 +192,6 @@ sub getDestination($;$) {
 	my $db = $self->connect();
 	
 	return $db->get_collection($destColl);
-}
-
-# freeDestination parameters:
-#	destination: An instance of MongoDB::Collection
-#	errflag: The error flag
-# As it is not needed to explicitly free them, it is an empty method.
-sub freeDestination($$) {
 }
 
 # bulkPrepare parameters:
