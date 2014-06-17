@@ -96,6 +96,7 @@ if(scalar(@ARGV)>=3) {
 	$conf->newval($BP::Loader::Mapper::DEFAULTSECTION,BP::Loader::Mapper::FILE_PREFIX_KEY,$relOutfilePrefix);
 	$conf->newval($BP::Loader::Mapper::SECTION,'release',$RELEASE);
 	$conf->AddSection($BP::Loader::Mapper::Relational::SECTION);
+	$conf->newval($BP::Loader::Mapper::Relational::SECTION,'db','');
 	$conf->newval($BP::Loader::Mapper::DocumentationGenerator::SECTION,'template-dir',$templateDocDir);
 	$conf->newval($BP::Loader::Mapper::DocumentationGenerator::SECTION,'pdflatex',PDFLATEX);
 	$conf->newval($BP::Loader::Mapper::DocumentationGenerator::SECTION,'terms-limit',TERMSLIMIT);
