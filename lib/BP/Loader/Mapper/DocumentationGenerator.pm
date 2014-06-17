@@ -986,7 +986,7 @@ DEOF
 	system(@params);
 	system(@standAloneParams);
 	
-	#$self->recordGeneratedFiles($latexfile,$standalonelatexfile);
+	#$self->recordGeneratedFiles([$latexfile,undef],[$standalonelatexfile,undef]);
 	
 	return ($latexfile,$figpreamble);
 }
@@ -1629,7 +1629,7 @@ EOFSH
 		# TODO: Signing the PDF with portablesigner
 		# http://portablesigner.sourceforge.net/
 		
-		$self->recordGeneratedFiles($outputFile);
+		$self->recordGeneratedFiles([$outputFile,1]);
 	}
 }
 
@@ -1693,7 +1693,7 @@ sub generateNativeModel($) {
 	# Generating the bpmodel bundle (if it is reasonable)
 	if(defined($outfileBPMODEL)) {
 		$model->saveBPModel($outfileBPMODEL);
-		$self->recordGeneratedFiles($outfileBPMODEL);
+		$self->recordGeneratedFiles([$outfileBPMODEL,1]);
 	}
 	
 	# Generating the graph model
@@ -1705,7 +1705,7 @@ sub generateNativeModel($) {
 	
 	if(defined($outfileLaTeX)) {
 		open($TO,'>:utf8',$outfileLaTeX) || Carp::croak("ERROR: Unable to create output LaTeX file $outfileLaTeX\n");
-		$self->recordGeneratedFiles($outfileLaTeX);
+		$self->recordGeneratedFiles([$outfileLaTeX,undef]);
 	} else {
 		$TO = File::Temp->new();
 		binmode($TO,':utf8');
