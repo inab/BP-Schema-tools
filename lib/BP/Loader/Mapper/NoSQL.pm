@@ -303,7 +303,7 @@ sub BP::Model::Concept::TO_JSON() {
 	return \%jsonConcept;
 }
 
-my $DEBUGgroupcounter = 0;
+#my $DEBUGgroupcounter = 0;
 
 # _TO_JSON parameters:
 #	val: The value to be 'json-ified' in memory
@@ -327,7 +327,7 @@ sub _TO_JSON($;$$) {
 			$elem = _TO_JSON($elem);
 		}
 		push(@results,\@newval);
-		print STDERR "DEBUG: array\n"  if(defined($bsonsize));
+		#print STDERR "DEBUG: array\n"  if(defined($bsonsize));
 	} elsif(ref($val) eq 'HASH') {
 		# This is needed to avoid memory structures corruption
 		my %newval = %{$val};
@@ -342,7 +342,7 @@ sub _TO_JSON($;$$) {
 			my ($insert, $ids) = (undef,undef); 
 			
 			($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1)  if($numterms<=$maxterms);
-			print STDERR "DEBUG: BSON $DEBUGgroupcounter terms $numterms\n";
+			#print STDERR "DEBUG: BSON $DEBUGgroupcounter terms $numterms\n";
 			if($numterms > $maxterms || length($insert) > $bsonsize ) {
 				my $numSubs = int(($numterms > $maxterms) ? ($numterms / $maxterms) : (length($insert) / $bsonsize))+1;
 				my $segsize = ($numterms > $maxterms) ? $maxterms : int($numterms / $numSubs);
@@ -364,21 +364,21 @@ sub _TO_JSON($;$$) {
 					}
 					
 					push(@results,\%i_subCV);
-					if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'-'.$i.'.json')) {
-						print $SUB encode_json(\%i_subCV);
-						close($SUB);
-					}
+					#if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'-'.$i.'.json')) {
+					#	print $SUB encode_json(\%i_subCV);
+					#	close($SUB);
+					#}
 					$offset = $newOffset;
 				}
 				
-				print STDERR "DEBUG: fragmented hash\n";
+				#print STDERR "DEBUG: fragmented hash\n";
 			} else {
 				push(@results,\%newval);
-				print STDERR "DEBUG: hash\n";
-				if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'.json')) {
-					print $SUB encode_json(\%newval);
-					close($SUB);
-				}
+				#print STDERR "DEBUG: hash\n";
+				#if(open(my $SUB,'>','/tmp/debug-'.$DEBUGgroupcounter.'.json')) {
+				#	print $SUB encode_json(\%newval);
+				#	close($SUB);
+				#}
 			}
 		} else {
 			push(@results,\%newval);
@@ -386,10 +386,10 @@ sub _TO_JSON($;$$) {
 		
 	} else {
 		push(@results,$val);
-		print STDERR "DEBUG: other\n"  if(defined($bsonsize));
+		#print STDERR "DEBUG: other\n"  if(defined($bsonsize));
 	}
 				
-	$DEBUGgroupcounter++  if(defined($bsonsize));
+	#$DEBUGgroupcounter++  if(defined($bsonsize));
 	
 	return wantarray? @results : $results[0];
 }
