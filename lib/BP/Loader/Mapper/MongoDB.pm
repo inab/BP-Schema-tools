@@ -25,7 +25,8 @@ my @DEFAULTS = (
 	['port' => ''],
 	['user' => ''],
 	['pass' => ''],
-	['timeout' => '']
+	['timeout' => ''],
+	['max-array-terms' => 256]
 );
 
 # Constructor parameters:
@@ -159,7 +160,7 @@ sub storeNativeModel() {
 	
 	# Do we have to store the JSON description of the model?
 	if(defined($self->{model}->metadataCollection())) {
-		my $p_generatedObjects = $self->generateNativeModel(undef);
+		my $p_generatedObjects = $self->generateNativeModel(undef,exists($self->{_BSONSIZE})?$self->{_BSONSIZE}:undef,$self->{'max-array-terms'});
 		
 		my $metadataCollection = $self->{model}->metadataCollection();
 		$metadataCollection->clearIndexes();

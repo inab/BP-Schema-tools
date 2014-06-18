@@ -307,13 +307,14 @@ sub BP::Model::Concept::TO_JSON() {
 
 # _TO_JSON parameters:
 #	val: The value to be 'json-ified' in memory
-#	bsonsize: The max size of a BSON object
-#	colpath: The putative collection where it is going to be stored
+#	colpath: The putative collection where it is going to be stored (optional)
+#	bsonsize: The max size of a BSON object (optional)
+#	maxterms: Max number of elements in an array (optional)
 # It returns an array of objects
-sub _TO_JSON($;$$);
+sub _TO_JSON($;$$$);
 
-sub _TO_JSON($;$$) {
-	my($val,$bsonsize,$colpath)=@_;
+sub _TO_JSON($;$$$) {
+	my($val,$colpath,$bsonsize,$maxterms)=@_;
 	
 	# First step
 	$val = $val->TO_JSON()  if(ref($val) && UNIVERSAL::can($val,'TO_JSON'));
@@ -335,17 +336,24 @@ sub _TO_JSON($;$$) {
 			$elem = _TO_JSON($elem);
 		}
 		
-		if(defined($bsonsize) && defined($colpath)) {
-			my $maxterms = 256;
-			
+		if(defined($colpath) && (defined($bsonsize) || defined($maxterms))) {
 			my $numterms = (exists($newval{terms}) && ref($newval{terms}) eq 'ARRAY')?scalar(@{$newval{terms}}):0;
 			my ($insert, $ids) = (undef,undef); 
 			
-			($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1)  if($numterms<=$maxterms);
+			($insert, $ids) = MongoDB::write_insert($colpath,[\%newval],1)  if(defined($bsonsize) && (!defined($maxterms) || $numterms<=$maxterms));
 			#print STDERR "DEBUG: BSON $DEBUGgroupcounter terms $numterms\n";
-			if($numterms > $maxterms || length($insert) > $bsonsize ) {
-				my $numSubs = int(($numterms > $maxterms) ? ($numterms / $maxterms) : (length($insert) / $bsonsize))+1;
-				my $segsize = ($numterms > $maxterms) ? $maxterms : int($numterms / $numSubs);
+			if( (defined($maxterms) && $numterms > $maxterms) || (defined($bsonsize) && length($insert) > $bsonsize) ) {
+				my $numSubs = undef;
+				my $segsize = undef;
+				
+				if(defined($maxterms) && $numterms > $maxterms) {
+					$numSubs = $numterms / $maxterms;
+					$segsize = $maxterms;
+				} else {
+					$numSubs = length($insert) / $bsonsize;
+					$segsize = int($numterms / $numSubs);
+				}
+				$numSubs = int($numSubs) + 1;
 				
 				my $offset = 0;
 				foreach my $i (0..($numSubs-1)) {
@@ -397,9 +405,11 @@ sub _TO_JSON($;$$) {
 
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
+#	BSONSIZE: optional parameter with the max BSON size (used to partitionate on arrays)
+#	maxterms: optional parameter with the max number of elements in an array (used to partitionate)
 # It returns a reference to an array of pairs
 #	[absolute paths to the generated files (based on workingDir),is essential]
-sub generateNativeModel(\$) {
+sub generateNativeModel(\$;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -409,7 +419,9 @@ sub generateNativeModel(\$) {
 	my @generatedFiles = ();
 	my $JSON = undef;
 	
-	my $BSONSIZE = exists($self->{_BSONSIZE})?$self->{_BSONSIZE}:undef;
+	my $BSONSIZE = shift;
+	my $maxterms = shift;
+	
 	my $metacollPath = defined($self->{model}->metadataCollection)?$self->{model}->metadataCollection->path:undef;
 	
 	my $filePrefix = undef;
@@ -469,7 +481,7 @@ sub generateNativeModel(\$) {
 										Carp::croak("Unable to create output file $outfilesubCVJSON");
 									}
 								} else {
-									push(@generatedFiles,_TO_JSON($subCV,$BSONSIZE,$metacollPath));
+									push(@generatedFiles,_TO_JSON($subCV,$metacollPath,$BSONSIZE,$maxterms));
 									# If we find again this CV, we do not process it again
 									$cvdump{$subcvname} = undef;
 								}
@@ -490,7 +502,7 @@ sub generateNativeModel(\$) {
 									Carp::croak("Unable to create output file $outfileCVJSON");
 								}
 							} else {
-								push(@generatedFiles,_TO_JSON($CV,$BSONSIZE,$metacollPath));
+								push(@generatedFiles,_TO_JSON($CV,$metacollPath,$BSONSIZE,$maxterms));
 								# If we find again this CV, we do not process it again
 								$cvdump{$cvname} = undef;
 							}
