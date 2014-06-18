@@ -42,15 +42,15 @@ sub BP::Model::TO_JSON() {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	# We need collections by path, not by id
-	my %jsonColls = map { $_->path => $_ } values(%{$self->{COLLECTIONS}});
+	my %jsonColls = map { $_->path => $_ } values(%{$self->collections()});
 	
 	# The main features
 	my %jsonModel=(
-		'project'	=> $self->{project},
-		'schemaVer'	=> $self->{schemaVer},
-		'annotations'	=> $self->{ANNOTATIONS},
+		'project'	=> $self->projectName(),
+		'schemaVer'	=> $self->versionString(),
+		'annotations'	=> $self->annotations(),
 		'collections'	=> \%jsonColls,
-		'domains'	=> $self->{CDOMAINHASH},
+		'domains'	=> $self->conceptDomainsHash(),
 	);
 	
 	return \%jsonModel;

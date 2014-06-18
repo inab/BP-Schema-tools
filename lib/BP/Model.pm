@@ -897,6 +897,15 @@ sub conceptDomains() {
 	return $self->{CDOMAINS};
 }
 
+# It returns a hash whose values are BP::Model::ConceptDomain instances (all the concept domains)
+sub conceptDomainsHash() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->{CDOMAINHASH};
+}
+
 # getConceptDomain parameters:
 #	conceptDomainName: The name of the concept domain to look for
 # returns a BP::Model::ConceptDomain object or undef (if it does not exist)
