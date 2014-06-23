@@ -3,7 +3,7 @@ BP-Schema-tools
 
 Bioinformatic Pantry Schema tools
 
-See INSTALL.md for software installation pre-requisites of these tools
+See [INSTALL.md](INSTALL.md) for software installation pre-requisites of these tools
 
 
 Rationale
