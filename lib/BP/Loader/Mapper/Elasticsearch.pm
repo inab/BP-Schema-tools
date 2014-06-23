@@ -11,6 +11,40 @@ use Tie::IxHash;
 # Better using something agnostic than JSON::true or JSON::false inside TO_JSON
 use boolean 0.32;
 
+package BP::Model::QuasiConcept;
+
+# A quasiconcept is not a real concept. It is only an object with id and columnSet methods
+# It is only needed by Elasticsearch metadata generation
+
+# Constructor parameters
+#	id: The id of this QuasiConcept
+#	columnSet: A BP::Model::ColumnSet instance
+sub new() {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
+	
+	my $id = shift;
+	my $columnSet = shift;
+	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($columnSet) && $columnSet->isa('BP::Model::ColumnSet'));
+	
+	my $self = [$id,$columnSet];
+	
+	return bless($self);
+}
+
+# It returns the id
+sub id {
+	$_[0]->[0];
+}
+
+# It returns the columnSet
+sub columnSet {
+	$_[0]->[1];
+}
+
+1;
+
+
 package BP::Loader::Mapper::Elasticsearch;
 
 use base qw(BP::Loader::Mapper::NoSQL);
@@ -163,24 +197,6 @@ sub _connect() {
 	return $es;
 }
 
-# getNativeDestination parameters:
-#	collection: a BP::Model::Collection instance
-# It returns a native collection object, to be used by bulkInsert, for instance
-sub getNativeDestination($) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $collection = shift;
-	
-	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
-	
-	my $db = $self->connect();
-	my $coll = $db->get_collection($collection->path);
-	
-	return $coll;
-}
-
 sub _FillMapping($);
 
 # _FillMapping parameters:
@@ -269,10 +285,38 @@ sub storeNativeModel() {
 	foreach my $collection (values(%{$self->{model}->collections})) {
 		$self->createCollection($collection);
 	}
+	
+	# Do we have to store the JSON description of the model?
+	#if(defined($self->{model}->metadataCollection())) {
+	#	# Second, generate the native model
+	#	my $p_generatedObjects = $self->generateNativeModel(undef);
+	#	
+	#	# Third, patch the metadata collection, so the
+	#	# two specialized mappings for the metadata model and the controlled vocabularies
+	#	# are generated
+	#	my $modelColumnSet = BP::Model::ColumnSet->new(undef,);
+	#	my $modelConcept = BP::Model::QuasiConcept->new('model',$modelColumnSet);
+	#	my $cvColumnSet = BP::Model::ColumnSet->new(undef,);
+	#	my $cvConcept = BP::Model::QuasiConcept->new('cv',$cvColumnSet);
+	#	
+	#	# TODO
+	#	
+	#	$self->createCollection($metadataCollection);
+        #
+	#	# Fourth, insert
+	#	my $cvdest = $self->getDestination($cvConcept);
+	#	my $modeldest = $self->getDestination($modelConcept);
+	#	
+	#	foreach my $p_generatedObject (@{$p_generatedObjects}) {
+	#		my $dest = (exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}))?$cvdest:$modeldest;
+	#		
+	#		$self->bulkInsert($dest,[ {'index' => $p_generatedObject} ]);
+	#	}
+	#}
 }
 
 # getDestination parameters:
-#	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
+#	correlatedConcept: An instance of BP::Loader::CorrelatableConcept or BP::Concept
 #	isTemp: should it be a temporary destination?
 # It returns a reference to a two element array, with index name and mapping type
 sub getDestination($;$) {
@@ -283,9 +327,9 @@ sub getDestination($;$) {
 	my $correlatedConcept = shift;
 	my $isTemp = shift;
 	
-	Carp::croak("ERROR: getDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	Carp::croak("ERROR: getDestination needs either a BP::Loader::CorrelatableConcept or BP::Model::QuasiConcept instance")  unless(ref($correlatedConcept) && ($correlatedConcept->isa('BP::Loader::CorrelatableConcept') || $correlatedConcept->isa('BP::Model::QuasiConcept')));
 	
-	my $concept = $correlatedConcept->concept;
+	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 	my $conid = $concept+0;
 	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
 	my $indexName = $collection->path;

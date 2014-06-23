@@ -2922,6 +2922,38 @@ sub parseColumnType($$$) {
 	return bless(\@columnType,$class);
 }
 
+# This is a constructor.
+# new parameters:
+#	itemType: One of the types supported by this BP::Model
+#	itemUse: is it idref, required, desirable, optional?
+#	restriction: An instance of BP::Model::CV::Abstract , Regexp or BP::Model::CompoundType
+#	default: A default value for this column
+#	arraySeps: The separators for multidimensional values, or undef
+#	allowedNulls: A reference to an array of valid null values
+# returns a BP::Model::ColumnType instance, with all the information related to
+# types, restrictions and enumerated values of this ColumnType.
+sub new($$$$$$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $containerDecl = shift;
+	my $model = shift;
+	my $columnName = shift;
+	
+	# Item type
+	# column use (idref, required, optional)
+	# content restrictions
+	# default value
+	# array separators
+	# null values
+	# data mangler
+	# data checker
+	my @nullValues = ();
+	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
+	
+}
+
 # Item type
 sub type {
 	return $_[0]->[BP::Model::ColumnType::TYPE];
@@ -3076,6 +3108,39 @@ sub parseColumn($$) {
 	return bless(\@column,$class);
 }
 
+# This is a constructor.
+# new parameters:
+#	name: The column name
+#	description: A BP::Model::DescriptionSet instance
+#	annotations: A BP::Model::AnnotationSet instance
+#	columnType: A BP::Model::ColumnType instance
+# returns a BP::Model::Column instance, with all the information related to
+# types, restrictions and enumerated values used by this column.
+sub new($$$$) {
+	my $class = shift;
+	
+	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	
+	my $name = shift;
+	my $description = shift;
+	my $annotations = shift;
+	my $columnType = shift;
+	
+	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
+	my @column = (
+		$name,
+		$description,
+		$annotations,
+		$columnType,
+		undef,
+		undef,
+		undef,
+		undef
+	);
+	
+	return bless(\@column,$class);
+}
+
 # The column name
 sub name {
 	return $_[0]->[BP::Model::Column::NAME];
@@ -3201,20 +3266,17 @@ sub cloneRelated($;$$$) {
 package BP::Model::ColumnSet;
 
 # This is the constructor.
-# parseColumnSet parameters:
-#	container: a XML::LibXML::Element node, containing 'dcc:column' elements
+# new parameters:
 #	parentColumnSet: a BP::Model::ColumnSet instance, which is the parent.
-#	model: a BP::Model instance, used to validate the columns.
+#	columns: an array of BP::Model::Column instances
 # returns a BP::Model::ColumnSet instance with all the BP::Model::Column instances (including
 # the inherited ones from the parent).
-sub parseColumnSet($$$) {
-	my $class = shift;
+sub new($@) {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
-	
-	my $container = shift;
 	my $parentColumnSet = shift;
-	my $model = shift;
+	my @columns = @_;
 	
 	my @columnNames = ();
 	my @idColumnNames = ();
@@ -3231,11 +3293,7 @@ sub parseColumnSet($$$) {
 	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
 	
 	my @checkDefault = ();
-	foreach my $colDecl ($container->childNodes()) {
-		next  unless($colDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $colDecl->localname() eq 'column');
-		
-		my $column = BP::Model::Column->parseColumn($colDecl,$model);
-		
+	foreach my $column (@columns) {
 		# We want to keep the original column order as far as possible
 		if(exists($columnDecl{$column->name})) {
 			if($columnDecl{$column->name}->columnType->use eq BP::Model::ColumnType::IDREF) {
@@ -3268,6 +3326,33 @@ sub parseColumnSet($$$) {
 	
 	return bless(\@columnSet,$class);
 }
+
+# This is a constructor.
+# parseColumnSet parameters:
+#	container: a XML::LibXML::Element node, containing 'dcc:column' elements
+#	parentColumnSet: a BP::Model::ColumnSet instance, which is the parent.
+#	model: a BP::Model instance, used to validate the columns.
+# returns a BP::Model::ColumnSet instance with all the BP::Model::Column instances (including
+# the inherited ones from the parent).
+sub parseColumnSet($$$) {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
+	
+	my $container = shift;
+	my $parentColumnSet = shift;
+	my $model = shift;
+	
+	my @columns = ();
+	foreach my $colDecl ($container->childNodes()) {
+		next  unless($colDecl->nodeType == XML::LibXML::XML_ELEMENT_NODE && $colDecl->localname() eq 'column');
+		
+		my $column = BP::Model::Column->parseColumn($colDecl,$model);
+		push(@columns,$column);
+	}
+	
+	return $class->new($parentColumnSet,@columns);
+}
+
 
 # This is a constructor
 # combineColumnSets parameters:
