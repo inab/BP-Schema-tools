@@ -1419,7 +1419,7 @@ EOF
 					my $rRestr = $rColumn->columnType->restriction;
 					
 					if(defined($rRestr) && ref($rRestr) && $rRestr->isa('BP::Model::CV::Abstract')) {
-						$values .= "\n".'\textit{\texttt{\textbf{'.$rColumnName.'}}}';
+						$values .= "\n".'\textit{\texttt{\textbf{'._LaTeX__escape($rColumnName).'}}}';
 						foreach my $rCV (@{$rRestr->getEnclosedCVs}) {
 							# Is it an anonymous CV?
 							my $numterms = scalar(@{$rCV->order});
