@@ -819,7 +819,7 @@ DEOF
 			
 		
 			# Let's print the rank
-			print $DOT <<DEOF;
+			print $DOT <<DEOF  if(scalar(@firstRank)>1);
 		{ rank=same; @firstRank }
 DEOF
 			# Then, their relationships
@@ -962,7 +962,6 @@ DEOF
 		'--autosize',
 #		'--nominsize',
 		'-c',
-		'--preproc',
 		'--figonly',
 # This backend kills relationships
 #		'-ftikz',
@@ -976,7 +975,6 @@ DEOF
 		'--autosize',
 #		'--nominsize',
 		'-c',
-		'--preproc',
 #		'--prog=circo',
 # This backend kills relationships
 #		'-ftikz',
@@ -1047,7 +1045,7 @@ DEOF
 		}
 		
 		# Let's print the rank
-		print $DOT <<DEOF;
+		print $DOT <<DEOF  if(scalar(@firstRank)>1);
 	{ rank=same; @firstRank }
 DEOF
 		
@@ -1186,7 +1184,6 @@ DEOF
 		'--autosize',
 #		'--nominsize',
 		'-c',
-		'--preproc',
 		'--figonly',
 # This backend kills relationships
 #		'-ftikz',
@@ -1200,7 +1197,6 @@ DEOF
 		'--autosize',
 #		'--nominsize',
 		'-c',
-		'--preproc',
 #		'--prog=circo',
 # This backend kills relationships
 #		'-ftikz',
@@ -1211,6 +1207,115 @@ DEOF
 	system(@standAloneParams);
 
 	return ($latexfile,$figpreamble);
+}
+
+# _printColumn parameters:
+#	O: the output handler
+#	concept: A BP::Model::Concept instance
+#	latexDefaultValue: a string
+#	column: A BP::Model::Column instance
+#	p_idColumnNames: A reference to a hash (or undef)
+#	p_columnAncestors: The ancestor columns (for compounds)
+sub _printColumn($$$$\%;\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my($O,$concept,$latexDefaultValue,$column,$p_idColumnNames, $p_columnAncestors)=@_;
+	
+	$p_columnAncestors = []  unless(defined($p_columnAncestors));
+	
+	my @rColumns = ();
+	
+	my @descriptionItems = ();
+	# Preparing the documentation
+	my $description='';
+	foreach my $documentation (@{$column->description}) {
+		$description = "\n\n" if(length($description)>0);
+		$description .= _LaTeX__format($documentation);
+	}
+	push(@descriptionItems,$description);
+	
+	# Only references to concepts is non abstract concept domains
+	if(scalar(@{$p_columnAncestors}) > 0 && (defined($column->refColumn) && (!$self->{release} || !$column->refConcept->conceptDomain->isAbstract))) {
+		my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'._Label__Column($column->refConcept,$column->refColumn).']{'._LaTeX__escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
+		push(@descriptionItems,$related);
+	}
+	
+	# The comment about the values
+	my $values='';
+	if(exists($column->annotations->hash->{values})) {
+		$values = '\\textit{'._LaTeX__format($column->annotations->hash->{values}).'}';
+	}
+	
+	my $columnType = $column->columnType;
+	
+	# The default value
+	if(defined($columnType->default)) {
+		my $related = '\textcolor{gray}{If it is set to '.$latexDefaultValue.', the default value for this column is '.(ref($columnType->default)?'from ':'').'\textbf{\texttt{\color{black}'.(ref($columnType->default)?('\hyperref[column:'._Label__Column($concept,$columnType->default).']{'._LaTeX__escape($columnType->default->name).'}'):_LaTeX__escape($columnType->default)).'}}}';
+		push(@descriptionItems,$related);
+	}
+	
+	# Now the possible CV(s)
+	my $restriction = $columnType->restriction;
+	if(ref($restriction) && $restriction->isa('BP::Model::CV::Abstract')) {
+		foreach my $CV (@{$restriction->getEnclosedCVs}) {
+			# Is it an anonymous CV?
+			my $numterms = scalar(@{$CV->order});
+			if($numterms < $self->{'inline-terms-limit'} && (!defined($CV->name) || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline'))) {
+				$values .= _LaTeX__inlineCVTable($CV);
+			} else {
+				my $cv = $CV->name;
+				$values .= "\n\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'._LaTeX__CVCaption($CV).', CV \ref*{cvsec:'.$cv.'}})}';
+			}
+		}
+	}
+	
+	### HACK ###
+	if(ref($restriction) && $restriction->isa('BP::Model::CompoundType')) {
+		my $rColumnSet = $restriction->columnSet;
+		push(@rColumns,@{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+	}
+	
+	push(@descriptionItems,$values)  if(length($values)>0);
+	
+	# What it goes to the column type column
+	my $arrayDecorators = defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'';
+	my @colTypeLines = ('\textbf{'._LaTeX__escape($columnType->type.$arrayDecorators).'}');
+	
+	push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'._LaTeX__escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
+	
+	push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'._LaTeX__escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
+	
+	#push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(default \textbf{\color{black}'.(ref($columnType->default)?('\hyperref[column:'._Label__Column($concept,$columnType->default).']{'._LaTeX__escape($columnType->default->name).'}'):_LaTeX__escape($columnType->default)).'})}}')  if(defined($columnType->default));
+	
+	# Stringify it!
+	my $colTypeStr = (scalar(@colTypeLines)>1)?
+#					'\begin{tabular}{l}'.join(' \\\\ ',map { _LaTeX__escape($_) } @colTypeLines).'\end{tabular}'
+#					'\begin{minipage}[t]{8em}'.join(' \\\\ ',@colTypeLines).'\end{minipage}'
+			'\pbox[t]{10cm}{\relax\ifvmode\centering\fi'."\n".join(' \\\\ ',@colTypeLines).'}'
+			:
+			$colTypeLines[0]
+	;
+	
+	my $fontPrefix = (scalar(@{$p_columnAncestors}) > 0)?'\small ':'';
+	print $O join(' & ',
+		map { '{'.$fontPrefix.$_.'}' } (
+			((scalar(@{$p_columnAncestors})>0)?('\texttt{'.('~' x (scalar(@{$p_columnAncestors})*2)).'}'.'\textcolor{gray}{'._LaTeX__escape($column->name).'}'):('\label{column:'._Label__Column($concept,$column).'}'._LaTeX__escape($column->name))),
+			$colTypeStr,
+			$COLKIND2ABBR{($columnType->use!=BP::Model::ColumnType::IDREF || exists($p_idColumnNames->{$column->name}))?$columnType->use:BP::Model::ColumnType::REQUIRED},
+			join("\n\n",@descriptionItems)
+		)
+	),'\\\\',"\n";
+	
+	# The internal columns
+	my @augmentedAncestors = (@{$p_columnAncestors},$column);
+	foreach my $rColumn (@rColumns) {
+		# print $O '\arrayrulecolor{gray}\hline',"\n";
+		$self->_printColumn($O,$concept,$latexDefaultValue,$rColumn,undef,\@augmentedAncestors);
+	}
+	
+	print $O '\hline',"\n"  unless(scalar(@{$p_columnAncestors}) > 0);
 }
 
 # _printConceptDomain parameters:
@@ -1367,100 +1472,7 @@ EOF
 		
 		# Now, let's print the documentation of each column
 		foreach my $column (@{$columnSet->columns}{@colorder}) {
-			my @descriptionItems = ();
-			# Preparing the documentation
-			my $description='';
-			foreach my $documentation (@{$column->description}) {
-				$description = "\n\n" if(length($description)>0);
-				$description .= _LaTeX__format($documentation);
-			}
-			push(@descriptionItems,$description);
-			
-			# Only references to concepts is non abstract concept domains
-			if(defined($column->refColumn) && (!$self->{release} || !$column->refConcept->conceptDomain->isAbstract)) {
-				my $related = '\\textcolor{gray}{Relates to \\textit{\\hyperref[column:'._Label__Column($column->refConcept,$column->refColumn).']{'._LaTeX__escape($column->refConcept->fullname.' ('.$column->refColumn->name.')').'}}}';
-				push(@descriptionItems,$related);
-			}
-			
-			# The comment about the values
-			my $values='';
-			if(exists($column->annotations->hash->{values})) {
-				$values = '\\textit{'._LaTeX__format($column->annotations->hash->{values}).'}';
-			}
-			
-			my $columnType = $column->columnType;
-			
-			# The default value
-			if(defined($columnType->default)) {
-				my $related = '\textcolor{gray}{If it is set to '.$latexDefaultValue.', the default value for this column is '.(ref($columnType->default)?'from ':'').'\textbf{\texttt{\color{black}'.(ref($columnType->default)?('\hyperref[column:'._Label__Column($concept,$columnType->default).']{'._LaTeX__escape($columnType->default->name).'}'):_LaTeX__escape($columnType->default)).'}}}';
-				push(@descriptionItems,$related);
-			}
-			
-			# Now the possible CV(s)
-			my $restriction = $columnType->restriction;
-			if(ref($restriction) && $restriction->isa('BP::Model::CV::Abstract')) {
-				foreach my $CV (@{$restriction->getEnclosedCVs}) {
-					# Is it an anonymous CV?
-					my $numterms = scalar(@{$CV->order});
-					if($numterms < $self->{'inline-terms-limit'} && (!defined($CV->name) || (exists($CV->annotations->hash->{'disposition'}) && $CV->annotations->hash->{disposition} eq 'inline'))) {
-						$values .= _LaTeX__inlineCVTable($CV);
-					} else {
-						my $cv = $CV->name;
-						$values .= "\n\n".'\textit{(See \hyperref[cvsec:'.$cv.']{'._LaTeX__CVCaption($CV).', CV \ref*{cvsec:'.$cv.'}})}';
-					}
-				}
-			}
-			
-			### HACK ###
-			if(ref($restriction) && $restriction->isa('BP::Model::CompoundType')) {
-				my $rColumnSet = $restriction->columnSet;
-				foreach my $rColumnName (@{$rColumnSet->columnNames}) {
-					my $rColumn = $rColumnSet->columns->{$rColumnName};
-					my $rRestr = $rColumn->columnType->restriction;
-					
-					if(defined($rRestr) && ref($rRestr) && $rRestr->isa('BP::Model::CV::Abstract')) {
-						$values .= "\n".'\textit{\texttt{\textbf{'._LaTeX__escape($rColumnName).'}}}';
-						foreach my $rCV (@{$rRestr->getEnclosedCVs}) {
-							# Is it an anonymous CV?
-							my $numterms = scalar(@{$rCV->order});
-							if($numterms < $self->{'inline-terms-limit'} && (!defined($rCV->name) || (exists($rCV->annotations->hash->{'disposition'}) && $rCV->annotations->hash->{disposition} eq 'inline'))) {
-								$values .= "\n"._LaTeX__inlineCVTable($rCV);
-							} else {
-								my $cv = $rCV->name;
-								$values .= '$\mapsto$ \textit{(See \hyperref[cvsec:'.$cv.']{'._LaTeX__CVCaption($rCV).', CV \ref*{cvsec:'.$cv.'}})}';
-							}
-						}
-					}
-				}
-			}
-			
-			push(@descriptionItems,$values)  if(length($values)>0);
-			
-			# What it goes to the column type column
-			my $arrayDecorators = defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'';
-			my @colTypeLines = ('\textbf{'._LaTeX__escape($columnType->type.$arrayDecorators).'}');
-			
-			push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'._LaTeX__escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
-			
-			push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'._LaTeX__escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
-			
-			#push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(default \textbf{\color{black}'.(ref($columnType->default)?('\hyperref[column:'._Label__Column($concept,$columnType->default).']{'._LaTeX__escape($columnType->default->name).'}'):_LaTeX__escape($columnType->default)).'})}}')  if(defined($columnType->default));
-			
-			# Stringify it!
-			my $colTypeStr = (scalar(@colTypeLines)>1)?
-#					'\begin{tabular}{l}'.join(' \\\\ ',map { _LaTeX__escape($_) } @colTypeLines).'\end{tabular}'
-#					'\begin{minipage}[t]{8em}'.join(' \\\\ ',@colTypeLines).'\end{minipage}'
-					'\pbox[t]{10cm}{\relax\ifvmode\centering\fi'."\n".join(' \\\\ ',@colTypeLines).'}'
-					:
-					$colTypeLines[0]
-			;
-			
-			print $O join(' & ',
-				'\label{column:'._Label__Column($concept,$column).'}'._LaTeX__escape($column->name),
-				$colTypeStr,
-				$COLKIND2ABBR{($columnType->use!=BP::Model::ColumnType::IDREF || exists($idColumnNames{$column->name}))?$columnType->use:BP::Model::ColumnType::REQUIRED},
-				join("\n\n",@descriptionItems)
-			),'\\\\ \hline',"\n";
+			$self->_printColumn($O,$concept,$latexDefaultValue,$column,\%idColumnNames);
 		}
 		# End of the table!
 		print $O <<'EOF';
