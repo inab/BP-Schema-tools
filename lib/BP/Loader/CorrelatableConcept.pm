@@ -44,6 +44,11 @@ sub concept {
 	return $_[0]->{concept};
 }
 
+# It returns whether we have read all the lines
+sub eof {
+	return exists($_[0]->{eof});
+}
+
 # Labelling this correlating concept as 'slave' of the identifying one, so it is going
 # to be correlated
 sub setSlave() {
@@ -308,7 +313,7 @@ sub nextLine() {
 	unless(exists($self->{eof})) {
 		my $H = $self->{H};
 		my $line = <$H>;
-		unless(eof($H)) {
+		unless(CORE::eof($H)) {
 			chomp($line);
 			$self->{referenceConceptFile}->mapValues(split(/\t/,$line));
 			return 1;
@@ -385,7 +390,7 @@ sub readEntry(;$\@) {
 			push(@entries,$entry);
 			
 			# We read next line, but we stop on eof
-			last  unless($self->nextline());
+			last  unless($self->nextLine());
 		}
 	}
 	
