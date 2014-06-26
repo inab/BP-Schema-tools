@@ -716,17 +716,16 @@ sub storeNativeModel() {
 	}
 }
 
-# getDestination parameters:
+# _genDestination parameters:
 #	corrConcept: An instance of BP::Loader::CorrelatableConcept
-# It returns a DBI prepared statement
-sub getDestination($) {
+# It returns the destination to be used in bulkInsert calls,
+# i.e. a DBI prepared statement
+sub _genDestination($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $correlatedConcept = shift;
-	
-	Carp::croak("ERROR: getDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
 	
 	my $concept = $correlatedConcept->concept;
 	my $desttable = __entryName($concept);
@@ -746,16 +745,16 @@ sub getDestination($) {
 	return $destination;
 }
 
-# freeDestination parameters:
-#	destination: What it is returned by getDestination
+# _freeDestination parameters:
+#	destination: the destination to be freed
 #	errflag: The error flag
-# It frees a destination, which dependes on the Mapper implementation.
+# It frees a destination, in this case a prepared statement
 # It can also finish a transaction, based on the error flag
-sub freeDestination($) {
+sub _freeDestination(;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
+
 	my $destination = shift;
 	my $errflag = shift;
 	
@@ -771,11 +770,11 @@ sub freeDestination($) {
 	$destination->finish();
 }
 
-# bulkPrepare parameters:
+# _bulkPrepare parameters:
 #	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
 # It returns the bulkData to be used for the load
-sub bulkPrepare($$) {
+sub _bulkPrepare($$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -839,10 +838,10 @@ sub bulkPrepare($$) {
 	return \@coldata;
 }
 
-# bulkInsert parameters:
+# _bulkInsert parameters:
 #	destination: The destination of the bulk insertion, which is a DBI prepared statement.
 #	bulkData: a reference to an array of hashes which contain the values to store.
-sub bulkInsert($\@) {
+sub _bulkInsert($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -850,7 +849,7 @@ sub bulkInsert($\@) {
 	my $destination = shift;
 	my $bulkData = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs a prepared statemtent")  unless(ref($destination) && $destination->can('execute'));
+	Carp::croak("ERROR: bulkInsert needs a prepared statement")  unless(ref($destination) && $destination->can('execute'));
 	
 	my $colnum = 1;
 	foreach my $p_column (@{$bulkData}) {
