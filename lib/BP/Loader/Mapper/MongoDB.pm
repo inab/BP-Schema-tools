@@ -175,11 +175,12 @@ sub storeNativeModel() {
 	}
 }
 
-# getDestination parameters:
+# _genDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
 #	isTemp: should it be a temporary destination?
-# It returns a MongoDB::Collection instance
-sub getDestination($;$) {
+# It sets up the destination to be used in bulkInsert calls, in this case
+# a MongoDB::Collection instance
+sub _genDestination($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -187,19 +188,24 @@ sub getDestination($;$) {
 	my $correlatedConcept = shift;
 	my $isTemp = shift;
 	
-	Carp::croak("ERROR: getDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
-	
 	my $destColl = $isTemp?'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1)):$correlatedConcept->concept->collection->path;
 	my $db = $self->connect();
 	
 	return $db->get_collection($destColl);
 }
 
-# bulkPrepare parameters:
+# _freeDestination parameters:
+#	destination: An instance of MongoDB::Collection
+#	errflag: The error flag
+# As it is not needed to explicitly free them, it is an empty method.
+sub _freeDestination($$) {
+}
+
+# _bulkPrepare parameters:
 #	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
 # It returns the bulkData to be used for the load
-sub bulkPrepare($$) {
+sub _bulkPrepare($$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -210,10 +216,10 @@ sub bulkPrepare($$) {
 	return $entorp->[0];
 }
 
-# bulkInsert parameters:
+# _bulkInsert parameters:
 #	destination: The destination of the bulk insertion (a MongoDB::Collection instance)
 #	p_batch: a reference to an array of hashes which contain the values to store.
-sub bulkInsert($\@) {
+sub _bulkInsert($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));

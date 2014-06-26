@@ -532,11 +532,4 @@ sub createCollection($) {
 	Carp::croak('Unimplemented method!');
 }
 
-# freeDestination parameters:
-#	destination: An instance of MongoDB::Collection
-#	errflag: The error flag
-# As it is not needed to explicitly free them, it is an empty method.
-sub freeDestination($$) {
-}
-
 1;
