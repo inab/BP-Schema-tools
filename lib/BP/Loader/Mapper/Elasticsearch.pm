@@ -251,6 +251,7 @@ sub createCollection($) {
 	my $indexName = $collection->path;
 	
 	# At least, let's create the index
+	$es->indices->delete('index' => $indexName);
 	$es->indices->create('index' => $indexName);
 	
 	my $colid = $collection+0;
@@ -315,11 +316,11 @@ sub storeNativeModel() {
 	#}
 }
 
-# getDestination parameters:
+# _genDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept or BP::Concept
 #	isTemp: should it be a temporary destination?
 # It returns a reference to a two element array, with index name and mapping type
-sub getDestination($;$) {
+sub _genDestination($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -327,21 +328,42 @@ sub getDestination($;$) {
 	my $correlatedConcept = shift;
 	my $isTemp = shift;
 	
-	Carp::croak("ERROR: getDestination needs either a BP::Loader::CorrelatableConcept or BP::Model::QuasiConcept instance")  unless(ref($correlatedConcept) && ($correlatedConcept->isa('BP::Loader::CorrelatableConcept') || $correlatedConcept->isa('BP::Model::QuasiConcept')));
-	
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 	my $conid = $concept+0;
 	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
 	my $indexName = $collection->path;
 	my $mappingName = $concept->id();
-	return [$indexName,$mappingName];
+	
+	my $es = $self->connect();
+	my $bes = $es->bulk_helper(
+		index   => $indexName,
+		type    => $mappingName
+	);
+		
+	return $bes;
 }
 
-# bulkPrepare parameters:
+# _freeDestination parameters:
+#	destination: An instance of MongoDB::Collection
+#	errflag: The error flag
+# As it is not needed to explicitly free them, only it is assured the data is flushed.
+sub _freeDestination($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $destination = shift;
+	my $errflag = shift;
+	
+	# Assure last entries are flushed
+	$destination->flush();
+}
+
+# _bulkPrepare parameters:
 #	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
-# It returns the bulkData to be used for the bulk method from Search::Elasticsearch
-sub bulkPrepare($$) {
+# It returns the bulkData to be used for the load
+sub _bulkPrepare($$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -349,13 +371,14 @@ sub bulkPrepare($$) {
 	my $correlatedConcept = shift;
 	my $entorp = shift;
 	
-	return [ map { {'index' => $_} } @{$entorp->[0]} ];
+	return $entorp->[0];
 }
 
-# bulkInsert parameters:
+
+# _bulkInsert parameters:
 #	destination: A reference to a two element array, with index name and mapping type
 #	p_batch: a reference to an array of hashes which contain the values to store.
-sub bulkInsert($\@) {
+sub _bulkInsert($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
@@ -365,16 +388,12 @@ sub bulkInsert($\@) {
 	Carp::croak("ERROR: bulkInsert needs an array instance")  unless(ref($destination) eq 'ARRAY');
 	
 	my $p_batch = shift;
-
-	my($indexName,$mappingName) = @{$destination};
 	
-	my $es = $self->connect();
+	foreach my $doc (@{$p_batch}) {
+		$destination->index({source=>$doc});
+	}
 	
-	return $es->bulk(
-		'index' => $indexName,
-		'type' => $mappingName,
-		'body' => $p_batch
-	);
+	return 1;
 }
 
 1;
