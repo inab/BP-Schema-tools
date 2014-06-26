@@ -141,28 +141,70 @@ sub storeNativeModel(;\$) {
 	Carp::croak('Unimplemented method!');
 }
 
-# getDestination parameters:
+# _genDestination parameters:
 #	corrConcept: An instance of BP::Loader::CorrelatableConcept
-# It returns a destination, which dependes on the Mapper implementation,
-# to be used in bulkInsert calls. It can also start a transaction.
-sub getDestination($) {
+#	isTemp: Sets up a temp destination
+# It returns the destination to be used in bulkInsert calls, which depends
+# on the Mapper implementation. It can prepare a sentence and also start a transaction.
+sub _genDestination($;$) {
+	Carp::croak('Unimplemented method!');
+}
+
+# setDestination parameters:
+#	corrConcept: An instance of BP::Loader::CorrelatableConcept
+#	isTemp: Sets up a temp destination
+# It sets up the destination to be used in bulkInsert calls, which depends
+# on the Mapper implementation. It can prepare a sentence and also start a transaction.
+sub setDestination($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	Carp::croak('Destination was already setup!')  if(exists($self->{_destination}));
+	
+	my $correlatedConcept = $_[0];
+	
+	Carp::croak("ERROR: setDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	
+	# Any needed sort happens here
+	$correlatedConcept->openFiles();
+	
+	$self->{_destination} = $self->_genDestination(@_);
+	$self->{_correlatedConcept} = $correlatedConcept;
+}
+
+# _freeDestination parameters:
+#	destination: the destination to be freed
+#	errflag: The error flag
+# It frees a destination previously set up, which dependes on the Mapper implementation.
+# It can also finish a transaction, based on the error flag
+sub _freeDestination($;$) {
 	Carp::croak('Unimplemented method!');
 }
 
 # freeDestination parameters:
-#	destination: What it is returned by getDestination
 #	errflag: The error flag
-# It frees a destination, which dependes on the Mapper implementation.
+# It frees a destination, in this case a prepared statement
 # It can also finish a transaction, based on the error flag
-sub freeDestination($$) {
-	Carp::croak('Unimplemented method!');
+sub freeDestination(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	if(exists($self->{_destination})) {
+		$self->_freeDestination($self->{_destination},@_);
+		delete($self->{_destination});
+		
+		$self->{_correlatedConcept}->closeFiles();
+		delete($self->{_correlatedConcept});
+	}
 }
 
-# bulkPrepare parameters:
+# _bulkPrepare parameters:
 #	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
 # It returns the bulkData to be used for the load
-sub bulkPrepare($$) {
+sub _bulkPrepare($$) {
 	Carp::croak('Unimplemented method!');
 }
 
@@ -170,8 +212,18 @@ sub bulkPrepare($$) {
 # bulkInsert parameters:
 #	destination: The destination of the bulk insertion.
 #	bulkData: a reference to an array of hashes which contain the values to store.
-sub bulkInsert($\@) {
+sub _bulkInsert($\@) {
 	Carp::croak('Unimplemented method!');
+}
+
+# bulkInsert parameters:
+#	bulkData: a reference to an array of hashes which contain the values to store.
+sub bulkInsert(\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->_bulkInsert($self->{_destination},@_);
 }
 
 # parseOrderingHints parameters:
@@ -258,20 +310,20 @@ sub _fancyColumnOrdering($) {
 }
 
 # readEntry parameters:
-#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	BMAX: The max number of entries to fetch
+# It reads the entry from the previously registered correlatedConcept
 # It returns a reference to a bulk of data which can be managed by bulkInsert
 sub readEntry($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $correlatedConcept = shift;
+	my $correlatedConcept = $self->{_correlatedConcept};
 	my $BMAX = shift;
 	
 	my $entorp = $correlatedConcept->readEntry($BMAX);
 	
-	return $self->bulkPrepare($correlatedConcept,$entorp);
+	return $self->_bulkPrepare($correlatedConcept,$entorp);
 }
 
 # mapData parameters:
@@ -292,20 +344,16 @@ sub mapData(\@\@) {
 	# Phase1: iterate over the main ones
 	foreach my $correlatedConcept (@{$p_mainCorrelatableConcepts}) {
 		eval {
-			# Any needed sort happens here
-			$correlatedConcept->openFiles();
-			
 			# The destination collection
-			my $destination = $self->getDestination($correlatedConcept);
+			$self->setDestination($correlatedConcept);
 			
 			# Let's store!!!!
 			my $errflag = undef;
-			while(my $bulkData = $self->readEntry($correlatedConcept,$BMAX)) {
-				$self->bulkInsert($destination,$bulkData);
+			my $batchData = undef;
+			for($batchData = $self->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $self->readEntry($BMAX)) {
+				$self->bulkInsert($batchData);
 			}
-			$self->freeDestination($destination,$errflag);
-			
-			$correlatedConcept->closeFiles();
+			$self->freeDestination($errflag);
 		};
 		
 		if($@) {
@@ -317,19 +365,16 @@ sub mapData(\@\@) {
 	foreach my $correlatedConcept (@{$p_otherCorrelatedConcepts}) {
 		# Main storage on a fake collection
 		eval {
-			# Any needed sort happens here
-			$correlatedConcept->openFiles();
-			
 			# The destination 'fake' collection
-			my $destination = $self->getDestination($correlatedConcept,1);
+			$self->setDestination($correlatedConcept,1);
 			
 			# Let's store!!!!
 			my $errflag = undef;
-			while(my $bulkData = $self->readEntry($correlatedConcept,$BMAX)) {
-				$self->bulkInsert($destination,$bulkData);
+			my $batchData = undef;
+			for($batchData = $self->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $self->readEntry($BMAX)) {
+				$self->bulkInsert($batchData);
 			}
-			$self->freeDestination($destination,$errflag);
-			$correlatedConcept->closeFiles();
+			$self->freeDestination($errflag);
 		
 			# TODO: Send the mapReduce sentence to join inside the database
 			
