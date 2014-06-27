@@ -173,6 +173,17 @@ sub setDestination($;$) {
 	$self->{_correlatedConcept} = $correlatedConcept;
 }
 
+# getInternalDestination parameters:
+#		(none)
+# It returns the internal object used for bulk insertions
+sub getInternalDestination() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return exists($self->{_destination})?$self->{_destination}:undef;
+}
+
 # _freeDestination parameters:
 #	destination: the destination to be freed
 #	errflag: The error flag
