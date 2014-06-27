@@ -156,8 +156,7 @@ sub new($$) {
 				
 				# Perl hack to have something 'comparable'
 				my $conid = $concept+0;
-				$concol{$conid} = []  unless(exists($concol{$conid}));
-				push(@{$concol{$conid}}, $collection);
+				$concol{$conid} = $collection;
 			}
 		}
 	}
@@ -331,7 +330,7 @@ sub _genDestination($;$) {
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 	my $conid = $concept+0;
 	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-	my $indexName = $collection->path;
+	my $indexName = $collection->path();
 	my $mappingName = $concept->id();
 	
 	my $es = $self->connect();
@@ -339,7 +338,7 @@ sub _genDestination($;$) {
 		index   => $indexName,
 		type    => $mappingName
 	);
-		
+	
 	return $bes;
 }
 
