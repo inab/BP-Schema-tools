@@ -35,6 +35,8 @@ sub new($@) {
 	my @conceptFiles = @_;
 	@{$self->{conceptFiles}} = map { BP::Loader::CorrelatableConcept::File->new($_) } @conceptFiles;
 	$self->{correlatedConcepts} = undef;
+	
+	# TODO: command line tool detection (pigz vs gzip)
 
 	return $self;
 }
@@ -159,53 +161,57 @@ sub sortCompressed() {
 	$self->readColDesc();
 	
 	unless(exists($self->{__compressed})) {
-		my $referenceConceptFile = $self->{conceptFiles}->[0];
-		$self->{referenceConceptFile} = $referenceConceptFile;
-		# We only have to sort when we have slave correlated concepts
-		# or when this correlatable concept is already a slave
-		if(defined($self->{correlatedConcepts}) || $self->isSlave()) {
-			# First, the internal sort
-			my @sortPipes = ();
-			push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
-			
-			# Primary and foreign key positions on the reference concept file
-			my $PKkeypos = $referenceConceptFile->{PKkeypos};
-			my $FKkeypos = $referenceConceptFile->{FKkeypos};
-			
-			my $isIdentifying = shift;
-			my $isSlave = shift;
-	
-			# Identifying whether we have to do two sorts
-			my $distinctFK = 1;
-			if($FKkeypos && $PKkeypos) {
-				my $maxSteps = scalar(@{$FKkeypos});
-				if(scalar(@{$PKkeypos}) >= $maxSteps) {
-					$distinctFK = undef;
-					foreach my $keypos (0..($maxSteps-1)) {
-						if($PKkeypos->[$keypos] != $FKkeypos->[$keypos]) {
-							$distinctFK = 1;
-							Carp::croak('FATAL ERROR: Model does not correlate the identifying concept keys with the foreign keys!');
-							last;
+		if(scalar(@{$self->{conceptFiles}})>0) {
+			my $referenceConceptFile = $self->{conceptFiles}->[0];
+			$self->{referenceConceptFile} = $referenceConceptFile;
+			# We only have to sort when we have slave correlated concepts
+			# or when this correlatable concept is already a slave
+			if(defined($self->{correlatedConcepts}) || $self->isSlave()) {
+				# First, the internal sort
+				my @sortPipes = ();
+				push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
+				
+				# Primary and foreign key positions on the reference concept file
+				my $PKkeypos = $referenceConceptFile->{PKkeypos};
+				my $FKkeypos = $referenceConceptFile->{FKkeypos};
+				
+				my $isIdentifying = shift;
+				my $isSlave = shift;
+		
+				# Identifying whether we have to do two sorts
+				my $distinctFK = 1;
+				if($FKkeypos && $PKkeypos) {
+					my $maxSteps = scalar(@{$FKkeypos});
+					if(scalar(@{$PKkeypos}) >= $maxSteps) {
+						$distinctFK = undef;
+						foreach my $keypos (0..($maxSteps-1)) {
+							if($PKkeypos->[$keypos] != $FKkeypos->[$keypos]) {
+								$distinctFK = 1;
+								Carp::croak('FATAL ERROR: Model does not correlate the identifying concept keys with the foreign keys!');
+								last;
+							}
 						}
 					}
 				}
-			}
 
-			$self->{PKsortedConceptFile} = $PKkeypos ? __SortCompressed(@sortPipes,@{$PKkeypos}) : undef;
+				$self->{PKsortedConceptFile} = $PKkeypos ? __SortCompressed(@sortPipes,@{$PKkeypos}) : undef;
 
-			if($FKkeypos) {
-				$self->{FKsortedConceptFile} = $distinctFK ? __SortCompressed(@sortPipes,@{$FKkeypos}) : $self->{PKsortedConceptFile};
-			} else {
-				$self->{FKsortedConceptFile} = undef;
-			}
-			
-			$self->{__compressed} = 1;
-			
-			# And also for the slave correlated concepts
-			if(defined($self->{correlatedConcepts})) {
-				foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
-					$correlatedConcept->sortCompressed();
+				if($FKkeypos) {
+					$self->{FKsortedConceptFile} = $distinctFK ? __SortCompressed(@sortPipes,@{$FKkeypos}) : $self->{PKsortedConceptFile};
+				} else {
+					$self->{FKsortedConceptFile} = undef;
 				}
+				
+				$self->{__compressed} = 1;
+				
+				# And also for the slave correlated concepts
+				if(defined($self->{correlatedConcepts})) {
+					foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+						$correlatedConcept->sortCompressed();
+					}
+				}
+			} else {
+				$self->{__compressed} = undef;
 			}
 		} else {
 			$self->{__compressed} = undef;
@@ -234,50 +240,52 @@ sub openFiles() {
 		# Assuring it is as it should be
 		$self->sortCompressed();
 		
-		my $referenceConceptFile = exists($self->{referenceConceptFile}) ? $self->{referenceConceptFile} : undef;
-		if(defined($self->{__compressed})) {
-			# All the content is already preprocessed
-			my $sortedFilename = $self->{PKsortedConceptFile} ? $self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
-			if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
-				$self->{H} = $H;
-			} else {
-				Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->id);
-			}
-		} elsif(scalar(@{$self->{conceptFiles}}) > 0) {
-			# Content is spread over several files. Reclaim pipe expressions
-			my @sortPipes = ();
-			push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
-			
-			my $inpipeStr = __inpipe2Str(@sortPipes);
-			
-			if(open(my $H,'-|',$inpipeStr)) {
-				$self->{H} = $H;
-			} else {
-				Carp::croak('ERROR: Unable to open pipe '.$inpipeStr.' associated to concept '.$self->{concept}->id);
-			}
-		} elsif(open(my $H,'<',$referenceConceptFile->filename())) {
-			# Single file
-			# First, skip initial comments and header
-			$self->{H} = $H;
-			while(my $line = <$H>) {
-				next  if(substr($line,0,1) eq '#');
+		my $referenceConceptFile = (scalar($self->{conceptFiles}) >0) ? $self->{conceptFiles}->[0] : undef;
+		if(defined($referenceConceptFile)) {
+			if(defined($self->{__compressed})) {
+				# All the content is already preprocessed
+				my $sortedFilename = $self->{PKsortedConceptFile} ? $self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
+				if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
+					$self->{H} = $H;
+				} else {
+					Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->id);
+				}
+			} elsif(scalar(@{$self->{conceptFiles}}) > 0) {
+				# Content is spread over several files. Reclaim pipe expressions
+				my @sortPipes = ();
+				push(@sortPipes,map { $_->generatePipeSentence($referenceConceptFile) } @{$self->{conceptFiles}});
 				
-				# The header is here, so go out
-				last;
+				my $inpipeStr = __inpipe2Str(@sortPipes);
+				
+				if(open(my $H,'-|',$inpipeStr)) {
+					$self->{H} = $H;
+				} else {
+					Carp::croak('ERROR: Unable to open pipe '.$inpipeStr.' associated to concept '.$self->{concept}->id);
+				}
+			} elsif(open(my $H,'<',$referenceConceptFile->filename())) {
+				# Single file
+				# First, skip initial comments and header
+				$self->{H} = $H;
+				while(my $line = <$H>) {
+					next  if(substr($line,0,1) eq '#');
+					
+					# The header is here, so go out
+					last;
+				}
+			} else {
+				Carp::croak('ERROR: Unable to open file '.$referenceConceptFile->filename());
 			}
-		} else {
-			Carp::croak('ERROR: Unable to open file '.$referenceConceptFile->filename());
-		}
-		
-		# As this is too expensive, we are doing it only once!
-		$self->{__prepared} = 1;
-		
-		# First read, prefilling so internal buffers
-		$self->nextLine();
-		
-		# And now, the slave correlated concepts
-		foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
-			$correlatedConcept->openFiles();
+			
+			# As this is too expensive, we are doing it only once!
+			$self->{__prepared} = 1;
+			
+			# First read, prefilling so internal buffers
+			$self->nextLine();
+			
+			# And now, the slave correlated concepts
+			foreach my $correlatedConcept (@{$self->{correlatedConcepts}}) {
+				$correlatedConcept->openFiles();
+			}
 		}
 	}
 }
