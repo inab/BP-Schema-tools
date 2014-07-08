@@ -49,6 +49,9 @@ package BP::Loader::Mapper::Elasticsearch;
 
 use base qw(BP::Loader::Mapper::NoSQL);
 
+use BP::Loader::CorrelatableConcept;
+
+
 our $SECTION;
 
 BEGIN {
@@ -250,24 +253,26 @@ sub createCollection($) {
 	my $indexName = $collection->path;
 	
 	# At least, let's create the index
-	$es->indices->delete('index' => $indexName);
-	$es->indices->create('index' => $indexName);
-	
+	#$es->indices->delete('index' => $indexName);
+	$es->indices->create('index' => $indexName)  unless($es->indices->exists('index' => $indexName));
 	my $colid = $collection+0;
+	
 	if(exists($self->{_colConcept}{$colid})) {
 		foreach my $concept (@{$self->{_colConcept}{$colid}}) {
 			my $conceptId = $concept->id();
 			
-			# Build the mapping
-			my $p_mappingDesc = _FillMapping($concept->columnSet());
-			
-			$es->indices->put_mapping(
-				'index' => $indexName,
-				'type' => $conceptId,
-				'body' => {
-					$conceptId => $p_mappingDesc
-				}
-			);
+			#unless($es->indices->exists_type('index' => $indexName,type' => $conceptId)) {
+				# Build the mapping
+				my $p_mappingDesc = _FillMapping($concept->columnSet());
+				
+				$es->indices->put_mapping(
+					'index' => $indexName,
+					'type' => $conceptId,
+					'body' => {
+						$conceptId => $p_mappingDesc
+					}
+				);
+			#}
 		}
 	}
 	
@@ -340,6 +345,88 @@ sub _genDestination($;$) {
 	);
 	
 	return $bes;
+}
+
+use constant {
+	GZIP	=>	'pigz'
+};
+
+my %SORTMAPS = (
+	BP::Model::ColumnType::INTEGER_TYPE	=>	'n',
+	BP::Model::ColumnType::DECIMAL_TYPE	=>	'g'
+);
+
+# existingEntries parameters:
+#	colNames: The column names to fetch with this scroll helper
+#	existingFile: Destination where the file is being saved
+# It dumps all the values of these columns to the file, and it returns the number of lines of the file
+sub existingEntries($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	# TODO: In the future, when grouping functionality has been developed for BP::Model, these column names will be derived from the correlated concept
+	my $p_colNames = shift;
+	
+	my $existingFile = shift;
+	
+	my $correlatedConcept = $self->{_correlatedConcept};
+	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
+	my $conid = $concept+0;
+	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
+	my $indexName = $collection->path();
+	my $mappingName = $concept->id();
+	
+	my $es = $self->connect();
+
+	my $scroll = $es->scroll_helper(
+		'index'	=> $indexName,
+		'type'	=> $mappingName,
+		'size'	=> 5000,
+		'search_type'	=> 'scan', # With this, no sort is applied
+		#'search_type'	=> 'query_and_fetch',
+		'body'	=> {
+			#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
+			# Each fetched document comes with its unique identifier
+			'fields'=> $p_colNames,
+			'query'	=> {
+				'match_all' => {}
+			}
+		}
+	);
+	
+	my $sortColDef = '';
+	my $kidx = 2;
+	foreach my $colName (@{$p_colNames}) {
+		$sortColDef .= " -k${kidx},${kidx}";
+		if(exists($concept->columnSet->columns->{$colName})) {
+			my $columnBaseType = $concept->columnSet->columns->{$colName}->columnType->type;
+			$sortColDef .= $SORTMAPS{$columnBaseType}  if(exists($SORTMAPS{$columnBaseType}));
+		}
+		$kidx++;
+	}
+	
+	my $counter = 0;
+	if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
+		until($scroll->is_finished) {
+			$scroll->refill_buffer();
+			my @docs = $scroll->drain_buffer();
+			$counter += scalar(@docs);
+			foreach my $doc (@docs) {
+		#		#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
+				my $fields = $doc->{fields};
+		#		#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
+		#		#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
+		#		print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
+				print $EXISTING join("\t",$doc->{_id},map { $fields->{$_}[0] } @{$p_colNames}),"\n";
+			}
+		}
+		close($EXISTING);
+	}
+	# Explicitly freeing the scroll helper
+	$scroll->finish;
+	
+	return $counter;
 }
 
 # _freeDestination parameters:

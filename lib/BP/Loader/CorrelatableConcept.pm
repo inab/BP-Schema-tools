@@ -17,8 +17,13 @@ use BP::Loader::CorrelatableConcept::File;
 
 package BP::Loader::CorrelatableConcept;
 
-my $SORT = 'sort';
-my $NUMCPUS = Sys::CPU::cpu_count();
+use constant {
+	GZIP	=>	'pigz',
+	GUNZIP	=>	'unpigz',
+	SORT	=>	'sort'
+};
+
+our $NUMCPUS = Sys::CPU::cpu_count();
 
 # Constructor parameters:
 #	concept: a BP::Model::Concept
@@ -142,7 +147,7 @@ sub __SortCompressed(\@\@) {
 	
 	my $inpipeStr = __inpipe2Str(@{$inpipe});
 	
-	my $cmd = "$inpipeStr | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys | gzip -9c > '$tmpoutfilename'";
+	my $cmd = "$inpipeStr | '".BP::Loader::CorrelatableConcept::SORT."' --parallel=$NUMCPUS -S 50% $sortkeys | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$tmpoutfilename'";
 	
 	system($cmd);
 	
@@ -245,7 +250,7 @@ sub openFiles() {
 			if(defined($self->{__compressed})) {
 				# All the content is already preprocessed
 				my $sortedFilename = $self->{PKsortedConceptFile} ? $self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
-				if(open(my $H,'-|','gunzip','-c',$sortedFilename)) {
+				if(open(my $H,'-|',BP::Loader::CorrelatableConcept::GUNZIP,'-c',$sortedFilename)) {
 					$self->{H} = $H;
 				} else {
 					Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->id);
