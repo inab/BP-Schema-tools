@@ -283,7 +283,8 @@ sub openModel() {
 		
 		return $temp;
 	} else {
-		open(my $X,'<:utf8',$self->{_modelAbsPath});
+		# This file must be open in binary, as XML::LibXML and Digest::SHA1 expect it so
+		open(my $X,'<:bytes',$self->{_modelAbsPath});
 		
 		return $X;
 	}
