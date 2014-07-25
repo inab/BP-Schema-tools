@@ -1598,7 +1598,7 @@ sub _assemblePDF($$$$$$) {
 	
 	if(defined($outputSH)) {
 		if(open(my $SH,'>',$outputSH)) {
-			my $workingDir = cwd();
+			my $workingDir = Cwd::cwd();
 			if($workingDir =~ /['" ()\$\\]/) {
 				$workingDir =~ s/'/'"'"'/g;
 				$workingDir = "'".$workingDir."'";
