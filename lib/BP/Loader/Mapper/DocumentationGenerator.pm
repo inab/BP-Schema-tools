@@ -741,7 +741,7 @@ sub _GenConceptGraphNode($\@$$) {
 	
 	my $doubleBorder = defined($concept->idConcept)?',double distance=2pt':'';
 	my $dotline = <<DEOF;
-$entry [texlbl="$latexAttribs",style="top color=$color,rounded corners,drop shadow$doubleBorder",margin="0,0"];
+$entry [label=" ",texlbl="$latexAttribs",style="top color=$color,shape=rectangle,rounded corners,drop shadow$doubleBorder",margin="0,0"];
 DEOF
 
 	return ($dotline, $entry, \%partialFKS, $color => $p_colorDef);
@@ -770,10 +770,21 @@ sub _genModelGraph($$\%) {
 
 	my $dotfile = $figurePrefix . '-model.dot';
 	my $latexfile = $figurePrefix . '-model.latex';
-	my $standalonelatexfile = $figurePrefix . '-model-standalone.latex';
+	# These variables will be filled later
+	my $docpreamble = '';
+	my $fontpreamble = '';
+	my $figpreamble = '';
+	
 	if(open(my $DOT,'>:utf8',$dotfile)) {
+		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
+		$docpreamble =~ tr/\n/ /;
+		$fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
+		$fontpreamble =~ tr/\n/ /;
+		
 		print $DOT <<DEOF;
 digraph G {
+	d2toptions="--autosize --crop -ftikz";
+	d2tdocpreamble="$docpreamble $fontpreamble";
 	rankdir=LR;
 	node [shape=box];
 	edge [arrowhead=none];
@@ -797,7 +808,7 @@ DEOF
 			my $conceptDomainFullName = $conceptDomain->fullname;
 			print $DOT <<DEOF;
 	subgraph cluster_$conceptDomainName {
-		label="$conceptDomainFullName"
+		label="$conceptDomainFullName";
 DEOF
 			my %fks = ();
 			my @firstRank = ();
@@ -825,7 +836,7 @@ DEOF
 			# Then, their relationships
 			print $DOT <<DEOF;
 		
-		node [shape=diamond, texlbl="Identifies"];
+		node [shape=diamond, label=" ",texlbl="Identifies"];
 		
 DEOF
 			# The FK restrictions from identification relations
@@ -834,7 +845,7 @@ DEOF
 				my $dEntry = 'ID_'.$idEntry;
 				print $DOT <<DEOF;
 			
-		${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
+		${dEntry}_$relnode [style="top color=$idEntry,drop shadow,shape aspect=2,$doubleBorder"];
 		$idEntry -> ${dEntry}_$relnode  [label="1"];
 DEOF
 				foreach my $entry (keys(%{$fks{$idEntry}})) {
@@ -872,7 +883,7 @@ DEOF
 #							$port = ':n';
 #							$eport = ':e';
 #							$wport = ':w';
-#							$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'._LaTeX__escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+#							$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",label=" ",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'._LaTeX__escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
 #						} elsif($relatedConcept->concept eq $concept) {
 #							$eport = ':n';
 #							$wport = ':s';
@@ -888,7 +899,7 @@ DEOF
 						
 						print $DOT <<DEOF;
 		
-		${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
+		${dEntry}_$relnode [style="top color=$refEntry,drop shadow,shape aspect=2",label=" ",texlbl="$texlbl"];
 		$refEntry -> ${dEntry}_$relnode [label="$arity"];
 		${dEntry}_$relnode -> $entry [label="N",style="$doubleBorder"];
 DEOF
@@ -922,7 +933,7 @@ DEOF
 					my $extendsEntry = $parentEntry.'__extends';
 					if(!exists($parentConceptNodes{$parentEntry})) {
 						# Let's create the (d) node, along with its main arc
-						$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",texlbl="\texttt{d}"];'."\n";
+						$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",label=" ",texlbl="\texttt{d}"];'."\n";
 						$parentEntryLines .= $extendsEntry.' -> '.$parentEntry.' [style="double distance=2pt"];'."\n";
 						
 						$parentConceptNodes{$parentEntry} = undef;
@@ -935,54 +946,31 @@ DEOF
 			print $DOT $parentEntryLines  if(length($parentEntryLines)>0);
 		}
 
+	
+		# Prepare the colors
+		$figpreamble = join('',map {
+			my $color = $_;
+			my($colorModel,@components) = @{$p_colors->{$color}};
+			'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
+		} keys(%{$p_colors}));
+		
 		# And now, let's close the graph
 		print $DOT <<DEOF;
+	
+	d2tfigpreamble="$figpreamble";
 }
 DEOF
 		close($DOT);
 	}
 	
-	# Prepare the colors
-	my $figpreamble = join('',map {
-		my $color = $_;
-		my($colorModel,@components) = @{$p_colors->{$color}};
-		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
-	} keys(%{$p_colors}));
-	
 	# The moment to call dot2tex
-	my $docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
-	$docpreamble =~ tr/\n/ /;
-	my $fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
-	$fontpreamble =~ tr/\n/ /;
 	my @params = (
 		'dot2tex',
-		'--usepdflatex',
-		'--docpreamble='.$docpreamble.' '.$fontpreamble,
-		'--figpreamble='.$figpreamble,
-		'--autosize',
-#		'--nominsize',
-		'-c',
 		'--figonly',
-# This backend kills relationships
-#		'-ftikz',
 		'-o',$latexfile,
 		$dotfile
 	);
-	my @standAloneParams = (
-		'dot2tex',
-		'--usepdflatex',
-		'--docpreamble='.$docpreamble.' '.$fontpreamble.' '.$figpreamble,
-		'--autosize',
-#		'--nominsize',
-		'-c',
-#		'--prog=circo',
-# This backend kills relationships
-#		'-ftikz',
-		'-o',$standalonelatexfile,
-		$dotfile
-	);
 	system(@params);
-	system(@standAloneParams);
 	
 	#$self->recordGeneratedFiles([$latexfile,undef],[$standalonelatexfile,undef]);
 	
@@ -1004,10 +992,14 @@ sub _genConceptDomainGraph($$$\%) {
 	my $model = $self->{model};
 	
 	my @defaultColorDef = ('rgb',0,1,0);
+	my @defaultModelColorDef = @defaultColorDef;
 	if(exists($conceptDomain->annotations->hash->{defaultColor})) {
 		@defaultColorDef = _ParseModelColor($conceptDomain->annotations->hash->{defaultColor});
-	} elsif(exists($model->annotations->hash->{defaultColor})) {
-		@defaultColorDef = _ParseModelColor($model->annotations->hash->{defaultColor});
+	}
+	
+	if(exists($model->annotations->hash->{defaultColor})) {
+		@defaultModelColorDef = _ParseModelColor($model->annotations->hash->{defaultColor});
+		@defaultColorDef = @defaultModelColorDef  unless(exists($conceptDomain->annotations->hash->{defaultColor}));
 	}
 
 #	node [shape=box,style="rounded corners,drop shadow"];
@@ -1015,10 +1007,21 @@ sub _genConceptDomainGraph($$$\%) {
 	my $conceptDomainName = $conceptDomain->name;
 	my $dotfile = $figurePrefix . '-domain-'.$conceptDomainName.'.dot';
 	my $latexfile = $figurePrefix . '-domain-'.$conceptDomainName.'.latex';
-	my $standalonelatexfile = $figurePrefix . '-domain-'.$conceptDomainName.'-standalone.latex';
+	# These variables will be filled later
+	my $docpreamble = '';
+	my $fontpreamble = '';
+	my $figpreamble = '';
+	
 	if(open(my $DOT,'>:utf8',$dotfile)) {
+		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
+		$docpreamble =~ tr/\n/ /;
+		$fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
+		$fontpreamble =~ tr/\n/ /;
+		
 		print $DOT <<DEOF;
 digraph G {
+	d2toptions="--autosize --crop -ftikz";
+	d2tdocpreamble="$docpreamble $fontpreamble";
 	rankdir=LR;
 	node [shape=box];
 	edge [arrowhead=none];
@@ -1052,7 +1055,7 @@ DEOF
 		# Then, their relationships
 		print $DOT <<DEOF;
 	
-	node [shape=diamond, texlbl="Identifies"];
+	node [shape=diamond, label=" ", texlbl="Identifies"];
 	
 DEOF
 		# The FK restrictions from identification relations
@@ -1062,7 +1065,7 @@ DEOF
 			my $dEntry = 'ID_'.$idEntry;
 			print $DOT <<DEOF;
 	
-	${dEntry}_$relnode [style="top color=$idEntry,drop shadow,$doubleBorder"];
+	${dEntry}_$relnode [style="top color=$idEntry,drop shadow,shape aspect=2,$doubleBorder"];
 	$idEntry -> ${dEntry}_$relnode  [label="1"];
 DEOF
 			foreach my $entry (keys(%{$fks{$idEntry}})) {
@@ -1099,7 +1102,22 @@ DEOF
 						$port = ':n';
 						$eport = ':e';
 						$wport = ':w';
-						$refEntryLine = $refEntry.' [shape="box",style="top color='.$refEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'._LaTeX__escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+						$refEntryLine = $refEntry.' [style="top color='.$refEntry.',shape=rectangle,rounded corners,inner sep=10pt,drop shadow",label=" ",texlbl="\textbf{\hyperref[tab:'.$refEntry.']{\Large{}'._LaTeX__escape(exists($relatedConcept->concept->annotations->hash->{'altkey'})?$relatedConcept->concept->annotations->hash->{'altkey'}:$relatedConcept->concept->fullname).'}}"];';
+						
+						# Adding the color of this block
+						unless(exists($p_colors->{$refEntry})) {
+							my $p_colorDef = \@defaultColorDef;
+							if(exists($relatedConcept->concept->annotations->hash->{color})) {
+								my @colorDef = _ParseModelColor($relatedConcept->concept->annotations->hash->{color});
+								$p_colorDef = \@colorDef;
+							} elsif(exists($relatedConcept->concept->conceptDomain->annotations->hash->{defaultColor})) {
+								my @colorDef = _ParseModelColor($relatedConcept->concept->conceptDomain->annotations->hash->{defaultColor});
+								$p_colorDef = \@colorDef;
+							} else {
+								$p_colorDef = \@defaultModelColorDef;
+							}
+							$p_colors->{$refEntry} = $p_colorDef;
+						}
 					} elsif($relatedConcept->concept eq $concept) {
 						$eport = ':n';
 						$wport = ':s';
@@ -1115,7 +1133,7 @@ DEOF
 					
 					print $DOT <<DEOF;
 	
-	${dEntry}_$relnode [style="top color=$refEntry,drop shadow",texlbl="$texlbl"];
+	${dEntry}_$relnode [style="top color=$refEntry,drop shadow,shape aspect=2",label=" ",texlbl="$texlbl"];
 	$refEntryLine
 	$refEntry$port -> ${dEntry}_$relnode$wport [label="$arity"];
 	${dEntry}_$relnode$eport -> $entry$port [label="N",style="$doubleBorder"];
@@ -1141,11 +1159,11 @@ DEOF
 				if(!exists($parentConceptNodes{$parentEntry})) {
 					# Let's create the node, if external
 					if($parentConcept->conceptDomain!=$conceptDomain) {
-						$parentEntryLines .= $parentEntry.' [shape="box",style="top color='.$parentEntry.',rounded corners,drop shadow",texlbl="\textbf{\hyperref[tab:'.$parentEntry.']{\Large{}'._LaTeX__escape(exists($parentConcept->annotations->hash->{'altkey'})?$parentConcept->annotations->hash->{'altkey'}:$parentConcept->fullname).'}}"];'."\n";
+						$parentEntryLines .= $parentEntry.' [shape="box",style="top color='.$parentEntry.',rounded corners,drop shadow",label=" ",texlbl="\textbf{\hyperref[tab:'.$parentEntry.']{\Large{}'._LaTeX__escape(exists($parentConcept->annotations->hash->{'altkey'})?$parentConcept->annotations->hash->{'altkey'}:$parentConcept->fullname).'}}"];'."\n";
 					}
 					
 					# Let's create the (d) node, along with its main arc
-					$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",texlbl="\texttt{d}"];'."\n";
+					$parentEntryLines .= $extendsEntry.' [shape="triangle",margin="0",style="top color='.$parentEntry.',drop shadow",label=" ",texlbl="\texttt{d}"];'."\n";
 					$parentEntryLines .= $extendsEntry.' -> '.$parentEntry.' [style="double distance=2pt"];'."\n";
 					
 					$parentConceptNodes{$parentEntry} = undef;
@@ -1157,54 +1175,30 @@ DEOF
 		}
 		print $DOT $parentEntryLines  if(length($parentEntryLines)>0);
 		
+		# Prepare the colors
+		$figpreamble = join('',map {
+			my $color = $_;
+			my($colorModel,@components) = @{$p_colors->{$color}};
+			'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
+		} keys(%{$p_colors}));
+		
 		# And now, let's close the graph
 		print $DOT <<DEOF;
+	
+	d2tfigpreamble="$figpreamble";
 }
 DEOF
 		close($DOT);
 	}
 	
-	# Prepare the colors
-	my $figpreamble = join('',map {
-		my $color = $_;
-		my($colorModel,@components) = @{$p_colors->{$color}};
-		'\definecolor{'.$color.'}{'.$colorModel.'}{'.join(',',@components).'}';
-	} keys(%{$p_colors}));
-	
 	# The moment to call dot2tex
-	my $docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
-	$docpreamble =~ tr/\n/ /;
-	my $fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
-	$fontpreamble =~ tr/\n/ /;
 	my @params = (
 		'dot2tex',
-		'--usepdflatex',
-		'--docpreamble='.$docpreamble.' '.$fontpreamble,
-		'--figpreamble='.$figpreamble,
-		'--autosize',
-#		'--nominsize',
-		'-c',
 		'--figonly',
-# This backend kills relationships
-#		'-ftikz',
 		'-o',$latexfile,
 		$dotfile
 	);
-	my @standAloneParams = (
-		'dot2tex',
-		'--usepdflatex',
-		'--docpreamble='.$docpreamble.' '.$fontpreamble.' '.$figpreamble,
-		'--autosize',
-#		'--nominsize',
-		'-c',
-#		'--prog=circo',
-# This backend kills relationships
-#		'-ftikz',
-		'-o',$standalonelatexfile,
-		$dotfile
-	);
 	system(@params);
-	system(@standAloneParams);
 
 	return ($latexfile,$figpreamble);
 }
