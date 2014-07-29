@@ -79,6 +79,21 @@
 \usetikzlibrary{shapes,automata,backgrounds,arrows,shadows}
 %\usepackage[pgf,debug]{dot2texi}
 
+%\ifx \tikzexternalrealjob \undefined
+%	\usepackage{graphicx}
+%	\usepackage{pgf}
+%	\usepackage{tikzexternal}
+%\else
+%% This package is used by generated graphs from dot declarations
+%% as they depend on tikz package
+%\usepackage{tikz}
+%\usetikzlibrary{shapes,automata,backgrounds,arrows,shadows}
+%\usetikzlibrary{external}
+%%\usepackage[pgf,debug]{dot2texi}
+%\fi
+%
+%\tikzexternalize
+
 % Change content size when width is bigger than ...
 \usepackage{adjustbox}
 
@@ -137,6 +152,9 @@ The attachments can be extracted using tools like newer enough versions of \href
 
 \subimport*{\INCLUDEbodydir}{\INCLUDEbodyname}
 
+% Only import the model into the main file
+\ifx \tikzexternalrealjob \undefined
 \embeddedfile[{\projectName\ DCC BPModel}]{BPMODEL}{\BPMODELpath}
+\fi
 
 \end{document}
