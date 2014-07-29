@@ -75,6 +75,7 @@ if(scalar(@ARGV)>=3) {
 	# In case $out is a directory, then fill-in the other variables
 	my $relOutfilePrefix = undef;
 	my $workingDir = undef;
+	my $SQLworkingDir = undef;
 	if(-d $out) {
 		my (undef,undef,undef,$day,$month,$year) = localtime();
 		# Doing numerical adjustments
@@ -83,11 +84,12 @@ if(scalar(@ARGV)>=3) {
 		my $thisdate = sprintf("%d%.2d%.2d",$year,$month,$day);
 		
 		$relOutfilePrefix=join('-',$model->projectName,'data_model',$model->versionString,$thisdate);
-		$workingDir = $out;
+		$SQLworkingDir = $workingDir = $out;
 		my $outfileRoot = File::Spec->catfile($out,$relOutfilePrefix);
 	} else {
 		$relOutfilePrefix = File::Basename::basename($out);
-		$workingDir = File::Basename::dirname($out);
+		$SQLworkingDir = File::Basename::dirname($out);
+		$workingDir = $out;
 	}
 	
 	# Generating the SQL file for BioMart
@@ -101,7 +103,7 @@ if(scalar(@ARGV)>=3) {
 	$conf->newval($BP::Loader::Mapper::DocumentationGenerator::SECTION,'pdflatex',PDFLATEX);
 	$conf->newval($BP::Loader::Mapper::DocumentationGenerator::SECTION,'terms-limit',TERMSLIMIT);
 	my $relStor = BP::Loader::Mapper::Relational->new($model,$conf);
-	$relStor->generateNativeModel($workingDir);
+	$relStor->generateNativeModel($SQLworkingDir);
 	
 	# We finish here if only SQL is required
 	exit 0  if($onlySQL);
