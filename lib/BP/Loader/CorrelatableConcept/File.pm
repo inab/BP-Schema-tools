@@ -15,6 +15,8 @@ use DateTime::Format::ISO8601;
 
 package BP::Loader::CorrelatableConcept::File;
 
+use Scalar::Util qw(blessed);
+
 my $GREP = 'grep';
 #my $PHYSMEM = Sys::MemInfo::totalmem();
 
@@ -52,7 +54,7 @@ sub readColDesc($$$) {
 	unless(exists($self->{coldesc})) {
 		my $concept = shift;
 		
-		Carp::croak('Parameter must be a BP::Model::Concept')  unless(defined($concept) && ref($concept) && $concept->isa('BP::Model::Concept'));
+		Carp::croak('Parameter must be a BP::Model::Concept')  unless(blessed($concept) && $concept->isa('BP::Model::Concept'));
 		my $isIdentifying = shift;
 		my $isSlave = shift;
 		

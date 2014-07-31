@@ -17,6 +17,8 @@ use BP::Loader::CorrelatableConcept::File;
 
 package BP::Loader::CorrelatableConcept;
 
+use Scalar::Util qw(blessed);
+
 use constant {
 	GZIP	=>	'pigz',
 	GUNZIP	=>	'unpigz',
@@ -82,8 +84,8 @@ sub addCorrelatedConcept($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $correlatedConcept = shift;
-	Carp::croak('Parameter must be a BP::Loader::CorrelatableConcept')  unless(defined($correlatedConcept) && ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
-	Carp::croak('You can only add correlated concepts')  unless(defined($correlatedConcept->concept->idConcept) && $correlatedConcept->concept->idConcept==$self->concept);
+	Carp::croak('Parameter must be a BP::Loader::CorrelatableConcept')  unless(blessed($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	Carp::croak('You can only add correlated concepts')  unless(ref($correlatedConcept->concept->idConcept) && $correlatedConcept->concept->idConcept==$self->concept);
 	
 	$self->{correlatedConcepts} = []   unless(defined($self->{correlatedConcepts}));
 	# Slaving it
