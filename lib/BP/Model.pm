@@ -13,6 +13,7 @@ use Digest::SHA1;
 use URI;
 use Archive::Zip;
 use Archive::Zip::MemberRead;
+use Scalar::Util;
 
 # Early subpackage constant declarations
 package BP::Model::CV;
@@ -1118,7 +1119,7 @@ sub addIndexes(@) {
 	while(scalar(@_)>0) {
 		my $index = shift;
 		
-		Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($index) && $index->isa('BP::Model::Index'));
+		Carp::croak("ERROR: Input parameter must be an index declaration")  unless(Scalar::Util::blessed($index) && $index->isa('BP::Model::Index'));
 		
 		push(@{$self->[2]},$index);
 	}
@@ -2285,7 +2286,7 @@ sub add(@) {
 	
 	# It stores only the ones which are from BP::Model::CV
 	foreach my $p_cv (@_) {
-		if(ref($p_cv) && $p_cv->isa('BP::Model::CV::Abstract')) {
+		if(Scalar::Util::blessed($p_cv) && $p_cv->isa('BP::Model::CV::Abstract')) {
 			my $baseNumCV = scalar(@{$self})-1;
 			push(@{$self},@{$p_cv->getEnclosedCVs});
 			my $newNumCV = scalar(@{$self})-1;
@@ -2805,11 +2806,11 @@ sub parseColumnType($$$) {
 		# Setting up the data checker
 		my $dataChecker = \&__true;
 		
-		if(defined($restriction) && ref($restriction)) {
+		if(Scalar::Util::blessed($restriction)) {
 			# We are covering here both compound type checks and CV checks
 			if($restriction->can('dataChecker')) {
 				$dataChecker = $restriction->dataChecker;
-			} elsif(ref($restriction) eq 'Regexp') {
+			} elsif($restriction->isa('Regexp')) {
 				$dataChecker = sub { $_[0] =~ $restriction };
 			}
 		} else {
@@ -2818,7 +2819,7 @@ sub parseColumnType($$$) {
 		}
 		
 		# Setting up the data mangler
-		my $dataMangler = (defined($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[BP::Model::ColumnType::DATATYPEMANGLER];
+		my $dataMangler = (Scalar::Util::blessed($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[BP::Model::ColumnType::DATATYPEMANGLER];
 		
 		# Default value
 		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;
@@ -3035,7 +3036,7 @@ sub clone(;$) {
 	
 	my $relatedConcept = shift;
 	
-	Carp::croak('Input parameter must be a BP::Model::RelatedConcept')  if(defined($relatedConcept) && (ref($relatedConcept) eq '' || !$relatedConcept->isa('BP::Model::RelatedConcept')));
+	Carp::croak('Input parameter must be a BP::Model::RelatedConcept')  unless(!defined($relatedConcept) || (Scalar::Util::blessed($relatedConcept) && $relatedConcept->isa('BP::Model::RelatedConcept')));
 	
 	# Cloning this object
 	my @cloneData = @{$self};
@@ -3307,7 +3308,7 @@ sub new($@) {
 		}
 		
 		$columnDecl{$column->name}=$column;
-		push(@checkDefault,$column)  if(defined($column->columnType->default) && ref($column->columnType->default));
+		push(@checkDefault,$column)  if(ref($column->columnType->default));
 	}
 	
 	# And now, second pass, where we check the consistency of default values
@@ -3551,7 +3552,7 @@ sub resolveDefaultCalculatedValues() {
 	
 	my $p_columns = $self->columns;
 	foreach my $column (values(%{$p_columns})) {
-		if(defined($column->columnType->default) && ref($column->columnType->default) eq 'SCALAR') {
+		if(ref($column->columnType->default) eq 'SCALAR') {
 			my $defCalColumnName = ${$column->columnType->default};
 			
 			if(exists($p_columns->{$defCalColumnName})) {
@@ -3752,7 +3753,7 @@ sub match($) {
 		next  unless(defined($part));
 		
 		# Is it a CV?
-		if($part->isa('BP::Model::CV')) {
+		if(Scalar::Util::blessed($part) && $part->isa('BP::Model::CV')) {
 			Carp::croak('Validation against CV did not match')  unless($part->isValid($values[$ipart]));
 			
 			# Let's save the matched CV value
@@ -4367,8 +4368,8 @@ sub setRelatedConcept($$) {
 	my $concept = shift;
 	my $columnSet = shift;
 	
-	Carp::croak('Parameter must be either a BP::Model::Concept or undef')  unless(!defined($concept) || (ref($concept) && $concept->isa('BP::Model::Concept')));
-	Carp::croak('Parameter must be either a BP::Model::ColumnSet or undef')  unless(!defined($columnSet) || (ref($columnSet) && $columnSet->isa('BP::Model::ColumnSet')));
+	Carp::croak('Parameter must be either a BP::Model::Concept or undef')  unless(!defined($concept) || (Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept')));
+	Carp::croak('Parameter must be either a BP::Model::ColumnSet or undef')  unless(!defined($columnSet) || (Scalar::Util::blessed($columnSet) && $columnSet->isa('BP::Model::ColumnSet')));
 	
 	$self->[3] = $concept;
 	$self->[4] = $columnSet;
