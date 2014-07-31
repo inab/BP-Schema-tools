@@ -11,6 +11,8 @@ use Tie::IxHash;
 # Better using something agnostic than JSON::true or JSON::false inside TO_JSON
 use boolean 0.32;
 
+use Scalar::Util;
+
 package BP::Model::QuasiConcept;
 
 # A quasiconcept is not a real concept. It is only an object with id and columnSet methods
@@ -25,7 +27,7 @@ sub new() {
 	
 	my $id = shift;
 	my $columnSet = shift;
-	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(ref($columnSet) && $columnSet->isa('BP::Model::ColumnSet'));
+	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(Scalar::Util::blessed($columnSet) && $columnSet->isa('BP::Model::ColumnSet'));
 	
 	my $self = [$id,$columnSet];
 	
@@ -130,43 +132,6 @@ sub new($$) {
 		}
 	}
 	
-	# Finding the correspondence between collections and concepts
-	# needed for type mapping in elasticsearch
-	my %colcon = ();
-	my %concol = ();
-	foreach my $conceptDomain (@{$model->conceptDomains}) {
-		next  if($self->{release} && $conceptDomain->isAbstract());
-		
-		foreach my $concept (@{$conceptDomain->concepts()}) {
-			my $collection;
-			for(my $lookconcept = $concept , $collection = undef ; !defined($collection) && defined($lookconcept) ; ) {
-				if($lookconcept->goesToCollection()) {
-					# If it has a destination collection, save the collection
-					$collection = $lookconcept->collection();
-				} elsif(defined($lookconcept->idConcept())) {
-					# If it has an identifying concept, does that concept (or one ancestor idconcept) have a destination collection
-					$lookconcept = $lookconcept->idConcept();
-				} else {
-					$lookconcept = undef;
-				}
-			}
-			
-			if(defined($collection)) {
-				# Perl hack to have something 'comparable'
-				my $colid = $collection+0;
-				$colcon{$colid} = []  unless(exists($colcon{$colid}));
-				push(@{$colcon{$colid}}, $concept);
-				
-				# Perl hack to have something 'comparable'
-				my $conid = $concept+0;
-				$concol{$conid} = $collection;
-			}
-		}
-	}
-	
-	$self->{_colConcept} = \%colcon;
-	$self->{_conceptCol} = \%concol;
-	
 	return $self;
 }
 
@@ -218,7 +183,7 @@ sub _FillMapping($) {
 		
 		# Is this a compound type?
 		my $restriction = $columnType->restriction;
-		if(ref($restriction) && $restriction->isa('BP::Model::CompoundType')) {
+		if(Scalar::Util::blessed($restriction) && $restriction->isa('BP::Model::CompoundType')) {
 			my $p_subMapping = _FillMapping($restriction->columnSet);
 			@typeDecl{keys(%{$p_subMapping})} = values(%{$p_subMapping});
 		} elsif(defined($columnType->default()) && !ref($columnType->default())) {
@@ -246,7 +211,7 @@ sub createCollection($) {
 	
 	my $collection = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
 	my $es = $self->connect();
 	

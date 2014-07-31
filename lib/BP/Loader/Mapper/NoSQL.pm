@@ -13,6 +13,8 @@ use JSON;
 # Better using something agnostic than JSON::true or JSON::false inside TO_JSON
 use boolean 0.32;
 
+use Scalar::Util qw(blessed);
+
 use base qw(BP::Loader::Mapper);
 
 # Constructor parameters:
@@ -29,6 +31,43 @@ sub new($$) {
 	bless($self,$class);
 	
 	return $self;
+	
+	# Finding the correspondence between collections and concepts
+	# needed for type mapping
+	my %colcon = ();
+	my %concol = ();
+	foreach my $conceptDomain (@{$model->conceptDomains}) {
+		next  if($self->{release} && $conceptDomain->isAbstract());
+		
+		foreach my $concept (@{$conceptDomain->concepts()}) {
+			my $collection;
+			for(my $lookconcept = $concept , $collection = undef ; !defined($collection) && defined($lookconcept) ; ) {
+				if($lookconcept->goesToCollection()) {
+					# If it has a destination collection, save the collection
+					$collection = $lookconcept->collection();
+				} elsif(defined($lookconcept->idConcept())) {
+					# If it has an identifying concept, does that concept (or one ancestor idconcept) have a destination collection
+					$lookconcept = $lookconcept->idConcept();
+				} else {
+					$lookconcept = undef;
+				}
+			}
+			
+			if(defined($collection)) {
+				# Perl hack to have something 'comparable'
+				my $colid = $collection+0;
+				$colcon{$colid} = []  unless(exists($colcon{$colid}));
+				push(@{$colcon{$colid}}, $concept);
+				
+				# Perl hack to have something 'comparable'
+				my $conid = $concept+0;
+				$concol{$conid} = $collection;
+			}
+		}
+	}
+	
+	$self->{_colConcept} = \%colcon;
+	$self->{_conceptCol} = \%concol;
 }
 
 # These methods are called by JSON library, which gives the structure to
@@ -91,8 +130,8 @@ sub BP::Model::DescriptionSet::TO_JSON() {
 		
 		foreach my $val (@arrayRef) {
 			if(ref($val) eq 'ARRAY') {
-				$val = join('',map { (ref($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
-			} elsif(ref($val) && $val->can('toString')) {
+				$val = join('',map { (blessed($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
+			} elsif(blessed($val) && $val->can('toString')) {
 				$val = $val->toString();
 			}
 		}
@@ -113,8 +152,8 @@ sub BP::Model::AnnotationSet::TO_JSON() {
 		
 		foreach my $val (values(%hashRes)) {
 			if(ref($val) eq 'ARRAY') {
-				$val = join('',map { (ref($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
-			} elsif(ref($val) && $val->can('toString')) {
+				$val = join('',map { (blessed($_) && $_->can('toString'))?$_->toString():$_ } @{$val});
+			} elsif(blessed($val) && $val->can('toString')) {
 				$val = $val->toString();
 			}
 		}
@@ -208,13 +247,13 @@ sub BP::Model::ColumnType::TO_JSON() {
 	
 	if(defined($self->default)) {
 		if(ref($self->default)) {
-			$jsonColumnType{'defaultCol'} = $self->default->name;
+			$jsonColumnType{'defaultCol'} = blessed($self->default->name)?$self->default->name:${$self->default};
 		} else {
 			$jsonColumnType{'default'} = $self->default;
 		}
 	}
 	
-	if(defined($self->restriction)) {
+	if(blessed($self->restriction)) {
 		if($self->restriction->isa('BP::Model::CV::Abstract')) {
 			$jsonColumnType{'cv'} = $self->restriction->_jsonId;
 		} elsif($self->restriction->isa('BP::Model::CompoundType')) {
@@ -317,7 +356,7 @@ sub _TO_JSON($;$$$) {
 	my($val,$colpath,$bsonsize,$maxterms)=@_;
 	
 	# First step
-	$val = $val->TO_JSON()  if(ref($val) && UNIVERSAL::can($val,'TO_JSON'));
+	$val = $val->TO_JSON()  if(blessed($val) && $val->can('TO_JSON'));
 	
 	my @results = ();
 	
@@ -403,6 +442,22 @@ sub _TO_JSON($;$$$) {
 }
 
 
+# hasConceptsInCollection parameters:
+#	collection: A BP::Model::Collection instance
+sub hasConceptsInCollection($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $colid = $collection+0;
+	
+	return exists($self->{_colConcept}{$colid});
+}
+
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
 #	BSONSIZE: optional parameter with the max BSON size (used to partitionate on arrays)
@@ -456,7 +511,7 @@ sub generateNativeModel(\$;$$) {
 			foreach my $column (values(%{$columnSet->columns})) {
 				my $columnType = $column->columnType;
 				# Registering CVs
-				if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
+				if(blessed($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
 					my $CV = $columnType->restriction;
 					
 					my $cvname = $CV->id;
