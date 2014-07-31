@@ -7,6 +7,8 @@ package BP::Loader::Mapper;
 
 use BP::Model;
 
+use Scalar::Util qw(blessed);
+
 # This constant is used by several storage models.
 # Therefore, it is better defined here.
 use constant FILE_PREFIX_KEY => 'file-prefix';
@@ -65,11 +67,11 @@ sub new($$) {
 	
 	$self->{model} = shift;
 	
-	Carp::croak("ERROR: model must be an instance of BP::Model")  unless(ref($self->{model}) && $self->{model}->isa('BP::Model'));
+	Carp::croak("ERROR: model must be an instance of BP::Model")  unless(blessed($self->{model}) && $self->{model}->isa('BP::Model'));
 	
 	my $config = shift;
 	
-	Carp::croak("ERROR: config must be an instance of Config::IniFiles")  unless(ref($config) && $config->isa('Config::IniFiles'));
+	Carp::croak("ERROR: config must be an instance of Config::IniFiles")  unless(blessed($config) && $config->isa('Config::IniFiles'));
 	
 	if(scalar(@DEFAULTS)>0) {
 		if($config->SectionExists($SECTION)) {
@@ -164,7 +166,7 @@ sub setDestination($;$) {
 	
 	my $correlatedConcept = $_[0];
 	
-	Carp::croak("ERROR: setDestination needs a BP::Loader::CorrelatableConcept instance")  unless(ref($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	Carp::croak("ERROR: setDestination needs a BP::Loader::CorrelatableConcept instance")  unless(blessed($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
 	
 	# Any needed sort happens here
 	$correlatedConcept->openFiles();
@@ -244,7 +246,7 @@ sub parseOrderingHints($) {
 	my($ordHints) = @_;
 	
 	my $retvalBlock = undef;
-	if(ref($ordHints) && $ordHints->isa('XML::LibXML::Element')
+	if(blessed($ordHints) && $ordHints->isa('XML::LibXML::Element')
 		&& $ordHints->namespaceURI eq BP::Model::dccNamespace
 		&& $ordHints->localname eq 'ordering-hints'
 	) {
