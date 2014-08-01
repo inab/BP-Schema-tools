@@ -589,6 +589,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                 <xs:element name="sep" type="bp:nonEmptyStringType" />
                 <xs:element ref="bp:column" />
             </xs:sequence>
+        	<xs:element ref="bp:index" minOccurs="0" maxOccurs="unbounded" />
         </xs:sequence>
     </xs:complexType>
     
@@ -703,7 +704,8 @@ If if starts as $$, it tells the required or idref column with the value for thi
                 </xs:element>
                 <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
                 <xs:element ref="bp:column" minOccurs="0" maxOccurs="unbounded"/>
-                <xs:element name="weak-concepts" minOccurs="0" maxOccurs="1">
+            	<xs:element ref="bp:index" minOccurs="0" maxOccurs="unbounded" />
+            	<xs:element name="weak-concepts" minOccurs="0" maxOccurs="1">
                     <xs:annotation>
                         <xs:documentation>A primary concept can have secondary concepts related.
                             The secondary concepts inherit the idref columns from the primary concepts, so the concept type for these secondary concepts should not overlap columns or types with the primary one</xs:documentation>

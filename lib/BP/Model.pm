@@ -3175,7 +3175,7 @@ sub refColumn {
 }
 
 # If this column is part of a foreign key pointing
-# to a concept using related-to, this method will return a BP::Model::RelatedConcept
+# to a concept using dcc:related-to, this method will return a BP::Model::RelatedConcept
 # instance which correlates to
 # Otherwise, it will return undef
 sub relatedConcept {
@@ -4308,7 +4308,7 @@ package BP::Model::RelatedConcept;
 
 # This is the constructor.
 # parseRelatedConcept parameters:
-#	relatedDecl: A XML::LibXML::Element 'dcc:related-concept' instance
+#	relatedDecl: A XML::LibXML::Element 'dcc:related-to' instance
 # It returns a BP::Model::RelatedConcept instance
 sub parseRelatedConcept($) {
 	my $class = shift;
