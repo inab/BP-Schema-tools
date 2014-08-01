@@ -19,6 +19,8 @@ use Image::ExifTool;
 
 package BP::Loader::Mapper::DocumentationGenerator;
 
+use Scalar::Util qw(blessed);
+
 use base qw(BP::Loader::Mapper);
 
 our $SECTION;
@@ -183,7 +185,7 @@ sub _LaTeX__escape($) {
 	my $paragraph = $par;
 	# Let's serialize this nodeset
 	if(ref($par) eq 'ARRAY') {
-		$paragraph = join('',map { ($_->can('toString'))?$_->toString(0):$_ } @{$par});
+		$paragraph = join('',map { (blessed($_) && $_->can('toString'))?$_->toString(0):$_ } @{$par});
 	}
 	
 	# Replace a \ with $\backslash$
@@ -554,7 +556,7 @@ sub _ParseModelColor($) {
 	my $colorModel = undef;
 	my @colorComponents = ();
 	
-	if(ref($color) && $color->isa('XML::LibXML::Element')
+	if(blessed($color) && $color->isa('XML::LibXML::Element')
 		&& $color->namespaceURI eq BP::Model::dccNamespace
 		&& $color->localname eq 'color'
 	) {
@@ -594,7 +596,7 @@ sub _ParseOrderingHints($) {
 	my($ordHints) = @_;
 	
 	my $retvalBlock = undef;
-	if(ref($ordHints) && $ordHints->isa('XML::LibXML::Element')
+	if(blessed($ordHints) && $ordHints->isa('XML::LibXML::Element')
 		&& $ordHints->namespaceURI eq BP::Model::dccNamespace
 		&& $ordHints->localname eq 'ordering-hints'
 	) {
@@ -1252,7 +1254,7 @@ sub _printColumn($$$$\%;\@) {
 	
 	# Now the possible CV(s)
 	my $restriction = $columnType->restriction;
-	if(ref($restriction) && $restriction->isa('BP::Model::CV::Abstract')) {
+	if(blessed($restriction) && $restriction->isa('BP::Model::CV::Abstract')) {
 		foreach my $CV (@{$restriction->getEnclosedCVs}) {
 			# Is it an anonymous CV?
 			my $numterms = scalar(@{$CV->order});
@@ -1266,7 +1268,7 @@ sub _printColumn($$$$\%;\@) {
 	}
 	
 	### HACK ###
-	if(ref($restriction) && $restriction->isa('BP::Model::CompoundType')) {
+	if(blessed($restriction) && $restriction->isa('BP::Model::CompoundType')) {
 		my $rColumnSet = $restriction->columnSet;
 		push(@rColumns,@{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
 	}
@@ -1277,7 +1279,7 @@ sub _printColumn($$$$\%;\@) {
 	my $arrayDecorators = defined($columnType->arraySeps)?('[]' x length($columnType->arraySeps)):'';
 	my @colTypeLines = ('\textbf{'._LaTeX__escape($columnType->type.$arrayDecorators).'}');
 	
-	push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'._LaTeX__escape($restriction->template).'}}')  if(ref($restriction) eq 'BP::Model::CompoundType');
+	push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'._LaTeX__escape($restriction->template).'}}')  if(blessed($restriction) && $restriction->isa('BP::Model::CompoundType'));
 	
 	push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{(array seps \textbf{\color{black}'._LaTeX__escape($columnType->arraySeps).'})}}')  if(defined($columnType->arraySeps));
 	
