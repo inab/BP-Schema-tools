@@ -13,6 +13,8 @@ use BP::Model;
 
 package BP::Loader::Mapper::Relational;
 
+use Scalar::Util qw(blessed);
+
 use base qw(BP::Loader::Mapper);
 
 our $SECTION;
@@ -312,7 +314,7 @@ sub generateNativeModel($) {
 					my $columnType = $column->columnType;
 					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}[0]:$p_TYPE2SQL->{$columnType->type}[0];
 					# Registering CVs
-					if(defined($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
+					if(blessed($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
 						# At the end is a key outside here, so assuring it is using the right size
 						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
 						$SQLtype = $p_TYPE2SQLKEY->{$columnType->type}[0];
@@ -849,7 +851,7 @@ sub _bulkInsert($\@) {
 	my $destination = shift;
 	my $bulkData = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs a prepared statement")  unless(ref($destination) && $destination->can('execute'));
+	Carp::croak("ERROR: bulkInsert needs a prepared statement")  unless(blessed($destination) && $destination->can('execute'));
 	
 	my $colnum = 1;
 	foreach my $p_column (@{$bulkData}) {
