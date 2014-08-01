@@ -10,6 +10,8 @@ use Tie::IxHash;
 
 package BP::Loader::Mapper::MongoDB;
 
+use Scalar::Util qw(blessed);
+
 use base qw(BP::Loader::Mapper::NoSQL);
 
 our $SECTION;
@@ -105,7 +107,7 @@ sub getNativeDestination($) {
 	
 	my $collection = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
 	my $db = $self->connect();
 	my $coll = $db->get_collection($collection->path);
@@ -137,7 +139,7 @@ sub createCollection($) {
 	
 	my $collection = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a collection")  unless(ref($collection) && $collection->isa('BP::Model::Collection'));
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
 	my $coll = $self->getNativeDestination($collection);
 	if(ref($collection->indexes) eq 'ARRAY' && scalar(@{$collection->indexes})>0) {
@@ -227,7 +229,7 @@ sub _bulkInsert($\@) {
 	my $destination = shift;
 	my $p_batch = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs a MongoDB::Collection instance")  unless(ref($destination) && $destination->isa('MongoDB::Collection'));
+	Carp::croak("ERROR: bulkInsert needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
 	
 	return $destination->batch_insert($p_batch);
 }
