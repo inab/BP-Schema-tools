@@ -3267,32 +3267,45 @@ sub cloneRelated($;$$$) {
 
 package BP::Model::ColumnSet;
 
+use constant {
+	ID_COLUMN_NAMES	=>	0,
+	COLUMN_NAMES	=>	1,
+	COLUMNS		=>	2,
+	INDEXES		=>	3
+};
+
 # This is the constructor.
 # new parameters:
 #	parentColumnSet: a BP::Model::ColumnSet instance, which is the parent.
+#	p_indexes: a reference to an array of BP::Model::Index instances.
 #	columns: an array of BP::Model::Column instances
 # returns a BP::Model::ColumnSet instance with all the BP::Model::Column instances (including
 # the inherited ones from the parent).
-sub new($@) {
+sub new($$@) {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	
 	my $parentColumnSet = shift;
+	my $p_indexes = shift;
+	$p_indexes = []  unless(ref($p_indexes) eq 'ARRAY');
 	my @columns = @_;
 	
 	my @columnNames = ();
 	my @idColumnNames = ();
 	my %columnDecl = ();
+	my @indexDecl = ();
 	# Inheriting column information from parent columnSet
-	if(defined($parentColumnSet)) {
+	if(Scalar::Util::blessed($parentColumnSet)) {
 		@idColumnNames = @{$parentColumnSet->idColumnNames};
 		@columnNames = @{$parentColumnSet->columnNames};
 		%columnDecl = %{$parentColumnSet->columns};
+		@indexDecl = @{$parentColumnSet->indexes};
 	}
+	
 	# Array with the idref column names
 	# Array with column names (all)
 	# Hash of BP::Model::Column instances
-	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
+	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl,\@indexDecl);
 	
 	my @checkDefault = ();
 	foreach my $column (@columns) {
@@ -3310,6 +3323,9 @@ sub new($@) {
 		$columnDecl{$column->name}=$column;
 		push(@checkDefault,$column)  if(ref($column->columnType->default));
 	}
+	
+	# TODO: validate duplicated index declarations
+	push(@indexDecl,@{$p_indexes});
 	
 	# And now, second pass, where we check the consistency of default values
 	foreach my $column (@checkDefault) {
@@ -3352,7 +3368,9 @@ sub parseColumnSet($$$) {
 		push(@columns,$column);
 	}
 	
-	return $class->new($parentColumnSet,@columns);
+	my $p_indexes = BP::Model::Index->parseIndexes($container);
+	
+	return $class->new($parentColumnSet,$p_indexes,@columns);
 }
 
 
@@ -3375,11 +3393,13 @@ sub combineColumnSets($@) {
 	my @columnNames = @{$firstColumnSet->columnNames};
 	my @idColumnNames = @{$firstColumnSet->idColumnNames};
 	my %columnDecl = %{$firstColumnSet->columns};
+	my @indexDecl = @{$firstColumnSet->indexes};
 	
 	# Array with the idref column names
 	# Array with column names (all)
 	# Hash of BP::Model::Column instances
-	my @columnSet = (\@idColumnNames,\@columnNames,\%columnDecl);
+	# Array of BP::Model::Index instances
+	my @combinedColumnSet = (\@idColumnNames,\@columnNames,\%columnDecl,\@indexDecl);
 	
 	# And now, the next ones!
 	foreach my $columnSet (@columnSets) {
@@ -3400,9 +3420,12 @@ sub combineColumnSets($@) {
 			}
 			$columnDecl{$columnName} = $p_columns->{$columnName};
 		}
+	
+		# TODO: validate duplicated index declarations
+		push(@indexDecl,@{$columnSet->indexes});
 	}
 	
-	return bless(\@columnSet,$class);
+	return bless(\@combinedColumnSet,$class);
 }
 
 # Cloning facility
@@ -3417,17 +3440,22 @@ sub clone() {
 
 # Reference to an array with the idref column names
 sub idColumnNames {
-	return $_[0]->[0];
+	return $_[0]->[BP::Model::ColumnSet::ID_COLUMN_NAMES];
 }
 
 # Array with column names (all)
 sub columnNames {
-	return $_[0]->[1];
+	return $_[0]->[BP::Model::ColumnSet::COLUMN_NAMES];
 }
 
 # Hash of BP::Model::Column instances
 sub columns {
-	return $_[0]->[2];
+	return $_[0]->[BP::Model::ColumnSet::COLUMNS];
+}
+
+# Array of BP::Model::Index instances
+sub indexes {
+	return $_[0]->[BP::Model::ColumnSet::INDEXES];
 }
 
 # idColumns parameters:
@@ -3448,11 +3476,14 @@ sub idColumns($;$$) {
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
 	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($idConcept,undef,$doMask,$weakAnnotations) } @columnNames;
+	# TODO: keep indexes defined over idColumns
+	my @indexDecl = ();
 	
 	my @columnSet = (
 		\@columnNames,
 		\@columnNames,
-		\%columns
+		\%columns,
+		\@indexDecl
 	);
 	
 	return bless(\@columnSet,ref($self));
@@ -3483,11 +3514,14 @@ sub relatedColumns(;$$) {
 		push(@refColumnNames,$refColumnName);
 		$refColumnName => $refColumn
 	} @columnNames;
+	# TODO: keep indexes defined over refColumns
+	my @indexDecl = ();
 	
 	my @columnSet = (
 		\@refColumnNames,
 		\@refColumnNames,
-		\%columns
+		\%columns,
+		\@indexDecl
 	);
 	
 	return bless(\@columnSet,ref($self));
@@ -3540,6 +3574,9 @@ sub addColumns($;$) {
 		
 		$p_columnsHash->{$inputColumnName} = $inputColumn;
 	}
+	
+	# TODO: validate repetitions on index declarations
+	push(@{$self->indexes},@{$inputColumnSet->indexes});
 }
 
 # resolveDefaultCalculatedValues parameters:
