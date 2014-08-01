@@ -2454,11 +2454,6 @@ sub parseConceptType($$;$) {
 	# Let's parse the columns
 	$ctype[4] = BP::Model::ColumnSet->parseColumnSet($ctypeElem,defined($ctypeParent)?$ctypeParent->columnSet:undef,$model);
 	
-	# And the index declarations
-	$ctype[5] = BP::Model::Index::parseIndexes($ctypeElem);
-	# inheriting the ones from the parent concept types
-	push(@{$ctype[5]},@{$ctypeParent->indexes})  if(defined($ctypeParent));
-	
 	# The returning values array
 	return bless(\@ctype,$class);
 }
@@ -2502,11 +2497,6 @@ sub parent {
 # It returns a BP::Model::ColumnSet instance, with all the column declarations
 sub columnSet {
 	return $_[0]->[4];
-}
-
-# It returns a reference to an array full of BP::Model::Index instances
-sub indexes {
-	return $_[0]->[5];
 }
 
 1;
