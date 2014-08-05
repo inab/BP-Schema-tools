@@ -456,6 +456,30 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                 </xs:restriction>
                             </xs:simpleType>
                         </xs:attribute>
+                    	<xs:attribute name="container-type" use="optional" default="scalar">
+                    		<xs:annotation>
+                    			<xs:documentation><![CDATA[The item type can be stored as a single value, or as a set of values following a topology]]></xs:documentation>
+                    		</xs:annotation>
+                    		<xs:simpleType>
+                    			<xs:restriction base="xs:string">
+                    				<xs:enumeration value="scalar">
+                    					<xs:annotation>
+                    						<xs:documentation><![CDATA[The attribute holds a single value]]></xs:documentation>
+                    					</xs:annotation>
+                    				</xs:enumeration>
+                    				<xs:enumeration value="array">
+                    					<xs:annotation>
+                    						<xs:documentation><![CDATA[The attribute holds an array of values, whose cardinality is defined by the number of elements in array-seps]]></xs:documentation>
+                    					</xs:annotation>
+                    				</xs:enumeration>
+                    				<xs:enumeration value="hash">
+                    					<xs:annotation>
+                    						<xs:documentation><![CDATA[The attribute holds a dictionary of values, whose keys are strings]]></xs:documentation>
+                    					</xs:annotation>
+                    				</xs:enumeration>
+                    			</xs:restriction>
+                    		</xs:simpleType>
+                    	</xs:attribute>
                         <xs:attribute name="pattern" type="bp:symbolType" use="optional">
                             <xs:annotation>
                                 <xs:documentation>The symbolic name of the pattern used to validate values for this column</xs:documentation>
@@ -508,7 +532,19 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                     the number of separators (i.e. the length of this attribute)</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
-                        <xs:attribute name="default" use="optional">
+                    	<xs:attribute name="hash-key-sep" type="bp:nonEmptyStringType" use="optional" default=":">
+                    		<xs:annotation>
+                    			<xs:documentation>If this attribute is set, it is a string used as separator for the keys and values.
+                    				So, values for this column are treated as a hash</xs:documentation>
+                    		</xs:annotation>
+                    	</xs:attribute>
+                    	<xs:attribute name="hash-value-sep" type="bp:nonEmptyStringType" use="optional" default=";">
+                    		<xs:annotation>
+                    			<xs:documentation>If this attribute is set, it is a string used as a separator of the different hash values.
+                    				So, values for this column are treated as a hash</xs:documentation>
+                    		</xs:annotation>
+                    	</xs:attribute>
+                    	<xs:attribute name="default" use="optional">
                             <xs:annotation>
                                 <xs:documentation>If this attribute is set, it is a value recognized as "default" for this column. It must fullfil all the checks.
 If if starts as $$, it tells the required or idref column with the value for this when a '#DE#' default value is set</xs:documentation>

@@ -2644,13 +2644,16 @@ package BP::Model::ColumnType;
 
 use constant {
 	TYPE	=>	0,
-	USE	=>	1,
-	RESTRICTION	=>	2,
-	DEFAULT	=>	3,
-	ARRAYSEPS	=>	4,
-	ALLOWEDNULLS	=>	5,
-	DATAMANGLER	=>	6,
-	DATACHECKER	=>	7,
+	CONTAINER_TYPE	=>	1,
+	USE	=>	2,
+	RESTRICTION	=>	3,
+	DEFAULT	=>	4,
+	ARRAYSEPS	=>	5,
+	KEYHASHSEP	=>	6,
+	VALHASHSEP	=>	7,
+	ALLOWEDNULLS	=>	8,
+	DATAMANGLER	=>	9,
+	DATACHECKER	=>	10,
 };
 
 use constant {
@@ -2658,6 +2661,18 @@ use constant {
 	REQUIRED	=>	1,
 	DESIRABLE	=>	-1,
 	OPTIONAL	=>	-2
+};
+
+use constant {
+	SCALAR_CONTAINER	=>	0,
+	ARRAY_CONTAINER	=>	1,
+	HASH_CONTAINER	=>	2
+};
+
+use constant STR2CONTAINER => {
+	'scalar'	=>	SCALAR_CONTAINER,
+	'array'		=>	ARRAY_CONTAINER,
+	'hash'		=>	HASH_CONTAINER
 };
 
 use constant STR2TYPE => {
@@ -2685,15 +2700,18 @@ sub parseColumnType($$$) {
 	my $columnName = shift;
 	
 	# Item type
+	# container type
 	# column use (idref, required, optional)
 	# content restrictions
 	# default value
 	# array separators
+	# key separator
+	# value separator
 	# null values
 	# data mangler
 	# data checker
 	my @nullValues = ();
-	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
+	my @columnType = (undef,undef,undef,undef,undef,undef,undef,undef,\@nullValues);
 	
 	# Let's parse the column type!
 	foreach my $colType ($containerDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'column-type')) {
@@ -2704,6 +2722,14 @@ sub parseColumnType($$$) {
 		Carp::croak("unknown type '$itemType' for column $columnName")  unless(defined($refItemType));
 		
 		$columnType[BP::Model::ColumnType::TYPE] = $itemType;
+		
+		my $containerType = BP::Model::ColumnType::SCALAR_CONTAINER;
+		if($colType->hasAttribute('container-type')) {
+			my $contType = $colType->getAttribute('container-type');
+			$containerType = (BP::Model::ColumnType::STR2CONTAINER)->{$contType}  if(exists((BP::Model::ColumnType::STR2CONTAINER)->{$contType}));
+		}
+		
+		$columnType[BP::Model::ColumnType::CONTAINER_TYPE] = $containerType;
 		
 		# Column use
 		my $columnKind = $colType->getAttribute('column-kind');
@@ -2818,7 +2844,9 @@ sub parseColumnType($$$) {
 		
 		# Array separators
 		$columnType[BP::Model::ColumnType::ARRAYSEPS] = undef;
-		if($colType->hasAttribute('array-seps')) {
+		if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER) {
+			Carp::croak('array-seps attribute must be defined when the container type is "array"')  unless($colType->hasAttribute('array-seps'));
+			
 			my $arraySeps = $colType->getAttribute('array-seps');
 			if(length($arraySeps) > 0) {
 				my %sepVal = ();
@@ -2835,8 +2863,6 @@ sub parseColumnType($$$) {
 				# Altering the data mangler in order to handle multidimensional matrices
 				my $itemDataMangler = $dataMangler;
 				$dataMangler = sub {
-					my @splittedVal = ($_[0]);
-					
 					my $result = [$_[0]];
 					my @frags = ($result);
 					my $countdown = $#seps;
@@ -2870,8 +2896,6 @@ sub parseColumnType($$$) {
 				# Altering the data checker in order to handle multidimensional matrices
 				my $itemDataChecker = $dataChecker;
 				$dataChecker = sub {
-					my @splittedVal = ($_[0]);
-					
 					my $result = [$_[0]];
 					my @frags = ($result);
 					my $countdown = $#seps;
@@ -2902,6 +2926,53 @@ sub parseColumnType($$$) {
 					return 1;
 				};
 			}
+		} elsif($colType->hasAttribute('array-seps')) {
+			Carp::croak('"container-type" must be "array" in order to use this attribute!');
+		}
+		
+		# We have to define the modifications to the data mangler and data checker
+		if($containerType==BP::Model::columnType::HASH_CONTAINER) {
+			# Default values
+			my $keySep = ':';
+			my $valSep = ';';
+			
+			$keySep = $colType->getAttribute('hash-key-sep')  if($colType->hasAttribute('hash-key-sep'));
+			$valSep = $colType->getAttribute('hash-value-sep')  if($colType->hasAttribute('hash-value-sep'));
+			
+			$columnType[BP::Model::ColumnType::KEYHASHSEP] = $keySep;
+			$columnType[BP::Model::ColumnType::VALHASHSEP] = $valSep;
+			
+			# Altering the data mangler in order to handle multidimensional matrices
+			my $itemDataMangler = $dataMangler;
+			$dataMangler = sub {
+				my @keyvals = split($valSep,$_[0]);
+				
+				my %resHash = ();
+				
+				foreach my $keyval  (@keyvals) {
+					my($key,$value) = split($keySep,$keyval,2);
+					
+					$resHash{$key} = $itemDataMangler->($value);
+				}
+				
+				return \%resHash;
+			};
+			
+			# Altering the data checker in order to handle multidimensional matrices
+			my $itemDataChecker = $dataChecker;
+			$dataChecker = sub {
+				my @keyvals = split($valSep,$_[0]);
+				
+				foreach my $keyval  (@keyvals) {
+					my($key,$value) = split($keySep,$keyval,2);
+					
+					return undef  unless($itemDataChecker->($value));
+				}
+				
+				return 1;
+			};
+		} elsif($colType->hasAttribute('hash-key-sep') || $colType->hasAttribute('hash-value-sep')) {
+			Carp::croak('"hash-key-sep" and "hash-value-sep" attributes must only be defined when the container type is "hash"');
 		}
 		
 		# And now, the data mangler and checker
