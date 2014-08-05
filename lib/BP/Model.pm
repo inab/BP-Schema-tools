@@ -2844,7 +2844,7 @@ sub parseColumnType($$$) {
 		
 		# Array separators
 		$columnType[BP::Model::ColumnType::ARRAYSEPS] = undef;
-		if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER) {
+		if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER || ($containerType==BP::Model::ColumnType::HASH_CONTAINER && $colType->hasAttribute('array-seps'))) {
 			Carp::croak('array-seps attribute must be defined when the container type is "array"')  unless($colType->hasAttribute('array-seps'));
 			
 			my $arraySeps = $colType->getAttribute('array-seps');
@@ -2927,11 +2927,11 @@ sub parseColumnType($$$) {
 				};
 			}
 		} elsif($colType->hasAttribute('array-seps')) {
-			Carp::croak('"container-type" must be "array" in order to use this attribute!');
+			Carp::croak('"container-type" must be either "array" or "hash" in order to use this attribute!');
 		}
 		
 		# We have to define the modifications to the data mangler and data checker
-		if($containerType==BP::Model::columnType::HASH_CONTAINER) {
+		if($containerType==BP::Model::ColumnType::HASH_CONTAINER) {
 			# Default values
 			my $keySep = ':';
 			my $valSep = ';';
