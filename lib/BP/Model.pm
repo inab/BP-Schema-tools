@@ -2985,38 +2985,6 @@ sub parseColumnType($$$) {
 	return bless(\@columnType,$class);
 }
 
-# This is a constructor.
-# new parameters:
-#	itemType: One of the types supported by this BP::Model
-#	itemUse: is it idref, required, desirable, optional?
-#	restriction: An instance of BP::Model::CV::Abstract , Regexp or BP::Model::CompoundType
-#	default: A default value for this column
-#	arraySeps: The separators for multidimensional values, or undef
-#	allowedNulls: A reference to an array of valid null values
-# returns a BP::Model::ColumnType instance, with all the information related to
-# types, restrictions and enumerated values of this ColumnType.
-sub new($$$$$$) {
-	my $class = shift;
-	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
-	
-	my $containerDecl = shift;
-	my $model = shift;
-	my $columnName = shift;
-	
-	# Item type
-	# column use (idref, required, optional)
-	# content restrictions
-	# default value
-	# array separators
-	# null values
-	# data mangler
-	# data checker
-	my @nullValues = ();
-	my @columnType = (undef,undef,undef,undef,undef,\@nullValues);
-	
-}
-
 # Item type
 sub type {
 	return $_[0]->[BP::Model::ColumnType::TYPE];
@@ -3104,13 +3072,15 @@ sub setDefault($) {
 # clone parameters:
 #	relatedConcept: optional BP::Model::RelatedConcept instance, it signals whether to change cloned columnType
 #		according to relatedConcept hints
+#	scalarize: If it is set, it resets the container type to SCALAR_CONTAINER
 # it returns a BP::Model::ColumnType instance
-sub clone(;$) {
+sub clone(;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $relatedConcept = shift;
+	my $scalarize = shift;
 	
 	Carp::croak('Input parameter must be a BP::Model::RelatedConcept')  unless(!defined($relatedConcept) || (Scalar::Util::blessed($relatedConcept) && $relatedConcept->isa('BP::Model::RelatedConcept')));
 	
@@ -3134,7 +3104,11 @@ sub clone(;$) {
 			} else {
 				$retval->[BP::Model::ColumnType::ARRAYSEPS] = $sep;
 			}
+			$retval->[BP::Model::ColumnType::CONTAINER_TYPE] = BP::Model::ColumnType::ARRAY_CONTAINER  if($retval->[BP::Model::ColumnType::CONTAINER_TYPE]!=BP::Model::ColumnType::ARRAY_CONTAINER);
 		}
+	} elsif($scalarize) {
+		$retval->[BP::Model::ColumnType::CONTAINER_TYPE] = BP::Model::ColumnType::SCALAR_CONTAINER;
+		$retval->[BP::Model::ColumnType::ARRAYSEPS] = undef;
 	}
 	
 	return $retval;
@@ -3201,7 +3175,9 @@ sub new($$$$) {
 	
 	my $name = shift;
 	my $description = shift;
+	$description = BP::Model::DescriptionSet->new()  unless(Scalar::Util::blessed($description));
 	my $annotations = shift;
+	$annotations = BP::Model::AnnotationSet->new()  unless(Scalar::Util::blessed($annotations));
 	my $columnType = shift;
 	
 	# Column name, description, annotations, column type, is masked, related concept, related column from the concept
@@ -3271,23 +3247,32 @@ sub relatedConcept {
 # clone parameters:
 #	doMask: optional, it signals whether to mark cloned column
 #		as masked, so it should not be considered for value storage in the database.
+#	prefix: optional, it is a prefix to add to the column name
+#	scalarize: optional, translate into scalar
 # it returns a BP::Model::Column instance
-sub clone(;$) {
+sub clone(;$$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $doMask = shift;
+	my $prefix = shift;
+	my $scalarize = shift;
 	
 	# Cloning this object
 	my @cloneData = @{$self};
 	my $retval = bless(\@cloneData,ref($self));
 	
 	# Cloning the description and the annotations
+	$retval->[BP::Model::Column::NAME] = $prefix.$self->name  if(defined($prefix));
 	$retval->[BP::Model::Column::DESCRIPTION] = $self->description->clone;
 	$retval->[BP::Model::Column::ANNOTATIONS] = $self->annotations->clone;
 	
 	$retval->[BP::Model::Column::ISMASKED] = ($doMask)?1:undef;
+	
+	if($scalarize) {
+		$retval->[BP::Model::Column::COLUMNTYPE] = $self->columnType->clone(undef,1);
+	}
 	
 	return $retval;
 }
@@ -3601,6 +3586,48 @@ sub relatedColumns(;$$) {
 	);
 	
 	return bless(\@columnSet,ref($self));
+}
+
+# addColumn parameters:
+#	inputColumn: A BP::Model::Column instance. Those
+#		columns with the same name are overwritten.
+#	isPKFriendly: if true, when the column is idref, its role is
+#		kept if there are already idref columns
+# the method stores the column in the current columnSet.
+# New columns can override old ones, unless some of the old ones
+# is typed as idref. In that case, an exception is fired.
+sub addColumn($;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $inputColumn = shift;
+	my $isPKFriendly = shift;
+	
+	# First, let's see whether there is some of our idkeys in the
+	# input, so we can stop early
+	my $inputColumnName = $inputColumn->name;
+	if(exists($self->columns->{$inputColumnName})) {
+		Carp::croak("Trying to add already declared idcolumn".$inputColumnName);
+	}
+	my $doAddIDREF = scalar(@{$self->idColumnNames}) > 0 && $isPKFriendly;
+	
+	# And now, let's add them!
+	my $p_columnsHash = $self->columns;
+	my $p_columnNames = $self->columnNames;
+	my $p_idColumnNames = $self->idColumnNames;
+	
+	# We want to keep the original column order as far as possible
+	# Registering the column names (if there is no column with that name!)
+	unless(exists($p_columnsHash->{$inputColumnName})) {
+		push(@{$p_columnNames},$inputColumnName);
+		# Is it a id column which should be added?
+		if($doAddIDREF && $inputColumn->columnType->use eq BP::Model::ColumnType::IDREF) {
+			push(@{$p_idColumnNames},$inputColumnName);
+		}
+	}
+	
+	$p_columnsHash->{$inputColumnName} = $inputColumn;
 }
 
 # addColumns parameters:
