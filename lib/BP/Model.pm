@@ -3557,7 +3557,7 @@ sub idColumns($;$$) {
 	
 	my @columnSet = (
 		\@columnNames,
-		\@columnNames,
+		[@columnNames],
 		\%columns,
 		\@indexDecl
 	);
@@ -3595,7 +3595,7 @@ sub relatedColumns(;$$) {
 	
 	my @columnSet = (
 		\@refColumnNames,
-		\@refColumnNames,
+		[@refColumnNames],
 		\%columns,
 		\@indexDecl
 	);
