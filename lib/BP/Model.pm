@@ -3022,6 +3022,11 @@ sub type {
 	return $_[0]->[BP::Model::ColumnType::TYPE];
 }
 
+# Container type
+sub containerType {
+	return $_[0]->[BP::Model::ColumnType::CONTAINER_TYPE];
+}
+
 # column use (idref, required, optional)
 # Idref equals 0; required, 1; optional, -1
 sub use {
@@ -3049,6 +3054,16 @@ sub arraySeps {
 # array separators
 sub arrayDimensions {
 	defined($_[0]->[BP::Model::ColumnType::ARRAYSEPS])?length($_[0]->[BP::Model::ColumnType::ARRAYSEPS]):0;
+}
+
+# array separators
+sub hashKeySep {
+	return $_[0]->[BP::Model::ColumnType::KEYHASHSEP];
+}
+
+# array separators
+sub hashValuesSep {
+	return $_[0]->[BP::Model::ColumnType::VALHASHSEP];
 }
 
 # An array of allowed null values
