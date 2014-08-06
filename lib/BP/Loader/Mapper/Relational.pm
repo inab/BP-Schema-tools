@@ -8,6 +8,7 @@ use DBI;
 use File::Basename;
 use File::Spec;
 use JSON;
+use XML::LibXML;
 
 use BP::Model;
 
@@ -250,6 +251,37 @@ sub generateNativeModel($) {
 #	the path to the SQL script which joins 
 	my $outfileTranslateSQL = $fullFilePrefix.'_CVtrans'.'-'.$self->{'sql-dialect'}.'.sql';
 	
+	#########
+	# These definitions are needed to generate the proper SQL sentences for hashes and arrays
+	#########
+	my $kdoc = XML::LibXML::Document->new('1.0','UTF-8');
+	my $root = $kdoc->createElementNS(BP::Model::dccNamespace,'column-set');
+	$kdoc->setDocumentElement($root);
+	
+	my $keyColumnElem = $kdoc->createElementNS(BP::Model::dccNamespace,'column');
+	$keyColumnElem->setAttribute('name','key');
+	$root->appendChild($keyColumnElem);
+
+	my $keyCT = $kdoc->createElementNS(BP::Model::dccNamespace,'column-type');
+	$keyCT->setAttribute('column-kind','idref');
+	$keyCT->setAttribute('item-type','string');
+	$keyColumnElem->appendChild($keyCT);
+	
+	my $indexColumnElem = $kdoc->createElementNS(BP::Model::dccNamespace,'column');
+	$indexColumnElem->setAttribute('name','idx');
+	$root->appendChild($indexColumnElem);
+	
+	my $indexCT = $kdoc->createElementNS(BP::Model::dccNamespace,'column-type');
+	$indexCT->setAttribute('column-kind','idref');
+	$indexCT->setAttribute('item-type','integer');
+	$indexColumnElem->appendChild($indexCT);
+	
+	# This one is for hashes
+	my $keyColumn = BP::Model::Column->new('key',undef,undef,BP::Model::ColumnType->parseColumnType($keyColumnElem,$model,'dummy-key'));
+	# This one is for arrays (at this moment, only unidimensional ones)
+	my $indexColumn = BP::Model::Column->new('idx',undef,undef,BP::Model::ColumnType->parseColumnType($indexColumnElem,$model,'dummy-i'));
+	
+	
 	my $dialectFuncs = $self->{dialect};
 	my $p_TYPE2SQL = $dialectFuncs->[_SQLDIALECT_TYPE2SQL];
 	my $p_TYPE2SQLKEY = $dialectFuncs->[_SQLDIALECT_TYPE2SQLKEY];
@@ -267,35 +299,36 @@ sub generateNativeModel($) {
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
+		my $p_TYPES = $model->types;
+		
 		# Needed later for foreign keys
 		my @fks = ();
 		
-		# Let's iterate over all the concept domains and their concepts
-		my $p_TYPES = $model->types;
-		foreach my $conceptDomain (@{$model->conceptDomains}) {
-			# Skipping abstract concept domains
-			next  if($self->{release} && $conceptDomain->isAbstract);
+		my $__printTable = undef;
+		
+		$__printTable = sub($$$;\@$) {
+			my($basename,$fullname,$columnSet,$p_colorder,$concept)=@_;
 			
-			my $conceptDomainName = $conceptDomain->name;
+			$p_colorder = $columnSet->columnNames  unless(defined($p_colorder));
 			
-			my %pcon = ();
-			foreach my $concept (@{$conceptDomain->concepts}) {
-				#my $conceptName = $concept->name;
-				my $basename = __entryName($concept,$conceptDomainName);
+			my %fkselemrefs = ();
+			my @fkselem = ($basename,$fullname,\%fkselemrefs);
+			my $fksinit = undef;
 
-				my %fkselemrefs = ();
-				my @fkselem = ($basename,$concept,\%fkselemrefs);
-				my $fksinit = undef;
-
-				print $SQL "\n-- ",$concept->fullname;
-				print $SQL "\nCREATE TABLE $basename (";
-				
-				
-				my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
-				my $columnSet = $concept->columnSet;
-				my $gottable=undef;
-				
-				foreach my $column (@{$columnSet->columns}{@colorder}) {
+			print $SQL "\n-- ",$fullname;
+			print $SQL "\nCREATE TABLE $basename (";
+			
+			
+			my $gottable=undef;
+			
+			my @subcolumns = ();
+			
+			my @columnsToPrint = @{$columnSet->columns}{@{$p_colorder}};
+			
+			my $idx = 0;
+			foreach my $column (@columnsToPrint) {
+				$idx++;
+				if($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER && !(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType'))) {
 					# Is it involved in a foreign key outside the relatedConcept system?
 					if(defined($column->refColumn) && !defined($column->relatedConcept)) {
 						$fksinit = 1;
@@ -344,37 +377,68 @@ sub generateNativeModel($) {
 						print $SQL ' DEFAULT ',$default;
 					}
 					$gottable = 1;
+				} elsif($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER) {
+					# It only happens to compound types
+					my $rColumnSet = $column->columnType->restriction->columnSet;
+					
+					splice(@columnsToPrint,$idx,0,map { $_->clone(undef,$column->name.'_') } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+				} else {
+					
+					# These are defined in a separate table
+					push(@subcolumns,$column);
 				}
-				
-				push(@fks,\@fkselem)  if(defined($fksinit));
-				
-				# Declaring a primary key (if any!)
-				my @idColumnNames = @{$columnSet->idColumnNames};
-				
-				if(scalar(@idColumnNames)>0) {
-					print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')';
-					$pcon{$basename} = undef;
-				}
-				
-				print $SQL "\n);\n\n";
 			}
 			
-			## Now, the FK restrictions from inheritance
-			#foreach my $concept (@{$conceptDomain->concepts}) {
-			#	my $basename = __entryName($concept,$conceptDomainName);
-			#	if(defined($concept->idConcept)) {
-			#		my $idConcept = $concept->idConcept;
-			#		my $refColnames = $idConcept->columnSet->idColumnNames;
-			#		my $idBasename = __entryName($idConcept,$conceptDomainName);
-			#		
-			#		# Referencing only concepts with keys
-			#		if(exists($pcon{$idBasename})) {
-			#			print $SQL "\n-- ",$concept->fullname, " foreign keys";
-			#			print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',@{$refColnames}),")";
-			#			print $SQL "\nREFERENCES $idBasename(".join(',',@{$refColnames}).");\n";
-			#		}
-			#	}
-			#}
+			push(@fks,\@fkselem)  if(defined($fksinit));
+			
+			# Declaring a primary key (if any!)
+			my @idColumnNames = @{$columnSet->idColumnNames};
+			
+			if(scalar(@idColumnNames)>0) {
+				print $SQL ",\n\tPRIMARY KEY (".join(',',@idColumnNames).')';
+			}
+			
+			print $SQL "\n);\n\n";
+			
+			# And now, let's process complicated columns
+			foreach my $column (@subcolumns) {
+				my $refColumnSet = $columnSet->idColumns($concept);
+				my $numIdColumns = scalar(@{$refColumnSet->idColumnNames});
+				
+				my $newtable = $basename.'_'.$column->name;
+				# Inject always a column "index" or "key"
+				my $ikey = $column->columnType->containerType==BP::Model::ColumnType::ARRAY_CONTAINER?$indexColumn:$keyColumn;
+				$refColumnSet->addColumn($ikey->clone(undef,$newtable.'_'),1);
+				
+				if(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType')) {
+					$refColumnSet->addColumns($column->columnType->restriction->columnSet,1);
+				} else {
+					my $newCol = $column->clone(undef,undef,1);
+					$refColumnSet->addColumn($newCol,1);
+				}
+				
+				# It is not really needed but .... HACK
+				@{$refColumnSet->idColumnNames} = ()  if(scalar(@{$refColumnSet->idColumnNames})==$numIdColumns);
+				
+				$__printTable->($newtable,$fullname.' ('.$newtable.')',$refColumnSet);
+			}
+		};
+
+		# Let's iterate over all the concept domains and their concepts
+		foreach my $conceptDomain (@{$model->conceptDomains}) {
+			# Skipping abstract concept domains
+			next  if($self->{release} && $conceptDomain->isAbstract);
+			
+			my $conceptDomainName = $conceptDomain->name;
+			
+			foreach my $concept (@{$conceptDomain->concepts}) {
+				#my $conceptName = $concept->name;
+				my $basename = __entryName($concept,$conceptDomainName);
+				
+				my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
+				my $columnSet = $concept->columnSet;
+				$__printTable->($basename,$concept->fullname,$columnSet,\@colorder,$concept);
+			}
 		}
 		
 		# Now, the CVs and the columns using them
@@ -591,9 +655,9 @@ TCVEOF
 		
 		# Now, the FK restrictions from identification relations
 		foreach my $p_fks (@fks) {
-			my($basename,$concept,$p_fkconcept) = @{$p_fks};
+			my($basename,$fullname,$p_fkconcept) = @{$p_fks};
 			
-			print $SQL "\n-- ",$concept->fullname, " foreign keys from inheritance";
+			print $SQL "\n-- ",$fullname, " foreign keys from inheritance";
 			my $cycle = 1;
 			foreach my $relatedBasename (keys(%{$p_fkconcept})) {
 				my $p_columns = $p_fkconcept->{$relatedBasename}[1];
