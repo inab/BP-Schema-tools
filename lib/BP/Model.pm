@@ -763,7 +763,7 @@ sub __parse_pattern($;$) {
 	if($pattern->hasAttribute('match')) {
 		$pat=$pattern->getAttribute('match');
 		eval {
-			$pat = qr/^$pat$/;
+			$pat = qr/$pat/;
 		};
 
 		if($@) {
@@ -1088,7 +1088,7 @@ sub parseCollection($) {
 	my $coll = shift;
 	
 	# Collection name, collection path, index declarations
-	my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),BP::Model::Index::parseIndexes($coll));
+	my @collection = ($coll->getAttribute('name'),$coll->getAttribute('path'),BP::Model::Index::ParseIndexes($coll));
 	return bless(\@collection,$class);
 }
 
@@ -1142,10 +1142,10 @@ sub clearIndexes() {
 package BP::Model::Index;
 
 # This is an static method.
-# parseIndexes parameters:
+# ParseIndexes parameters:
 #	container: a XML::LibXML::Element container of 'dcc:index' elements
 # returns an array reference, containing BP::Model::Index instances
-sub parseIndexes($) {
+sub ParseIndexes($) {
 	my $container = shift;
 	
 	# And the index declarations for this collection
@@ -2428,7 +2428,7 @@ sub parseConceptType($$;$) {
 		
 		if($ctypeElem->hasAttribute('collection')) {
 			if($ctypeElem->hasAttribute('key')) {
-				Carp::croak("A concept type cannot have a quantum storage state of physical and virtual collection");
+				Carp::croak("A concept type cannot have a quantum storage state of physical and virtual collection"."\nOffending XML fragment:\n".$ctypeElem->toString()."\n");
 			}
 			
 			$ctype[1] = 1;
@@ -2438,7 +2438,7 @@ sub parseConceptType($$;$) {
 			if(defined($collection)) {
 				$ctype[2] = $collection;
 			} else {
-				Carp::croak("Collection '$collName', used by concept type '$ctype[0]', does not exist");
+				Carp::croak("Collection '$collName', used by concept type '$ctype[0]', does not exist"."\nOffending XML fragment:\n".$ctypeElem->toString()."\n");
 			}
 		} elsif($ctypeElem->hasAttribute('key')) {
 			$ctype[2] = $ctypeElem->getAttribute('key');
@@ -2447,7 +2447,7 @@ sub parseConceptType($$;$) {
 			$ctype[1] = $ctypeParent->goesToCollection;
 			$ctype[2] = $ctypeParent->path;
 		} else {
-			Carp::croak("A concept type must have a storage state of physical or virtual collection");
+			Carp::croak("A concept type must have a storage state of physical or virtual collection"."\nOffending XML fragment:\n".$ctypeElem->toString()."\n");
 		}
 	}
 	
@@ -2719,7 +2719,7 @@ sub parseColumnType($$$) {
 		my $itemType = $colType->getAttribute('item-type');
 		
 		my $refItemType = $model->getItemType($itemType);
-		Carp::croak("unknown type '$itemType' for column $columnName")  unless(defined($refItemType));
+		Carp::croak("unknown type '$itemType' for column $columnName"."\nOffending XML fragment:\n".$colType->toString()."\n")  unless(defined($refItemType));
 		
 		$columnType[BP::Model::ColumnType::TYPE] = $itemType;
 		
@@ -2737,7 +2737,7 @@ sub parseColumnType($$$) {
 		if(exists((BP::Model::ColumnType::STR2TYPE)->{$columnKind})) {
 			$columnType[BP::Model::ColumnType::USE] = (BP::Model::ColumnType::STR2TYPE)->{$columnKind};
 		} else {
-			Carp::croak("Column $columnName has a unknown kind: $columnKind");
+			Carp::croak("Column $columnName has a unknown kind: $columnKind"."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# Content restrictions (children have precedence over attributes)
@@ -2749,16 +2749,16 @@ sub parseColumnType($$$) {
 				# Let's save the default value
 				push(@nullValues,$val);
 			} else {
-				Carp::croak("Column $columnName uses an unknown default value: $val");
+				Carp::croak("Column $columnName uses an unknown default value: $val"."\nOffending XML fragment:\n".$colType->toString()."\n");
 			}
 		}
 		
 		# First, is it a compound type?
 		my @compChildren = $colType->getChildrenByTagNameNS(BP::Model::dccNamespace,'compound-type');
 		if(defined($refItemType->[BP::Model::ColumnType::DATATYPEMANGLER]) && (scalar(@compChildren)>0 || $colType->hasAttribute('compound-type'))) {
-			Carp::croak("Column $columnName does not use a compound type, but it was declared");
+			Carp::croak("Column $columnName does not use a compound type, but it was declared"."\nOffending XML fragment:\n".$colType->toString()."\n");
 		} elsif(!defined($refItemType->[BP::Model::ColumnType::DATATYPEMANGLER]) && scalar(@compChildren)==0 && !$colType->hasAttribute('compound-type')) {
-			Carp::croak("Column $columnName uses a compound type, but it was not declared");
+			Carp::croak("Column $columnName uses a compound type, but it was not declared"."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# Second, setting the restrictions
@@ -2770,7 +2770,7 @@ sub parseColumnType($$$) {
 			if(defined($compoundType)) {
 				$restriction = $compoundType;
 			} else {
-				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type'));
+				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type')."\nOffending XML fragment:\n".$colType->toString()."\n");
 			}
 		} else {
 			my @restrictChildren = $colType->childNodes();
@@ -2788,7 +2788,7 @@ sub parseColumnType($$$) {
 						
 						$restriction->add($namedCV);
 					} else {
-						Carp::croak("Element cv-ref tried to use undeclared CV ".$colType->getAttribute('name'));
+						Carp::croak("Element cv-ref tried to use undeclared CV ".$colType->getAttribute('name')."\nOffending XML fragment:\n".$colType->toString()."\n");
 					}
 				} elsif($restrictChild->localName eq 'pattern') {
 					$restriction = BP::Model::__parse_pattern($restrictChild);
@@ -2804,14 +2804,14 @@ sub parseColumnType($$$) {
 					
 						$restriction->add($namedCV);
 					} else {
-						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv'));
+						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv')."\nOffending XML fragment:\n".$colType->toString()."\n");
 					}
 				} elsif($colType->hasAttribute('pattern')) {
 					my $PAT = $model->getNamedPattern($colType->getAttribute('pattern'));
 					if(defined($PAT)) {
-						$restriction = $PAT;
+						$restriction = qr/^$PAT$/;
 					} else {
-						Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern'));
+						Carp::croak("Column $columnName tried to use undeclared pattern ".$colType->getAttribute('pattern')."\nOffending XML fragment:\n".$colType->toString()."\n");
 					}
 				} 
 			}
@@ -2845,7 +2845,7 @@ sub parseColumnType($$$) {
 		# Array separators
 		$columnType[BP::Model::ColumnType::ARRAYSEPS] = undef;
 		if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER || ($containerType==BP::Model::ColumnType::HASH_CONTAINER && $colType->hasAttribute('array-seps'))) {
-			Carp::croak('array-seps attribute must be defined when the container type is "array"')  unless($colType->hasAttribute('array-seps'));
+			Carp::croak('array-seps attribute must be defined when the container type is "array"'."\nOffending XML fragment:\n".$colType->toString()."\n")  unless($colType->hasAttribute('array-seps'));
 			
 			my $arraySeps = $colType->getAttribute('array-seps');
 			if(length($arraySeps) > 0) {
@@ -2853,7 +2853,7 @@ sub parseColumnType($$$) {
 				my @seps = split(//,$arraySeps);
 				foreach my $sep (@seps) {
 					if(exists($sepVal{$sep})) {
-						Carp::croak("Column $columnName has repeated the array separator $sep!")
+						Carp::croak("Column $columnName has repeated the array separator $sep!"."\nOffending XML fragment:\n".$colType->toString()."\n")
 					}
 					
 					$sepVal{$sep}=undef;
@@ -2927,7 +2927,7 @@ sub parseColumnType($$$) {
 				};
 			}
 		} elsif($colType->hasAttribute('array-seps')) {
-			Carp::croak('"container-type" must be either "array" or "hash" in order to use this attribute!');
+			Carp::croak('"container-type" must be either "array" or "hash" in order to use this attribute!'."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# We have to define the modifications to the data mangler and data checker
@@ -2972,7 +2972,7 @@ sub parseColumnType($$$) {
 				return 1;
 			};
 		} elsif($colType->hasAttribute('hash-key-sep') || $colType->hasAttribute('hash-value-sep')) {
-			Carp::croak('"hash-key-sep" and "hash-value-sep" attributes must only be defined when the container type is "hash"');
+			Carp::croak('"hash-key-sep" and "hash-value-sep" attributes must only be defined when the container type is "hash"'."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# And now, the data mangler and checker
@@ -3429,7 +3429,7 @@ sub parseColumnSet($$$) {
 		push(@columns,$column);
 	}
 	
-	my $p_indexes = BP::Model::Index->parseIndexes($container);
+	my $p_indexes = BP::Model::Index::ParseIndexes($container);
 	
 	return $class->new($parentColumnSet,$p_indexes,@columns);
 }
@@ -3705,65 +3705,66 @@ sub parseFilenameFormat($$) {
 	
 	# The valid separators
 	# To be revised (scaping)
-	my $validSeps = join('',keys(%{(FileTypeSymbolPrefixes)}));
+	my $validSeps = join('',map { ($_ eq '\\')?('\\'.$_):$_ } keys(%{(FileTypeSymbolPrefixes)}));
 	my $validSepsR = '['.$validSeps.']';
 	my $validSepsN = '[^'.$validSeps.']+';
 	
-	my $pattern = '^';
+	my $pattern = '';
 	my $tokenString = $formatString;
 	
 	# First one, the origin
 	if($tokenString =~ /^($validSepsN)/) {
-		$pattern .= '\Q'.$1.'\E';
+		$pattern = qr/\Q$1\E/;
 		$tokenString = substr($tokenString,length($1));
 	}
 	
 	# Now, the different pieces
 	my $modelAnnotationsHash = $model->annotations->hash;
-	while($tokenString =~ /([$validSepsR])(\$?[a-zA-Z][a-zA-Z0-9]*)([^$validSeps]*)/g) {
+	while($tokenString =~ /($validSepsR)(\$?[a-zA-Z][a-zA-Z0-9]*)([^$validSeps]*)/g) {
 		# Pattern for the content
 		if(FileTypeSymbolPrefixes->{$1} eq 'Regexp') {
-			my $pat = $model->getNamedPatter($2);
+			my $pat = $model->getNamedPattern($2);
 			if(defined($pat)) {
 				# Check against the pattern!
-				$pattern .= '('.$pat.')';
+				$pattern = qr/$pattern($pat)/;
 				
 				# No additional check
 				push(@parts,undef);
 			} else {
-				Carp::croak("Unknown pattern '$2' used in filename-format '$formatString'");
+				Carp::croak("Unknown pattern '$2' used in filename-format '$formatString'"."\nOffending XML fragment:\n".$filenameFormatDecl->toString()."\n");
 			}
 		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::SimpleType') {
 			my $typeObject = $model->getItemType($2);
 			if(defined($typeObject)) {
 				my $type = $typeObject->[BP::Model::ColumnType::TYPEPATTERN];
 				if(defined($type)) {
-					$pattern .= '('.(($type->isa('Regexp'))?$type:'.+').')';
+					my $spat = ($type->isa('Regexp'))?$type:'.+';
+					$pattern = qr/$pattern($spat)/;
 					
 					# No additional check
 					push(@parts,undef);
 				} else {
-					Carp::croak("Type '$2' used in filename-format '$formatString' was not simple");
+					Carp::croak("Type '$2' used in filename-format '$formatString' was not simple"."\nOffending XML fragment:\n".$filenameFormatDecl->toString()."\n");
 				}
 			} else {
-				Carp::croak("Unknown type '$2' used in filename-format '$formatString'");
+				Carp::croak("Unknown type '$2' used in filename-format '$formatString'"."\nOffending XML fragment:\n".$filenameFormatDecl->toString()."\n");
 			}
 		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::CV') {
 			my $CV = $model->getNamedCV($2);
 			if(defined($CV)) {
-				$pattern .= '(.+)';
+				$pattern = qr/$pattern(.+)/;
 				
 				# Check the value against the CV
 				push(@parts,$CV);
 			} else {
-				Carp::croak("Unknown controlled vocabulary '$2' used in filename-format '$formatString'");
+				Carp::croak("Unknown controlled vocabulary '$2' used in filename-format '$formatString'"."\nOffending XML fragment:\n".$filenameFormatDecl->toString()."\n");
 			}
 		} elsif(FileTypeSymbolPrefixes->{$1} eq 'BP::Model::Annotation') {
 			my $annot = $2;
 			
 			# Is it a context-constant?
 			if(substr($annot,0,1) eq '$') {
-				$pattern .= '(.+)';
+				$pattern = qr/$pattern(.+)/;
 				
 				# Store the value in this context variable
 				push(@parts,$annot);
@@ -3771,31 +3772,30 @@ sub parseFilenameFormat($$) {
 				
 				if(exists($modelAnnotationsHash->{$annot})) {
 					# As annotations are at this point known constants, then check the exact value
-					$pattern .= '(\Q'.$modelAnnotationsHash->{$annot}.'\E)';
+					my $exact = $modelAnnotationsHash->{$annot};
+					$pattern = qr/$pattern\Q$exact\E/;
 					
 					# No additional check
 					push(@parts,undef);
 				} else {
-					Carp::croak("Unknown model annotation '$2' used in filename-format '$formatString'");
+					Carp::croak("Unknown model annotation '$2' used in filename-format '$formatString'"."\nOffending XML fragment:\n".$filenameFormatDecl->toString()."\n");
 				}
 			}
 		} else {
 			# For unimplemented checks (shouldn't happen)
-			$pattern .= '(.+)';
+			$pattern = qr/$pattern(.+)/;
 			
 			# No checks, because we don't know what to check
 			push(@parts,undef);
 		}
 		
 		# The uninteresting value
-		$pattern .= '\Q'.$3.'\E'  if(defined($3) && length($3)>0);
+		$pattern = qr/$pattern\Q$3\E/  if(defined($3) && length($3)>0);
 	}
 	
-	# Finishing the pattern building
-	$pattern .= '$';
-	
 	# Now, the Regexp object!
-	$filenamePattern[1] = qr/$pattern/;
+	# Finishing the pattern building
+	$filenamePattern[1] = qr/^$pattern$/;
 	
 	return bless(\@filenamePattern,$class);
 }
@@ -3951,7 +3951,7 @@ sub parseConceptDomain($$) {
 		
 	my $fpattern = $model->getFilenamePattern($filenameFormatName);
 	unless(defined($fpattern)) {
-		Carp::croak("Concept domain $conceptDomain[0] uses the unknown filename format $filenameFormatName");
+		Carp::croak("Concept domain $conceptDomain[0] uses the unknown filename format $filenameFormatName"."\nOffending XML fragment:\n".$conceptDomainDecl->toString()."\n");
 	}
 	
 	$conceptDomain[2] = $fpattern;
@@ -4105,13 +4105,13 @@ sub parseConcept($$$;$$) {
 		$parentConceptDomain = $conceptDomain;
 		if(defined($parentConceptDomainName)) {
 			$parentConceptDomain = $model->getConceptDomain($parentConceptDomainName);
-			Carp::croak("Concept domain $parentConceptDomainName with concept $parentConceptName does not exist!")  unless(defined($parentConceptDomain));
+			Carp::croak("Concept domain $parentConceptDomainName with concept $parentConceptName does not exist!"."\nOffending XML fragment:\n".$baseConcept->toString()."\n")  unless(defined($parentConceptDomain));
 		} else {
 			# Fallback name
 			$parentConceptDomainName = $parentConceptDomain->name;
 		}
 		
-		Carp::croak("Concept $parentConceptName does not exist in concept domain ".$parentConceptDomainName)  unless(exists($parentConceptDomain->conceptHash->{$parentConceptName}));
+		Carp::croak("Concept $parentConceptName does not exist in concept domain ".$parentConceptDomainName."\nOffending XML fragment:\n".$baseConcept->toString()."\n")  unless(exists($parentConceptDomain->conceptHash->{$parentConceptName}));
 		$parentConcept = $parentConceptDomain->conceptHash->{$parentConceptName};
 		last;
 	}
@@ -4121,13 +4121,13 @@ sub parseConcept($$$;$$) {
 	
 	# Now, let's get the base concept types
 	my @baseConceptTypesDecl = $conceptDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'base-concept-type');
-	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!")  if(scalar(@baseConceptTypesDecl)==0 && !defined($parentConcept));
+	Carp::croak("Concept $conceptFullname ($conceptName) has no base type (no dcc:base-concept-type)!"."\nOffending XML fragment:\n".$conceptDecl->toString()."\n")  if(scalar(@baseConceptTypesDecl)==0 && !defined($parentConcept));
 
 	my @basetypes = ();
 	foreach my $baseConceptTypeDecl (@baseConceptTypesDecl) {
 		my $basetypeName = $baseConceptTypeDecl->getAttribute('name');
 		my $basetype = $model->getConceptType($basetypeName);
-		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName")  unless(defined($basetype));
+		Carp::croak("Concept $conceptFullname ($conceptName) is based on undefined base type $basetypeName"."\nOffending XML fragment:\n".$baseConceptTypeDecl->toString()."\n")  unless(defined($basetype));
 		
 		foreach my $conceptBase (@conceptBaseTypes) {
 			if($conceptBase eq $basetype) {
@@ -4157,7 +4157,7 @@ sub parseConcept($$$;$$) {
 		$baseColumnSet = $parentConcept->columnSet;
 	} else {
 		# This shouldn't happen!!
-		Carp::croak("No concept types and no parent concept for $conceptFullname ($conceptName)");
+		Carp::croak("No concept types and no parent concept for $conceptFullname ($conceptName)"."\nOffending XML fragment:\n".$conceptDecl->toString()."\n");
 	}
 	
 	# Preparing the columns
