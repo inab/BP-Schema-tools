@@ -340,62 +340,63 @@ sub generateNativeModel($) {
 			my $idx = 0;
 			foreach my $column (@columnsToPrint) {
 				$idx++;
-				if($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER && !(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType'))) {
-					# Is it involved in a foreign key outside the relatedConcept system?
-					if(defined($column->refColumn) && !defined($column->relatedConcept)) {
-						$fksinit = 1;
+				if($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER) {
+					if(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType')) {
+						# It only happens to compound types
+						my $rColumnSet = $column->columnType->restriction->columnSet;
 						
-						my $refConcept = $column->refConcept;
-						my $refBasename = __entryName($refConcept);
-						
-						$fkselemrefs{$refBasename} = [$refConcept,[]]  unless(exists($fkselemrefs{$refBasename}));
-						
-						push(@{$fkselemrefs{$refBasename}[1]}, $column);
-					}
-					
-					# Let's print
-					print $SQL ','  if(defined($gottable));
-					
-					my $columnType = $column->columnType;
-					my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}[0]:$p_TYPE2SQL->{$columnType->type}[0];
-					# Registering CVs
-					if(blessed($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
-						# At the end is a key outside here, so assuring it is using the right size
-						# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
-						$SQLtype = $p_TYPE2SQLKEY->{$columnType->type}[0];
-						my $CV = $columnType->restriction;
-						
-						my $cvname = $CV->id;
-						#$cvname = $basename.'_'.$column->name  unless(defined($cvname));
-						# Perl reference trick to get a number
-						#$cvname = 'anon_'.($CV+0)  unless(defined($cvname));
-						
-						# Second position is the SQL type
-						# Third position holds the columns which depend on this CV
-						unless(exists($cvdump{$cvname})) {
-							$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
-							push(@cvorder,$cvname);
+						splice(@columnsToPrint,$idx,0,map { $_->clone(undef,$column->name.'_') } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+					} else {
+						# Is it involved in a foreign key outside the relatedConcept system?
+						if(defined($column->refColumn) && !defined($column->relatedConcept)) {
+							$fksinit = 1;
+							
+							my $refConcept = $column->refConcept;
+							my $refBasename = __entryName($refConcept);
+							
+							$fkselemrefs{$refBasename} = [$refConcept,[]]  unless(exists($fkselemrefs{$refBasename}));
+							
+							push(@{$fkselemrefs{$refBasename}[1]}, $column);
 						}
 						
-						# Saving the column and table name for further use
-						push(@{$cvdump{$cvname}[3]},[$column->name,$basename]);
+						# Let's print
+						print $SQL ','  if(defined($gottable));
+						
+						my $columnType = $column->columnType;
+						my $SQLtype = ($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn))?$p_TYPE2SQLKEY->{$columnType->type}[0]:$p_TYPE2SQL->{$columnType->type}[0];
+						# Registering CVs
+						if(blessed($columnType->restriction) && $columnType->restriction->isa('BP::Model::CV::Abstract')) {
+							# At the end is a key outside here, so assuring it is using the right size
+							# due restrictions on some SQL (cough, cough, MySQL, cough, cough) implementations
+							$SQLtype = $p_TYPE2SQLKEY->{$columnType->type}[0];
+							my $CV = $columnType->restriction;
+							
+							my $cvname = $CV->id;
+							#$cvname = $basename.'_'.$column->name  unless(defined($cvname));
+							# Perl reference trick to get a number
+							#$cvname = 'anon_'.($CV+0)  unless(defined($cvname));
+							
+							# Second position is the SQL type
+							# Third position holds the columns which depend on this CV
+							unless(exists($cvdump{$cvname})) {
+								$cvdump{$cvname} = [$CV,$p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC],$SQLtype,[]];
+								push(@cvorder,$cvname);
+							}
+							
+							# Saving the column and table name for further use
+							push(@{$cvdump{$cvname}[3]},[$column->name,$basename]);
+						}
+						
+						print $SQL "\n\t",$column->name,' ',$SQLtype;
+						print $SQL ' NOT NULL'  if($columnType->use >= BP::Model::ColumnType::IDREF);
+						if(defined($columnType->default) && ref($columnType->default) eq '') {
+							my $default = $columnType->default;
+							$default = __sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
+							print $SQL ' DEFAULT ',$default;
+						}
+						$gottable = 1;
 					}
-					
-					print $SQL "\n\t",$column->name,' ',$SQLtype;
-					print $SQL ' NOT NULL'  if($columnType->use >= BP::Model::ColumnType::IDREF);
-					if(defined($columnType->default) && ref($columnType->default) eq '') {
-						my $default = $columnType->default;
-						$default = __sql_escape($default)  if($p_TYPES->{$columnType->type}[BP::Model::ColumnType::ISNOTNUMERIC]);
-						print $SQL ' DEFAULT ',$default;
-					}
-					$gottable = 1;
-				} elsif($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER) {
-					# It only happens to compound types
-					my $rColumnSet = $column->columnType->restriction->columnSet;
-					
-					splice(@columnsToPrint,$idx,0,map { $_->clone(undef,$column->name.'_') } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
 				} else {
-					
 					# These are defined in a separate table
 					push(@subcolumns,$column);
 				}

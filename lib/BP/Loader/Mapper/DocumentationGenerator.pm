@@ -1277,14 +1277,22 @@ sub _printColumn($$$$\%;\@) {
 	
 	# What it goes to the column type column
 	my $containerDecorators = ($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER)?'{}':'';
-	$containerDecorators .= ('[]' x length($columnType->arraySeps))  if(defined($columnType->arraySeps));
+	if(defined($columnType->arraySeps)) {
+		$containerDecorators .= ('[]' x $columnType->arrayDimensions);
+	} elsif(defined($columnType->setSeps)) {
+		$containerDecorators .= ('()' x $columnType->setDimensions);
+	}
 	my @colTypeLines = ('\textbf{'._LaTeX__escape($columnType->type.$containerDecorators).'}');
 	
 	push(@colTypeLines,'\textit{\maxsizebox{2cm}{!}{'._LaTeX__escape($restriction->template).'}}')  if(blessed($restriction) && $restriction->isa('BP::Model::CompoundType'));
 	
 	if($columnType->containerType!=BP::Model::ColumnType::SCALAR_CONTAINER) {
 		my $contline = ($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER)?('(hash seps \textbf{\color{black}'._LaTeX__escape($columnType->hashKeySep).' and '._LaTeX__escape($columnType->hashValuesSep).'})'):'';
-		$contline .= (($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER)?' ':'').'(array seps \textbf{\color{black}'._LaTeX__escape($columnType->arraySeps).'})'  if(defined($columnType->arraySeps));
+		if(defined($columnType->arraySeps)) {
+			$contline .= (($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER)?' ':'').'(array seps \textbf{\color{black}'._LaTeX__escape($columnType->arraySeps).'})';
+		} elsif(defined($columnType->setSeps)) {
+			$contline .= (($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER)?' ':'').'(set seps \textbf{\color{black}'._LaTeX__escape($columnType->setSeps).'})';
+		}
 		push(@colTypeLines,'\textcolor{gray}{\maxsizebox{2cm}{!}{'.$contline.'}}');
 	}
 	

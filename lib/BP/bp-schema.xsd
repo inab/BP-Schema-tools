@@ -467,6 +467,11 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                     						<xs:documentation><![CDATA[The attribute holds a single value]]></xs:documentation>
                     					</xs:annotation>
                     				</xs:enumeration>
+                    				<xs:enumeration value="set">
+                    					<xs:annotation>
+                    						<xs:documentation><![CDATA[The attribute holds an unordered set of values, whose cardinality is defined by the number of elements in set-seps]]></xs:documentation>
+                    					</xs:annotation>
+                    				</xs:enumeration>
                     				<xs:enumeration value="array">
                     					<xs:annotation>
                     						<xs:documentation><![CDATA[The attribute holds an array of values, whose cardinality is defined by the number of elements in array-seps]]></xs:documentation>
@@ -532,6 +537,13 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                                     the number of separators (i.e. the length of this attribute)</xs:documentation>
                             </xs:annotation>
                         </xs:attribute>
+                    	<xs:attribute name="set-seps" type="bp:nonEmptyStringType" use="optional">
+                    		<xs:annotation>
+                    			<xs:documentation>If this attribute is set, it is a string whose characters are separators for the input values.
+                    				So, values for this column are treated as a multidimensional set, with the same number of dimensions as
+                    				the number of separators (i.e. the length of this attribute)</xs:documentation>
+                    		</xs:annotation>
+                    	</xs:attribute>
                     	<xs:attribute name="hash-key-sep" type="bp:nonEmptyStringType" use="optional" default=":">
                     		<xs:annotation>
                     			<xs:documentation>If this attribute is set, it is a string used as separator for the keys and values.

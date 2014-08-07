@@ -2648,12 +2648,13 @@ use constant {
 	USE	=>	2,
 	RESTRICTION	=>	3,
 	DEFAULT	=>	4,
-	ARRAYSEPS	=>	5,
-	KEYHASHSEP	=>	6,
-	VALHASHSEP	=>	7,
-	ALLOWEDNULLS	=>	8,
-	DATAMANGLER	=>	9,
-	DATACHECKER	=>	10,
+	SETSEPS	=>	5,
+	ARRAYSEPS	=>	6,
+	KEYHASHSEP	=>	7,
+	VALHASHSEP	=>	8,
+	ALLOWEDNULLS	=>	9,
+	DATAMANGLER	=>	10,
+	DATACHECKER	=>	11,
 };
 
 use constant {
@@ -2665,12 +2666,14 @@ use constant {
 
 use constant {
 	SCALAR_CONTAINER	=>	0,
-	ARRAY_CONTAINER	=>	1,
-	HASH_CONTAINER	=>	2
+	SET_CONTAINER	=>	1,
+	ARRAY_CONTAINER	=>	2,
+	HASH_CONTAINER	=>	3,
 };
 
 use constant STR2CONTAINER => {
 	'scalar'	=>	SCALAR_CONTAINER,
+	'set'		=>	SET_CONTAINER,
 	'array'		=>	ARRAY_CONTAINER,
 	'hash'		=>	HASH_CONTAINER
 };
@@ -2704,6 +2707,7 @@ sub parseColumnType($$$) {
 	# column use (idref, required, optional)
 	# content restrictions
 	# default value
+	# set separators
 	# array separators
 	# key separator
 	# value separator
@@ -2711,7 +2715,7 @@ sub parseColumnType($$$) {
 	# data mangler
 	# data checker
 	my @nullValues = ();
-	my @columnType = (undef,undef,undef,undef,undef,undef,undef,undef,\@nullValues);
+	my @columnType = (undef,undef,undef,undef,undef,undef,undef,undef,undef,\@nullValues);
 	
 	# Let's parse the column type!
 	foreach my $colType ($containerDecl->getChildrenByTagNameNS(BP::Model::dccNamespace,'column-type')) {
@@ -2842,31 +2846,33 @@ sub parseColumnType($$$) {
 		# Default values must be rechecked once all the columns are available
 		$columnType[BP::Model::ColumnType::DEFAULT] = (defined($defval) && substr($defval,0,2) eq '$$') ? \substr($defval,2): $defval;
 		
-		# Array separators
+		# Array and set separators
+		$columnType[BP::Model::ColumnType::SETSEPS] = undef;
 		$columnType[BP::Model::ColumnType::ARRAYSEPS] = undef;
-		if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER || ($containerType==BP::Model::ColumnType::HASH_CONTAINER && $colType->hasAttribute('array-seps'))) {
-			Carp::croak('array-seps attribute must be defined when the container type is "array"'."\nOffending XML fragment:\n".$colType->toString()."\n")  unless($colType->hasAttribute('array-seps'));
+		if($containerType==BP::Model::ColumnType::SET_CONTAINER || $containerType==BP::Model::ColumnType::ARRAY_CONTAINER || ($containerType==BP::Model::ColumnType::HASH_CONTAINER && ($colType->hasAttribute('set-seps') || $colType->hasAttribute('array-seps')))) {
+			Carp::croak('set-seps attribute must be defined when the container type is "set"'."\nOffending XML fragment:\n".$colType->toString()."\n")  if($containerType==BP::Model::ColumnType::SET_CONTAINER && !$colType->hasAttribute('set-seps'));
+			Carp::croak('array-seps attribute must be defined when the container type is "array"'."\nOffending XML fragment:\n".$colType->toString()."\n")  if($containerType==BP::Model::ColumnType::ARRAY_CONTAINER && !$colType->hasAttribute('array-seps'));
 			
-			my $arraySeps = $colType->getAttribute('array-seps');
-			if(length($arraySeps) > 0) {
+			my $seps = $colType->getAttribute($colType->hasAttribute('array-seps')?'array-seps':'set-seps');
+			if(length($seps) > 0) {
 				my %sepVal = ();
-				my @seps = split(//,$arraySeps);
-				foreach my $sep (@seps) {
+				my @sepsArr = split(//,$seps);
+				foreach my $sep (@sepsArr) {
 					if(exists($sepVal{$sep})) {
-						Carp::croak("Column $columnName has repeated the array separator $sep!"."\nOffending XML fragment:\n".$colType->toString()."\n")
+						Carp::croak("Column $columnName has repeated the separator $sep!"."\nOffending XML fragment:\n".$colType->toString()."\n")
 					}
 					
 					$sepVal{$sep}=undef;
 				}
-				$columnType[BP::Model::ColumnType::ARRAYSEPS] = $arraySeps;
+				$columnType[$colType->hasAttribute('array-seps')?BP::Model::ColumnType::ARRAYSEPS : BP::Model::ColumnType::SETSEPS] = $seps;
 				
 				# Altering the data mangler in order to handle multidimensional matrices
 				my $itemDataMangler = $dataMangler;
 				$dataMangler = sub {
 					my $result = [$_[0]];
 					my @frags = ($result);
-					my $countdown = $#seps;
-					foreach my $sep (@seps) {
+					my $countdown = $#sepsArr;
+					foreach my $sep (@sepsArr) {
 						my @newFrags = ();
 						foreach my $frag (@frags) {
 							foreach my $value (@{$frag}) {
@@ -2898,8 +2904,8 @@ sub parseColumnType($$$) {
 				$dataChecker = sub {
 					my $result = [$_[0]];
 					my @frags = ($result);
-					my $countdown = $#seps;
-					foreach my $sep (@seps) {
+					my $countdown = $#sepsArr;
+					foreach my $sep (@sepsArr) {
 						my @newFrags = ();
 						foreach my $frag (@frags) {
 							foreach my $value (@{$frag}) {
@@ -2926,8 +2932,10 @@ sub parseColumnType($$$) {
 					return 1;
 				};
 			}
+		} elsif($colType->hasAttribute('set-seps')) {
+			Carp::croak('"container-type" must be either "set" or "hash" in order to use "set-seps" attribute!'."\nOffending XML fragment:\n".$colType->toString()."\n");
 		} elsif($colType->hasAttribute('array-seps')) {
-			Carp::croak('"container-type" must be either "array" or "hash" in order to use this attribute!'."\nOffending XML fragment:\n".$colType->toString()."\n");
+			Carp::croak('"container-type" must be either "array" or "hash" in order to use "array-seps" attribute!'."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# We have to define the modifications to the data mangler and data checker
@@ -3012,6 +3020,16 @@ sub restriction {
 # default value
 sub default {
 	return $_[0]->[BP::Model::ColumnType::DEFAULT];
+}
+
+# set separators
+sub setSeps {
+	return $_[0]->[BP::Model::ColumnType::SETSEPS];
+}
+
+# set separators
+sub setDimensions {
+	defined($_[0]->[BP::Model::ColumnType::SETSEPS])?length($_[0]->[BP::Model::ColumnType::SETSEPS]):0;
 }
 
 # array separators
