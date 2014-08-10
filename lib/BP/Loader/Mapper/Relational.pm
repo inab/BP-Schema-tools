@@ -797,6 +797,17 @@ sub storeNativeModel() {
 	}
 }
 
+use constant {
+	MAPPING_TABLE	=>	0,
+	MAPPING_TYPE	=>	1,
+	MAPPING_VALUE_MAPPING	=>	2,
+	MAPPING_SUBMAPPINGS	=>	3,
+	MAPPING_KEY_IDX	=>	4,
+	MAPPING_KEYS_FOR_SUBMAPPINGS	=>	5,
+	MAPPING_FOREIGN_KEYS	=>	6,
+	MAPPING_VALUE_IDX	=>	7,
+};
+
 # _genDestination parameters:
 #	corrConcept: An instance of BP::Loader::CorrelatableConcept
 # It returns the destination to be used in bulkInsert calls,
@@ -827,21 +838,48 @@ sub _genDestination($) {
 		
 		my @subcolumns = ();
 		
-		my @columnsToInsert = @{$columnSet->columns}{@{$p_colorder}};
+		my @columnsToInsert = map { [$_->name,$_] } @{$columnSet->columns}{@{$p_colorder}};
+		
+		# A mapping has these features
+		# 0. table container key name
+		# 1. Container type (scalar, set, array, hash)
+		# 2. (key names -> column indexes mapping)
+		# 3. key names -> submapping
+		# 4. key_idx_name (the column which holds either an index or a hash key)
+		# 5. (key names -> submapping key names)
+		# 6. value_name (the column which holds the value when it is an array of scalar values)
+		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef ];
+		
 		my $idx = 0;
-		foreach my $column (@columnsToInsert) {
+		my $colidx = 0;
+		my @mappingStack = ();
+		my %idcolmap = ();
+		foreach my $columnData (@columnsToInsert) {
+			my($origColumnName,$column)  = @{$columnData};
+			my $p_mappings = (scalar(@mappingStack) > 0) ? pop(@mappingStack) : $p_main_mappings;
 			$idx++;
 			unless($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER && !(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType'))) {
 				if($column->columnType->containerType==BP::Model::ColumnType::SCALAR_CONTAINER) {
 					# It only happens to compound types
 					my $rColumnSet = $column->columnType->restriction->columnSet;
 					
-					splice(@columnsToInsert,$idx,0,map { $_->clone(undef,$column->name.'_') } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+					splice(@columnsToInsert,$idx,0,map { [$_->name,$_->clone(undef,$column->name.'_')] } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+					
+					# Creating the new mapping
+					my $p_newmappings = [ $basename, BP::Model::ColumnType::SCALAR_CONTAINER, {}, {}, undef, undef, undef, undef ];
+					$p_mappings->[MAPPING_SUBMAPPINGS]{$origColumnName} = $p_newmappings;
+					
+					# Put as many copies as columns this compound type has
+					map { push(@mappingStack,$p_newmappings) } @{$rColumnSet->columnNames};
 				} else {
 					
 					# These are defined in a separate table
-					push(@subcolumns,$column);
+					push(@subcolumns,[$p_mappings,$origColumnName,$column]);
 				}
+			} else {
+				$p_mappings->[MAPPING_VALUE_MAPPING]{$origColumnName} = $colidx;
+				$idcolmap{$column+0} = $colidx;
+				$colidx++;
 			}
 		}
 		
@@ -854,26 +892,58 @@ sub _genDestination($) {
 		$destHash{$basename} = [$dbh->prepare($insertSentence),\@colnames,\@coltypes,\@colmanglers];
 		
 		# And now, let's process complicated columns
-		foreach my $column (@subcolumns) {
+		foreach my $columnData (@subcolumns) {
+			my($p_mappings, $origColumnName, $column) = @{$columnData};
 			my $refColumnSet = $columnSet->idColumns($concept);
-			my $numIdColumns = scalar(@{$refColumnSet->idColumnNames});
+			
+			my %keytransfer = map { $_->name => $idcolmap{$_->refColumn + 0} }  @{$refColumnSet->columns}{@{$refColumnSet->columnNames}};
 			
 			my $newtable = $basename.'_'.$column->name;
 			# Inject always a column "index" or "key"
+			my $ikeycolumnname = undef;
 			if($column->columnType->containerType==BP::Model::ColumnType::ARRAY_CONTAINER || $column->columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER) {
 				my $ikey = $column->columnType->containerType==BP::Model::ColumnType::ARRAY_CONTAINER?$indexColumn:$keyColumn;
-				$refColumnSet->addColumn($ikey->clone(undef,$newtable.'_'),1);
+				my $ikeycolumn = $ikey->clone(undef,$newtable.'_');
+				$ikeycolumnname = $ikeycolumn->name;
+				$refColumnSet->addColumn($ikeycolumn,1);
 			}
 			
+			my $valuecolumnname = undef;
 			if(blessed($column->columnType->restriction) && $column->columnType->restriction->isa('BP::Model::CompoundType')) {
 				$refColumnSet->addColumns($column->columnType->restriction->columnSet,1);
 			} else {
 				my $newCol = $column->clone(undef,undef,1);
+				my $valuecolumnname = $newCol->name;
 				$refColumnSet->addColumn($newCol,1);
 			}
 			
-			$__genDest->($newtable,$refColumnSet);
+			my $new_submappings = $__genDest->($newtable,$refColumnSet);
+			
+			# Fixing up the submapping
+			$new_submappings->[MAPPING_TYPE] = $column->columnType->containerType;
+			if(defined($ikeycolumnname)) {
+				$new_submappings->[MAPPING_KEY_IDX] = $new_submappings->[MAPPING_VALUE_MAPPING]{$ikeycolumnname};
+				delete($new_submappings->[MAPPING_VALUE_MAPPING]{$ikeycolumnname});
+			}
+			$new_submappings->[MAPPING_KEYS_FOR_SUBMAPPINGS] = \%keytransfer;
+			
+			my %foreignKeys = ();
+			foreach my $foreignKey (keys(%keytransfer))  {
+				$foreignKeys{$foreignKey} = $new_submappings->[MAPPING_VALUE_MAPPING]{$foreignKey};
+				delete($new_submappings->[MAPPING_VALUE_MAPPING]{$foreignKey});
+			}
+			
+			$new_submappings->[MAPPING_FOREIGN_KEYS] = \%foreignKeys;
+			
+			if(defined($valuecolumnname)) {
+				$new_submappings->[MAPPING_VALUE_IDX] = $new_submappings->[MAPPING_VALUE_MAPPING]{$valuecolumnname};
+				delete($new_submappings->[MAPPING_VALUE_MAPPING]{$valuecolumnname});
+			}
+			
+			$p_mappings->[MAPPING_SUBMAPPINGS]{$origColumnName} = $new_submappings;
 		}
+		
+		return $p_main_mappings;
 	};
 	
 	my $concept = $correlatedConcept->concept;
@@ -882,12 +952,12 @@ sub _genDestination($) {
 	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
 	my $columnSet = $concept->columnSet;
 	
-	$__genDest->($desttable,$columnSet,\@colorder,$concept);
+	my $p_main_mappings = $__genDest->($desttable,$columnSet,\@colorder,$concept);
 	
 	# Starting a transaction so it is all or nothing
 	$dbh->begin_work();
 	
-	return \%destHash;
+	return [\%destHash,$p_main_mappings];
 }
 
 # _freeDestination parameters:
@@ -912,7 +982,7 @@ sub _freeDestination(;$) {
 	}
 	
 	# Freeing the sentence(s)
-	foreach my $destInfo (values(%{$destination})) {
+	foreach my $destInfo (values(%{$destination->[0]})) {
 		$destInfo->[0]->finish();
 		$destInfo->[0] = undef;
 	}
@@ -920,7 +990,7 @@ sub _freeDestination(;$) {
 
 # _bulkPrepare parameters:
 #	correlatedConcept: A BP::Loader::CorrelatableConcept instance
-#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (i.e. an array of hashes)
 # It returns the bulkData to be used for the load
 sub _bulkPrepare($$) {
 	my $self = shift;
@@ -930,61 +1000,105 @@ sub _bulkPrepare($$) {
 	my $correlatedConcept = shift;
 	my $entorp = shift;
 	
-	my $concept = $correlatedConcept->concept();
-	my $dialectFuncs = $self->{__dialect};
-	my $p_TYPE2SQL = $dialectFuncs->[_SQLDIALECT_TYPE2SQL];
-	my $p_TYPE2SQLKEY = $dialectFuncs->[_SQLDIALECT_TYPE2SQLKEY];
+	$entorp = [ $entorp ]  unless(ref($entorp eq 'ARRAY'));
 	
-	my @coldata = ();
-	my @pushorder = ();
-	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
-	my $columnSet = $concept->columnSet;
-	foreach my $colname (@colorder) {
-		my $column = $columnSet->columns->{$colname};
-		my $columnType = $column->columnType;
-		my $mangler = undef;
-		if($columnType->use == BP::Model::ColumnType::IDREF || defined($column->refColumn)) {
-			$mangler = $p_TYPE2SQLKEY->{$columnType->type}[2];
+	my $destination = $self->getInternalDestination();
+	
+	my($p_dest_hash,$p_main_mappings) = @{$destination};
+	
+	my %coldata = ();
+	
+	my $__processData = undef;
+	
+	$__processData = sub($$;%) {
+		my($p_mappings,$data,$p_parentData) = @_;
+		
+		my $p_parentColumns = $p_mappings->[MAPPING_FOREIGN_KEYS];
+		Carp::croak("Parent data unavailable for ".$p_mappings->[MAPPING_TABLE])  if(defined($p_parentColumns) && !defined($p_parentData));
+		
+		# Initializing the data structure
+		$coldata{$p_mappings->[MAPPING_TABLE]} = []  unless(exists($coldata{$p_mappings->[MAPPING_TABLE]}));
+		my $p_data_columns = $coldata{$p_mappings->[MAPPING_TABLE]};
+		
+		my $key_idx = $p_mappings->[MAPPING_KEY_IDX];
+		my $value_idx = $p_mappings->[MAPPING_VALUE_IDX];
+		my $p_value_mapping = $p_mappings->[MAPPING_VALUE_MAPPING];
+		my $p_sub_mappings = $p_mappings->[MAPPING_SUBMAPPINGS];
+		
+		my $__doProcess = sub {
+			my($p_key,$p_entry)=@_;
+			
+			my @columnData = ();
+			
+			# First, the values
+			# The (partial) key
+			if(defined($key_idx)) {
+				push(@{$p_data_columns->[$key_idx]}, $p_key);
+				$columnData[$key_idx] = $p_key;
+			}
+			
+			# The 'foreign keys'
+			if(defined($p_parentColumns)) {
+				while(my($colname,$colidx)=each(%{$p_parentColumns})) {
+					push(@{$p_data_columns->[$colidx]}, $p_parentData->{$colname});
+					$columnData[$colidx] = $p_parentData->{$colname};
+				}
+			}
+			
+			# And the values themselves
+			if(defined($value_idx)) {
+				push(@{$p_data_columns->[$value_idx]}, $p_entry);
+				$columnData[$value_idx] = $p_entry;
+			} else {
+				while(my($colname,$colidx)=each(%{$p_value_mapping})) {
+					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname});
+					$columnData[$colidx] = $p_entry->{$colname};
+				}
+			}
+			
+			# Then, the submappings
+			foreach my $sub_key (keys(%{$p_sub_mappings})) {
+				my $sub_mappings = $p_sub_mappings->{$sub_key};
+				if(exists($p_entry->{$sub_key}) || $sub_mappings->[MAPPING_TYPE]!=BP::Model::ColumnType::SCALAR_CONTAINER) {
+					# Then, building the parent data for the submappings which need it
+					my $sub_parentData = undef;
+					if($sub_mappings->[MAPPING_TYPE]!=BP::Model::ColumnType::SCALAR_CONTAINER) {
+						my %parentData = ();
+						
+						@parentData{keys(%{$sub_mappings->[MAPPING_KEYS_FOR_SUBMAPPINGS]})} = @columnData[values(%{$sub_mappings->[MAPPING_KEYS_FOR_SUBMAPPINGS]})];
+						
+						$sub_parentData = \%parentData;
+					}
+					
+					$__processData->($sub_mappings,$p_entry->{$sub_key},$sub_parentData);
+				}
+			}
+		};
+		
+		if($p_mappings->[MAPPING_TYPE]==BP::Model::ColumnType::HASH_CONTAINER) {
+			foreach my $p_key (keys(%{$data})) {
+				my $p_entry = $data->{$p_key};
+				
+				$__doProcess->($p_key,$p_entry);
+			}
 		} else {
-			$mangler = $p_TYPE2SQL->{$columnType->type}[2];
+			$data = [ $data ]  if($p_mappings->[MAPPING_TYPE]==BP::Model::ColumnType::SCALAR_CONTAINER);
+			my $p_key = 0;
+			foreach my $p_entry (@{$data}) {
+				$__doProcess->($p_key,$p_entry);
+				
+				$p_key++;
+			}
 		}
-		
-		# FUTURE: improve these two cases, based on non-standard database features
-		# The default case when we don't know to do, serialize in json
-		$mangler = \&JSON::encode_json  unless(defined($mangler));
-		
-		# And the array case is the same
-		$mangler = \&JSON::encode_json  if($columnType->arrayDimensions() > 0);
-		
-		my @preparedData = ();
-		# Setting up optimized pusher, based on what we know about the mangler
-		my $pusher = ($mangler == \&__bypass) ?
-		sub {
-			push(@preparedData,$_[0]);
-		}
-		:
-		sub {
-			push(@preparedData,$mangler->($_[0]));
-		}
-		;
-		push(@coldata,\@preparedData);
-		push(@pushorder,$pusher);
-	}
+	};
 	
-	# Now, let's fill the data arrays for each entry and column
-	foreach my $entry (@{$entorp->[0]}) {
-		my $colnum = 0;
-		foreach my $colname (@colorder) {
-			$pushorder[$colnum]->($entry->{$colname});
-			$colnum++;
-		}
-	}
+	$__processData->($p_main_mappings,$entorp);
 	
-	return \@coldata;
+	return \%coldata;
 }
 
 # _bulkInsert parameters:
-#	destination: The destination of the bulk insertion, which is a DBI prepared statement.
+#	destination: The destination of the bulk insertion, which is a set of DBI prepared statements
 #	bulkData: a reference to a hash of arrays which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
@@ -994,7 +1108,7 @@ sub _bulkInsert($\@) {
 	my $destination = shift;
 	my $bulkData = shift;
 	
-	Carp::croak("ERROR: _bulkInsert needs the destination as a hash of prepared statements")  unless(ref($destination) eq 'HASH');
+	Carp::croak("ERROR: _bulkInsert needs the destination as an array whose first element is a hash of prepared statements")  unless(ref($destination) eq 'ARRAY' && ref($destination->[0]) eq 'HASH');
 	Carp::croak("ERROR: _bulkInsert needs the data as a hash")  unless(ref($bulkData) eq 'HASH');
 	
 	# The order is preserved because we are using a Tie::IxHash for $destination
