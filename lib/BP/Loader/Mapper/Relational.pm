@@ -704,8 +704,14 @@ TCVEOF
 						
 						my $refBasename = __entryName($relatedConcept->concept,(defined($relatedConcept->conceptDomainName)?$relatedConcept->conceptDomainName:$conceptDomainName));
 						my @refColumns = values(%{$relatedConcept->columnSet->columns});
+						my $localbasename = $basename;
+						
+						# This only works with single columns
+						$localbasename .= '_'.$refColumns[0]->name  if($relatedConcept->arity eq 'M');
+						
+
 						#print $SQL "\nCREATE INDEX ${basename}_FK${cycle}_${refBasename} ON $basename (",join(',',map { $_->name } @refColumns),");\n";
-						print $SQL "\nALTER TABLE $basename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
+						print $SQL "\nALTER TABLE $localbasename ADD FOREIGN KEY (",join(',',map { $_->name } @refColumns),")";
 						print $SQL "\nREFERENCES $refBasename(".join(',',map { $_->refColumn->name } @refColumns).");\n";
 						$cycle++;
 					}
