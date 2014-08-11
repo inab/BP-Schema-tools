@@ -919,7 +919,7 @@ sub _genDestination($) {
 				$refColumnSet->addColumns($column->columnType->restriction->columnSet,1);
 			} else {
 				my $newCol = $column->clone(undef,undef,1);
-				my $valuecolumnname = $newCol->name;
+				$valuecolumnname = $newCol->name;
 				$refColumnSet->addColumn($newCol,1);
 			}
 			
@@ -1057,7 +1057,6 @@ sub _bulkPrepare($$) {
 				$columnData[$value_idx] = $p_entry;
 			} else {
 				while(my($colname,$colidx)=each(%{$p_value_mapping})) {
-					use Data::Dumper;
 					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname});
 					$columnData[$colidx] = $p_entry->{$colname};
 				}
