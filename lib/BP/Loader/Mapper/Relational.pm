@@ -1006,7 +1006,7 @@ sub _bulkPrepare($$) {
 	my $correlatedConcept = shift;
 	my $entorp = shift;
 	
-	$entorp = [ $entorp ]  unless(ref($entorp eq 'ARRAY'));
+	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
 	
 	my $destination = $self->getInternalDestination();
 	
@@ -1057,6 +1057,7 @@ sub _bulkPrepare($$) {
 				$columnData[$value_idx] = $p_entry;
 			} else {
 				while(my($colname,$colidx)=each(%{$p_value_mapping})) {
+					use Data::Dumper;
 					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname});
 					$columnData[$colidx] = $p_entry->{$colname};
 				}
