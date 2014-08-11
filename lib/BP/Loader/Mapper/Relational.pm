@@ -860,6 +860,7 @@ sub _genDestination($) {
 		my $colidx = 0;
 		my @mappingStack = ();
 		my %idcolmap = ();
+		my @survivors = ();
 		foreach my $columnData (@columnsToInsert) {
 			my($origColumnName,$column)  = @{$columnData};
 			my $p_mappings = (scalar(@mappingStack) > 0) ? pop(@mappingStack) : $p_main_mappings;
@@ -884,16 +885,18 @@ sub _genDestination($) {
 				}
 			} else {
 				$p_mappings->[MAPPING_VALUE_MAPPING]{$origColumnName} = $colidx;
+				push(@survivors,$columnData);
 				$idcolmap{$column+0} = $colidx;
 				$colidx++;
 			}
 		}
 		
-		my @colnames = map { $_->[1]->name } @columnsToInsert;
-		my @coltypes = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[1] } @columnsToInsert;
-		my @colmanglers = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[2] } @columnsToInsert;
+		my @colnames = map { $_->[1]->name } @survivors;
+		my @coltypes = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[1] } @survivors;
+		my @colmanglers = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[2] } @survivors;
 				
 		my $insertSentence = 'INSERT INTO '.$basename.'('.join(',',@colnames).') VALUES ('.join(',', map { '?' } @colnames).')';
+		#print STDERR "DEBUGPREPARE: $insertSentence\n";
 		
 		$destHash{$basename} = [$dbh->prepare($insertSentence),\@colnames,\@coltypes,\@colmanglers];
 		
@@ -1141,7 +1144,7 @@ sub _bulkInsert($\@) {
 				$colnum++;
 			}
 			
-			$destSentence->execute_array();
+			$destSentence->execute_array({ArrayTupleStatus => \my @tuple_status});
 		}
 	}
 }
