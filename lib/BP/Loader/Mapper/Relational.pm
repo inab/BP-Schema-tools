@@ -889,11 +889,11 @@ sub _genDestination($) {
 			}
 		}
 		
-		my @colnames = map { $_->name } @columnsToInsert;
-		my @coltypes = map { (($_->columnType->use == BP::Model::ColumnType::IDREF || defined($_->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$_->columnType->type}[1] } @columnsToInsert;
-		my @colmanglers = map { (($_->columnType->use == BP::Model::ColumnType::IDREF || defined($_->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$_->columnType->type}[2] } @columnsToInsert;
+		my @colnames = map { $_->[1]->name } @columnsToInsert;
+		my @coltypes = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[1] } @columnsToInsert;
+		my @colmanglers = map { my $col = $_->[1]; (($col->columnType->use == BP::Model::ColumnType::IDREF || defined($col->refColumn))?$p_TYPE2SQLKEY:$p_TYPE2SQL)->{$col->columnType->type}[2] } @columnsToInsert;
 				
-		my $insertSentence = 'INSERT INTO '.$basename.'('.join(',',@colnames).') VALUES ('.join(',', map { '?' } @columnsToInsert).')';
+		my $insertSentence = 'INSERT INTO '.$basename.'('.join(',',@colnames).') VALUES ('.join(',', map { '?' } @colnames).')';
 		
 		$destHash{$basename} = [$dbh->prepare($insertSentence),\@colnames,\@coltypes,\@colmanglers];
 		
