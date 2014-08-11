@@ -250,6 +250,11 @@
                                         <xs:documentation>The OBO flat file format (see http://www.geneontology.org/GO.format.obo-1_2.shtml)</xs:documentation>
                                     </xs:annotation>
                                 </xs:enumeration>
+                                <xs:enumeration value="OWL">
+                                    <xs:annotation>
+                                        <xs:documentation>The OWL format (see http://en.wikipedia.org/wiki/Web_Ontology_Language)</xs:documentation>
+                                    </xs:annotation>
+                                </xs:enumeration>
                             </xs:restriction>
                         </xs:simpleType>
                     </xs:attribute>
