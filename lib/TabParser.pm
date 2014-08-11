@@ -43,7 +43,7 @@ sub mapFilters($\@){
 	
 	my @retval = ();
 	foreach my $filter (@{$p_filters}) {
-		if($filter->[0] =~ /^0|[1-9][0-9]*$/) {
+		if($filter->[0] =~ /^(?:0|[1-9][0-9]*)$/) {
 			Carp::croak("Condition out of range: ".$filter->[0].' '.$filter->[1])  if($filter->[0] >= $numcols);
 			push(@retval,$filter);
 		} elsif(defined($p_header)) {
