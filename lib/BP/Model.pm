@@ -3122,7 +3122,8 @@ sub clone(;$$) {
 			} else {
 				$retval->[BP::Model::ColumnType::ARRAYSEPS] = $sep;
 			}
-			$retval->[BP::Model::ColumnType::CONTAINER_TYPE] = BP::Model::ColumnType::ARRAY_CONTAINER  if($retval->[BP::Model::ColumnType::CONTAINER_TYPE]!=BP::Model::ColumnType::ARRAY_CONTAINER);
+			# We don't need explicit indexes
+			$retval->[BP::Model::ColumnType::CONTAINER_TYPE] = BP::Model::ColumnType::SET_CONTAINER  if($retval->[BP::Model::ColumnType::CONTAINER_TYPE]!=BP::Model::ColumnType::ARRAY_CONTAINER);
 		}
 	} elsif($scalarize) {
 		$retval->[BP::Model::ColumnType::CONTAINER_TYPE] = BP::Model::ColumnType::SCALAR_CONTAINER;
