@@ -345,7 +345,18 @@ sub generateNativeModel($) {
 						# It only happens to compound types
 						my $rColumnSet = $column->columnType->restriction->columnSet;
 						
-						splice(@columnsToPrint,$idx,0,map { $_->clone(undef,$column->name.'_') } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+						my @cColumns = ();
+						
+						foreach my $rColumn (@{$rColumnSet->columns}{@{$rColumnSet->columnNames}}) {
+							my $cColumn = $rColumn->clone(undef,$column->name.'_');
+							
+							# Resetting the use when flattening complex types
+							$cColumn->columnType->setUse($column->columnType->use)  if($column->columnType->use < $cColumn->columnType->use);
+							
+							push(@cColumns,$cColumn);
+						}
+						
+						splice(@columnsToPrint,$idx,0,@cColumns);
 					} else {
 						# Is it involved in a foreign key outside the relatedConcept system?
 						if(defined($column->refColumn) && !defined($column->relatedConcept)) {
@@ -889,7 +900,17 @@ sub _genDestination($) {
 					# It only happens to compound types
 					my $rColumnSet = $column->columnType->restriction->columnSet;
 					
-					splice(@columnsToInsert,$idx,0,map { [$_->name,$_->clone(undef,$column->name.'_')] } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
+					my @cColumns = ();
+					
+					foreach my $rColumn (@{$rColumnSet->columns}{@{$rColumnSet->columnNames}}) {
+						my $cColumn = $rColumn->clone(undef,$column->name.'_');
+						
+						# Resetting the use when flattening complex types
+						$cColumn->columnType->setUse($column->columnType->use)  if($column->columnType->use < $cColumn->columnType->use);
+						push(@cColumns,[$rColumn->name,$cColumn]);
+					}
+					
+					splice(@columnsToInsert,$idx,0,@cColumns);
 					
 					# Creating the new mapping
 					my $p_newmappings = [ $basename, BP::Model::ColumnType::SCALAR_CONTAINER, {}, {}, undef, undef, undef, undef, {} ];

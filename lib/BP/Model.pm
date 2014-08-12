@@ -3087,6 +3087,16 @@ sub setDefault($) {
 	$self->[BP::Model::ColumnType::DEFAULT] = $val;
 }
 
+sub setUse($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $val = shift;
+	
+	$self->[BP::Model::ColumnType::USE] = $val;
+}
+
 # clone parameters:
 #	relatedConcept: optional BP::Model::RelatedConcept instance, it signals whether to change cloned columnType
 #		according to relatedConcept hints
