@@ -761,19 +761,35 @@ sub _connect() {
 	return $dbh;
 }
 
+# It stores the native model, but only on empty databases
 sub storeNativeModel() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	if(defined($self->{model}->metadataCollection)) {
+	my $dbh = $self->connect();
+	
+	my $schema = undef;
+	my $name = undef;
+	if(exists($self->{BP::Loader::Mapper::Relational::CONF_DB}) && defined($self->{BP::Loader::Mapper::Relational::CONF_DB})) {
+		my $sth = $dbh->table_info( '', $self->{BP::Loader::Mapper::Relational::CONF_DB}, '', 'TABLE' );
+		( undef, $schema, $name ) = $sth->fetchrow_array();
+		$sth->finish();
+	}
+	unless(defined($name)) {
+		my $sth = $dbh->table_info( '', 'public', '', 'TABLE' );
+		( undef, $schema, $name ) = $sth->fetchrow_array();
+		$sth->finish();
+	}
+	
+	# Create the database only when the database is empty (i.e. with no table)
+	unless(defined($name)) {
 		my $workingDir = File::Temp::tempdir();
 		
 		# First, the native model in file
 		my $p_nativeModelFiles = $self->generateNativeModel($workingDir);
 		
 		# Second, reading the file by ;
-		my $dbh = $self->connect();
 		$dbh->begin_work();
 		eval {
 			foreach my $p_nativeModelFile (@{$p_nativeModelFiles}) {
@@ -812,6 +828,7 @@ use constant {
 	MAPPING_KEYS_FOR_SUBMAPPINGS	=>	5,
 	MAPPING_FOREIGN_KEYS	=>	6,
 	MAPPING_VALUE_IDX	=>	7,
+	MAPPING_REQUIRED_COLUMNS	=>	8,
 };
 
 # _genDestination parameters:
@@ -851,10 +868,12 @@ sub _genDestination($) {
 		# 1. Container type (scalar, set, array, hash)
 		# 2. (key names -> column indexes mapping)
 		# 3. key names -> submapping
-		# 4. key_idx_name (the column which holds either an index or a hash key)
-		# 5. (key names -> submapping key names)
-		# 6. value_name (the column which holds the value when it is an array of scalar values)
-		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef ];
+		# 4. key_idx (the column which holds either an index or a hash key)
+		# 5. (key names -> submapping refkey indexes)
+		# 6. (local refkey names -> local refkey indexes)
+		# 7. value_idx (the column which holds the value when it is an array of scalar values)
+		# 8. required columns
+		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef, {} ];
 		
 		my $idx = 0;
 		my $colidx = 0;
@@ -873,7 +892,7 @@ sub _genDestination($) {
 					splice(@columnsToInsert,$idx,0,map { [$_->name,$_->clone(undef,$column->name.'_')] } @{$rColumnSet->columns}{@{$rColumnSet->columnNames}});
 					
 					# Creating the new mapping
-					my $p_newmappings = [ $basename, BP::Model::ColumnType::SCALAR_CONTAINER, {}, {}, undef, undef, undef, undef ];
+					my $p_newmappings = [ $basename, BP::Model::ColumnType::SCALAR_CONTAINER, {}, {}, undef, undef, undef, undef, {} ];
 					$p_mappings->[MAPPING_SUBMAPPINGS]{$origColumnName} = $p_newmappings;
 					
 					# Put as many copies as columns this compound type has
@@ -885,6 +904,8 @@ sub _genDestination($) {
 				}
 			} else {
 				$p_mappings->[MAPPING_VALUE_MAPPING]{$origColumnName} = $colidx;
+				# Registering required column
+				$p_mappings->[MAPPING_REQUIRED_COLUMNS]{$origColumnName} = undef  if($column->columnType->use>=BP::Model::ColumnType::IDREF);
 				push(@survivors,$columnData);
 				$idcolmap{$column+0} = $colidx;
 				$colidx++;
@@ -933,6 +954,8 @@ sub _genDestination($) {
 			if(defined($ikeycolumnname)) {
 				$new_submappings->[MAPPING_KEY_IDX] = $new_submappings->[MAPPING_VALUE_MAPPING]{$ikeycolumnname};
 				delete($new_submappings->[MAPPING_VALUE_MAPPING]{$ikeycolumnname});
+				# This does not have to be checked
+				delete($new_submappings->[MAPPING_REQUIRED_COLUMNS]{$ikeycolumnname});
 			}
 			$new_submappings->[MAPPING_KEYS_FOR_SUBMAPPINGS] = \%keytransfer;
 			
@@ -947,9 +970,13 @@ sub _genDestination($) {
 			if(defined($valuecolumnname)) {
 				$new_submappings->[MAPPING_VALUE_IDX] = $new_submappings->[MAPPING_VALUE_MAPPING]{$valuecolumnname};
 				delete($new_submappings->[MAPPING_VALUE_MAPPING]{$valuecolumnname});
+				# This does not have to be checked
+				delete($new_submappings->[MAPPING_REQUIRED_COLUMNS]{$valuecolumnname});
 			}
 			
 			$p_mappings->[MAPPING_SUBMAPPINGS]{$origColumnName} = $new_submappings;
+			# Registering required column
+			$p_mappings->[MAPPING_REQUIRED_COLUMNS]{$origColumnName} = undef  if($column->columnType->use>=BP::Model::ColumnType::IDREF);
 		}
 		
 		return $p_main_mappings;
@@ -1033,6 +1060,7 @@ sub _bulkPrepare($$) {
 		my $value_idx = $p_mappings->[MAPPING_VALUE_IDX];
 		my $p_value_mapping = $p_mappings->[MAPPING_VALUE_MAPPING];
 		my $p_sub_mappings = $p_mappings->[MAPPING_SUBMAPPINGS];
+		my $p_required = $p_mappings->[MAPPING_REQUIRED_COLUMNS];
 		
 		my $__doProcess = sub {
 			my($p_key,$p_entry)=@_;
@@ -1049,6 +1077,8 @@ sub _bulkPrepare($$) {
 			# The 'foreign keys'
 			if(defined($p_parentColumns)) {
 				while(my($colname,$colidx)=each(%{$p_parentColumns})) {
+					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_parentData->{$colname}) && defined($p_parentData->{$colname})));
+					
 					push(@{$p_data_columns->[$colidx]}, $p_parentData->{$colname});
 					$columnData[$colidx] = $p_parentData->{$colname};
 				}
@@ -1060,6 +1090,8 @@ sub _bulkPrepare($$) {
 				$columnData[$value_idx] = $p_entry;
 			} else {
 				while(my($colname,$colidx)=each(%{$p_value_mapping})) {
+					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_entry->{$colname}) && defined($p_entry->{$colname})));
+					
 					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname});
 					$columnData[$colidx] = $p_entry->{$colname};
 				}
@@ -1080,18 +1112,22 @@ sub _bulkPrepare($$) {
 					}
 					
 					$__processData->($sub_mappings,$p_entry->{$sub_key},$sub_parentData);
+				} elsif(!exists($p_entry->{$sub_key}) && exists($p_required->{$sub_key})) {
+					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $sub_key cannot be null!");
 				}
 			}
 		};
 		
 		if($p_mappings->[MAPPING_TYPE]==BP::Model::ColumnType::HASH_CONTAINER) {
+			Carp::croak("Expected a hash, but got a ".ref($data)." on ".$p_mappings->[MAPPING_TABLE])  unless(ref($data) eq 'HASH');
 			foreach my $p_key (keys(%{$data})) {
 				my $p_entry = $data->{$p_key};
 				
 				$__doProcess->($p_key,$p_entry);
 			}
 		} else {
-			$data = [ $data ]  if($p_mappings->[MAPPING_TYPE]==BP::Model::ColumnType::SCALAR_CONTAINER);
+			# Be permissive about what to expect
+			$data = [ $data ]  if($p_mappings->[MAPPING_TYPE]==BP::Model::ColumnType::SCALAR_CONTAINER || ref($data) ne 'ARRAY');
 			my $p_key = 0;
 			foreach my $p_entry (@{$data}) {
 				$__doProcess->($p_key,$p_entry);
@@ -1144,7 +1180,9 @@ sub _bulkInsert($\@) {
 				$colnum++;
 			}
 			
-			$destSentence->execute_array({ArrayTupleStatus => \my @tuple_status});
+			my @tuple_status = ();
+			use Data::Dumper;
+			$destSentence->execute_array({ArrayTupleStatus => \@tuple_status}) || print STDERR "DEBUG [$bulkKey]: ".Dumper(\@tuple_status)."\n";
 		}
 	}
 }
