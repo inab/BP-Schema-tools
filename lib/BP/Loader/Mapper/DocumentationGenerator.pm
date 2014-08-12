@@ -1633,6 +1633,13 @@ EOFSH
 	
 	system('latexmk',@latexmkParams);
 	if(-f $outputFile) {
+		# Another additional iteration
+		if(open(my $BODY,'>>',$bodyFile)) {
+			print $BODY "\n%\n";
+			close($BODY);
+			system('latexmk',@latexmkParams);
+		}
+		
 		my $annotations = $model->annotations->hash;
 		
 		# Annotating the PDF (if there is an available XMP sidecar file)
