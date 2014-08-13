@@ -985,7 +985,7 @@ sub _genDestination($) {
 		my $insertSentence = 'INSERT INTO '.$basename.'('.join(',',@colnames).') VALUES ('.join(',', map { '?' } @colnames).')';
 		#print STDERR "DEBUGPREPARE: $insertSentence\n";
 		
-		$destHash{$basename} = [$dbh->prepare($insertSentence),\@colnames,\@coltypes,\@colmanglers];
+		$destHash{$basename} = [$dbh->prepare_cached($insertSentence),\@colnames,\@coltypes,\@colmanglers];
 		
 		# And now, let's process complicated columns
 		foreach my $columnData (@subcolumns) {
@@ -1251,7 +1251,14 @@ sub _bulkInsert($\@) {
 				
 				my @tuple_status = ();
 				use Data::Dumper;
-				$destSentence->execute_array({ArrayTupleStatus => \@tuple_status}) || print STDERR "DEBUG [$bulkKey]: ".Dumper(\@tuple_status)."\n";
+				unless($destSentence->execute_array({ArrayTupleStatus => \@tuple_status})) {
+					foreach my $tuple_id (0..scalar(@tuple_status)) {
+						my $status = $tuple_status[$tuple_id];
+						next  if(!defined($status) || (!ref($status) && $status==1));
+						
+						print STDERR "DEBUG [$bulkKey]: Failed tuple (",join(',',map { defined($_->[$tuple_id])?$_->[$tuple_id]:'' } @{$bulkArray}),") Reasons: ",Dumper($status),"\n";
+					}
+				}
 			}
 		}
 	}
