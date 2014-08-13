@@ -346,6 +346,12 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                 </xs:complexType>
             </xs:element>
         </xs:sequence>
+    	
+    	<xs:attribute name="lax" type="xs:boolean" use="optional" default="false">
+    		<xs:annotation>
+    			<xs:documentation>Should we use lax checks with this controlled vocabulary?</xs:documentation>
+    		</xs:annotation>
+    	</xs:attribute>
     </xs:complexType>
     
     <xs:complexType name="patternType">

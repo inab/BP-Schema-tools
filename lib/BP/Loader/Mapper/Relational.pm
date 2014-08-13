@@ -692,11 +692,13 @@ CVEOF
 					my($columnName,$tableName)=@{$p_columnRef};
 #CREATE INDEX ${tableName}_${columnName}_CVindex ON $tableName ($columnName);
 #
-					print $SQL <<CVEOF;
+					unless($CV->isLax()) {
+						print $SQL <<CVEOF;
 ALTER TABLE $tableName ADD FOREIGN KEY ($columnName)
 REFERENCES ${cvname}_CVkeys_u(cvkey);
 
 CVEOF
+					}
 					print $TSQL <<TCVEOF;
 ALTER TABLE $tableName ADD COLUMN ${columnName}_term $descType;
 

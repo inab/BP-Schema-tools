@@ -1690,6 +1690,10 @@ sub id() {
 	Carp::croak("Unimplemented method!");
 }
 
+sub isLax() {
+	Carp::croak("Unimplemented method!");
+}
+
 # With this method a term or a term-alias is validated
 sub isValid($) {
 	Carp::croak("Unimplemented method!");
@@ -1735,7 +1739,8 @@ use constant {
 	CVKEYS	=>	8,		# The ordered CV term keys (for documentation purposes)
 	CVALKEYS	=>	9,	# The ordered CV alias keys (for documentation purposes)
 	CVXMLEL		=>	10,	# XML element of cv-file element
-	CVID		=>	11	# The CV id (used by SQL and MongoDB uniqueness purposes)
+	CVID		=>	11,	# The CV id (used by SQL and MongoDB uniqueness purposes)
+	CVLAX		=>	12,	# Disable checks on this CV
 };
 
 # This is the empty constructor
@@ -1750,7 +1755,7 @@ sub new() {
 	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
 	my $cvAnnot = BP::Model::AnnotationSet->new();
 	my $cvDesc = BP::Model::DescriptionSet->new();
-	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef);
+	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef,undef);
 	
 	$self->[BP::Model::CV::CVKEYS] = [];
 	# Hash shared by terms and term-aliases
@@ -1784,6 +1789,8 @@ sub parseCV($$) {
 	$self->description->parseDescriptions($cv);
 	
 	$self->[BP::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
+	
+	$self->[BP::Model::CV::CVLAX] = 1  if($cv->hasAttribute('lax') && $cv->getAttribute('lax') eq 'true');
 	
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
@@ -1865,6 +1872,10 @@ sub name {
 # The kind of CV
 sub kind {
 	return $_[0]->[BP::Model::CV::CVKIND];
+}
+
+sub isLax {
+	return $_[0]->[BP::Model::CV::CVLAX];
 }
 
 # Ref to an array of BP::Model::CV::External, holding these values (it could be undef)
@@ -2304,6 +2315,22 @@ sub add(@) {
 # The id
 sub id {
 	return $_[0]->[BP::Model::CV::Meta::CVID];
+}
+
+# lax checks?
+sub isLax() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $isLax = undef;
+	foreach my $p_cv (@{$self}[1..$#{$self}]) {
+		$isLax = $p_cv->isLax();
+		
+		last  if($isLax);
+	}
+	
+	return $isLax;
 }
 
 # With this method a term or a term-alias is validated
