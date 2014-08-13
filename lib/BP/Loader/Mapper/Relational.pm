@@ -1182,28 +1182,32 @@ sub _bulkInsert($\@) {
 	foreach my $bulkKey (keys(%{$p_dest_hash})) {
 		if(exists($bulkData->{$bulkKey})) {
 			my $bulkArray = $bulkData->{$bulkKey};
-			my $destInfo = $p_dest_hash->{$bulkKey};
-			my $destSentence = (ref($destInfo) eq 'ARRAY' && exists($destInfo->[0]))?$destInfo->[0]:undef;
-			
-			Carp::croak("ERROR: _bulkInsert needs a prepared statement")  unless(blessed($destSentence) && $destSentence->can('execute'));
 			Carp::croak("ERROR: _bulkInsert needs an array of arrays for the prepared statement")  unless(ref($bulkArray) eq 'ARRAY');
 			
-			my $colnum = 1;
-			foreach my $p_column (@{$bulkArray}) {
-				my $mangler = $destInfo->[3][$colnum-1];
+			# Only when we have something to insert it is worth doing all this work
+			if(scalar(@{$bulkArray}) > 0) {
+				my $destInfo = $p_dest_hash->{$bulkKey};
+				my $destSentence = (ref($destInfo) eq 'ARRAY' && exists($destInfo->[0]))?$destInfo->[0]:undef;
 				
-				# Preparing the data for SQL
-				foreach my $coldata (@{$p_column}) {
-					$coldata = $mangler->($coldata);
+				Carp::croak("ERROR: _bulkInsert needs a prepared statement")  unless(blessed($destSentence) && $destSentence->can('execute'));
+				
+				my $colnum = 1;
+				foreach my $p_column (@{$bulkArray}) {
+					my $mangler = $destInfo->[3][$colnum-1];
+					
+					# Preparing the data for SQL
+					foreach my $coldata (@{$p_column}) {
+						$coldata = $mangler->($coldata);
+					}
+					
+					$destSentence->bind_param_array($colnum,$p_column,$destInfo->[2][$colnum-1]);
+					$colnum++;
 				}
 				
-				$destSentence->bind_param_array($colnum,$p_column,$destInfo->[2][$colnum-1]);
-				$colnum++;
+				my @tuple_status = ();
+				use Data::Dumper;
+				$destSentence->execute_array({ArrayTupleStatus => \@tuple_status}) || print STDERR "DEBUG [$bulkKey]: ".Dumper(\@tuple_status)."\n";
 			}
-			
-			my @tuple_status = ();
-			use Data::Dumper;
-			$destSentence->execute_array({ArrayTupleStatus => \@tuple_status}) || print STDERR "DEBUG [$bulkKey]: ".Dumper(\@tuple_status)."\n";
 		}
 	}
 }
