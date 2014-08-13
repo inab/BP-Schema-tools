@@ -87,6 +87,8 @@ use constant {
 	_SQLDIALECT_TYPE2SQLKEY	=>	3,
 	_SQLDIALECT_UPDATE_CV	=>	4,
 	_SQLDIALECT_FALSE_TRUE	=>	5,
+	_SQLDIALECT_DIRECTIVES	=>	6,
+	_SQLDIALECT_DBI_DIRECTIVES	=>	7,
 };
 
 
@@ -102,6 +104,12 @@ my %SQLDIALECTS = (
 					\%ABSTYPE2SQLKEY,
 					\&_CV_SQL_UPDATE__mysql,
 					\@FALSE_TRUE,
+					[
+						'SET storage_engine=InnoDB'
+					],
+					{
+						mysql_enable_utf8	=>	1
+					},
 				],
 	'postgresql'	=>	[
 					'Pg',
@@ -114,6 +122,10 @@ my %SQLDIALECTS = (
 					\%ABSTYPE2SQLKEY,
 					\&_CV_SQL_UPDATE__postgresql,
 					\@FALSE_TRUE,
+					[
+					],
+					{
+					},
 				],
 	'sqlite3'	=>	[
 					'SQLite',
@@ -124,6 +136,13 @@ my %SQLDIALECTS = (
 					\%ABSTYPE2SQLKEY,
 					\&_CV_SQL_UPDATE__sqlite3,
 					\@FALSE_TRUE_FAKE,
+					[
+						'PRAGMA journal_mode=WAL',
+						'PRAGMA foreign_keys=ON'
+					],
+					{
+						sqlite_unicode	=>	1
+					},
 				],
 );
 
@@ -311,6 +330,12 @@ sub generateNativeModel($) {
 		print $SQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 		print $SQL '-- '.localtime()."\n";
 		
+		# The directives
+		foreach my $directive (@{$dialectFuncs->[_SQLDIALECT_DIRECTIVES]}) {
+			print $SQL "\n",$directive,";\n";
+		}
+		
+		
 		my $p_TYPES = $model->types;
 		
 		# Needed later for foreign keys
@@ -472,6 +497,11 @@ sub generateNativeModel($) {
 			print $TSQL '-- File '.File::Basename::basename($outfileTranslateSQL)." (".$self->{BP::Loader::Mapper::Relational::CONF_DIALECT}." dialect)\n";
 			print $TSQL '-- Generated from '.$model->projectName.' '.$model->versionString."\n";
 			print $TSQL '-- '.localtime()."\n";
+			
+			# The directives
+			foreach my $directive (@{$dialectFuncs->[_SQLDIALECT_DIRECTIVES]}) {
+				print $TSQL "\n",$directive,";\n";
+			}
 			
 			foreach my $cvname (@cvorder) {
 				my($CV,$doEscape,$SQLtype,$p_columnRefs) = @{$cvdump{$cvname}};
@@ -757,6 +787,7 @@ sub _dsn() {
 
 # This method returns a connection to the database
 # In this case, a DBI database handler
+# and runs the corresponding directives
 sub _connect() {
 	my $self = shift;
 	
@@ -767,7 +798,19 @@ sub _connect() {
 	my $user = exists($self->{BP::Loader::Mapper::Relational::CONF_DBUSER})?$self->{BP::Loader::Mapper::Relational::CONF_DBUSER}:'';
 	my $pass = exists($self->{BP::Loader::Mapper::Relational::CONF_DBPASS})?$self->{BP::Loader::Mapper::Relational::CONF_DBPASS}:'';
 	
-	my $dbh = DBI->connect($dsn,$user,$pass,{RaiseError=>0,AutoCommit=>1});
+	# Injecting dialect-specific directives
+	my $p_dbiDirectives = {
+		RaiseError=>0,
+		AutoCommit=>1
+	};
+	@{$p_dbiDirectives}{keys(%{$self->{__dialect}[_SQLDIALECT_DBI_DIRECTIVES]})} = values(%{$self->{__dialect}[_SQLDIALECT_DBI_DIRECTIVES]});
+	
+	my $dbh = DBI->connect($dsn,$user,$pass,$p_dbiDirectives);
+	
+	# Execute the directives
+	foreach my $directive (@{$self->{__dialect}[_SQLDIALECT_DIRECTIVES]}) {
+		$dbh->do($directive);
+	}
 	
 	return $dbh;
 }
