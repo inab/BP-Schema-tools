@@ -707,6 +707,8 @@ TCVEOF
 				}
 			}
 			close($TSQL);
+			
+			$__printTable = undef;
 		} else {
 			Carp::croak("Unable to create output file $outfileTranslateSQL");
 		}
@@ -1056,6 +1058,8 @@ sub _genDestination($) {
 	
 	my $p_main_mappings = $__genDest->($desttable,$columnSet,\@colorder,$concept);
 	
+	$__genDest = undef;
+	
 	# Starting a transaction so it is all or nothing
 	$dbh->begin_work();
 	
@@ -1201,9 +1205,12 @@ sub _bulkPrepare($$) {
 				$p_key++;
 			}
 		}
+		
+		$__doProcess = undef;
 	};
 	
 	$__processData->($p_main_mappings,$entorp);
+	$__processData = undef;
 	
 	return \%coldata;
 }
