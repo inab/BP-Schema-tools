@@ -20,11 +20,14 @@ use constant {
 	TAG_FETCH_COLS	=>	'fetch-cols',	# The columns we are interested in
 	TAG_CALLBACK	=>	'cb',		# callback to send tokens to
 	TAG_ERR_CALLBACK	=>	'ecb',	# error callback to call
+	TAG_CONTEXT	=>	'context',	# context data passed to the callback function
+	TAG_FOLLOW	=>	'follow',	# If set, if continues despite return values and the errors
 };
 
 my %DEFCONFIG = (
 #	TabParser::TAG_COMMENT	=>	'#',
-	TabParser::TAG_SEP		=>	qr/\t/,
+	TabParser::TAG_SEP	=>	qr/\t/,
+	TabParser::TAG_FOLLOW	=>	1,
 );
 
 sub parseTab($;\%);
@@ -85,6 +88,11 @@ sub parseTab($;\%) {
 	
 	my @columns = ();
 	my $doColumns = exists($config{TabParser::TAG_FETCH_COLS});
+	
+	my $hasContext = exists($config{TabParser::TAG_CONTEXT});
+	my $context = $hasContext?$config{TabParser::TAG_CONTEXT}:undef;
+	
+	my $doFollow = exists($config{TabParser::TAG_FOLLOW}) && $config{TabParser::TAG_FOLLOW};
 	
 	my @fetchColumnFilters = ();
 	@fetchColumnFilters = map { [$_ => undef] } @{$config{TabParser::TAG_FETCH_COLS}}  if($doColumns);
@@ -227,11 +235,45 @@ sub parseTab($;\%) {
 			
 			# And let's give it to the callback
 			if(defined($callback)) {
-				if($doColumns) {
-					$callback->(@tok[@columns]);
-				} else {
-					$callback->(@tok);
+				my $retval = undef;
+				
+				eval {
+					if($hasContext) {
+						if($doColumns) {
+							$retval = $callback->($context,@tok[@columns]);
+						} else {
+							$retval = $callback->($context,@tok);
+						}
+					} else {
+						if($doColumns) {
+							$retval = $callback->(@tok[@columns]);
+						} else {
+							$retval = $callback->(@tok);
+						}
+					}
+					$retval = 1  if($doFollow);
+				};
+				
+				# This is a chance to recover from the error condition
+				if(defined($err_callback) && $@) {
+					eval {
+						if($hasContext) {
+							if($doColumns) {
+								$retval = $err_callback->($@,$context,@tok[@columns]);
+							} else {
+								$retval = $err_callback->($@,$context,@tok);
+							}
+						} else {
+							if($doColumns) {
+								$retval = $err_callback->($@,@tok[@columns]);
+							} else {
+								$retval = $err_callback->($@,@tok);
+							}
+						}
+					};
 				}
+				
+				return  unless($retval);
 			}
 			last;
 		}
@@ -282,11 +324,45 @@ sub parseTab($;\%) {
 			
 			# And let's give it to the callback
 			if(defined($callback)) {
-				if($doColumns) {
-					$callback->(@tok[@columns]);
-				} else {
-					$callback->(@tok);
+				my $retval = undef;
+				
+				eval {
+					if($hasContext) {
+						if($doColumns) {
+							$retval = $callback->($context,@tok[@columns]);
+						} else {
+							$retval = $callback->($context,@tok);
+						}
+					} else {
+						if($doColumns) {
+							$retval = $callback->(@tok[@columns]);
+						} else {
+							$retval = $callback->(@tok);
+						}
+					}
+					$retval = 1  if($doFollow);
+				};
+				
+				# This is a chance to recover from the error condition
+				if(defined($err_callback) && $@) {
+					eval {
+						if($hasContext) {
+							if($doColumns) {
+								$retval = $err_callback->($@,$context,@tok[@columns]);
+							} else {
+								$retval = $err_callback->($@,$context,@tok);
+							}
+						} else {
+							if($doColumns) {
+								$retval = $err_callback->($@,@tok[@columns]);
+							} else {
+								$retval = $err_callback->($@,@tok);
+							}
+						}
+					};
 				}
+				
+				return  unless($retval);
 			}
 		}
 	}
