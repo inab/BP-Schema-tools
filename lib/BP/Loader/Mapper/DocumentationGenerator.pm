@@ -1806,7 +1806,10 @@ TEOF
 	print $TO "\\appendix\n";
 	print $TO "\\chapter{Controlled Vocabularies}\n";
 	
+	# Process only physical vocabularies
 	foreach my $CV (@{$model->namedCVs}) {
+		next  unless($CV->isa('BP::Model::CV'));
+		
 		unless(exists($CV->annotations->hash->{disposition}) && $CV->annotations->hash->{disposition} eq 'inline') {
 			_LaTeX__CVTable($TO,$CV,$self->{'terms-limit'});
 		}
