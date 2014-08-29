@@ -289,6 +289,50 @@ WHERE
 TSQL
 }
 
+# _SQL_CREATE_INDEXES parameters:
+#	table: a table name
+#	indexes: an array of BP::Model::Index instances
+#	columns: The array of columns
+# It returns an array of SQL sentences
+sub _SQL_CREATE_INDEXES($\@\@) {
+	my($table,$p_indexes,$p_columns) = @_;
+	
+	my @retval = ();
+	
+	my %colcheck = map { $_->name => undef } @{$p_columns};
+	
+	my $icounter = 0;
+	foreach my $index (@{$p_indexes}) {
+		my $isUnique = $index->isUnique;
+		
+		my $sentence = undef;
+		
+		foreach my $p_attr (@{$index->indexAttributes}) {
+			my($attrName,$isAscending) = @{$p_attr};
+			
+			if(exists($colcheck{$attrName})) {
+				unless(defined($sentence)) {
+					$sentence = 'CREATE';
+					$sentence .= ' UNIQUE'  if($isUnique);
+					$sentence .= ' INDEX '.$table.'_'.$icounter.' ON '.$table.'(';
+					$icounter++;
+				} else {
+					$sentence .= ',';
+				}
+				
+				$sentence .= $attrName.' '.(($isAscending==1)?'ASC':'DESC');
+			}
+		}
+		
+		if(defined($sentence)) {
+			$sentence .= ')';
+			push(@retval,$sentence);
+		}
+	}
+	
+	return @retval;
+}
+
 # generateNativeModel parameters:
 #	workingDir: The directory where the model files are going to be saved.
 # It returns a reference to an array of pairs
@@ -361,6 +405,7 @@ sub generateNativeModel($) {
 			my @subcolumns = ();
 			
 			my @columnsToPrint = @{$columnSet->columns}{@{$p_colorder}};
+			my @indexesToPrint = @{$columnSet->indexes};
 			
 			my $idx = 0;
 			foreach my $column (@columnsToPrint) {
@@ -370,10 +415,12 @@ sub generateNativeModel($) {
 						# It only happens to compound types
 						my $rColumnSet = $column->columnType->restriction->columnSet;
 						
+						my %columnCorrespondence = ();
 						my @cColumns = ();
 						
 						foreach my $rColumn (@{$rColumnSet->columns}{@{$rColumnSet->columnNames}}) {
 							my $cColumn = $rColumn->clone(undef,$column->name.'_');
+							$columnCorrespondence{$rColumn->name} = $cColumn->name;
 							
 							# Resetting the use when flattening complex types
 							$cColumn->columnType->setUse($column->columnType->use)  if($column->columnType->use < $cColumn->columnType->use);
@@ -382,6 +429,9 @@ sub generateNativeModel($) {
 						}
 						
 						splice(@columnsToPrint,$idx,0,@cColumns);
+						
+						# And the index hints!
+						push(@indexesToPrint,map { $_->relatedIndex(\%columnCorrespondence) } @{$rColumnSet->indexes});
 					} else {
 						# Is it involved in a foreign key outside the relatedConcept system?
 						if(defined($column->refColumn) && !defined($column->relatedConcept)) {
@@ -448,6 +498,11 @@ sub generateNativeModel($) {
 			}
 			
 			print $SQL "\n);\n\n";
+			
+			# Let's print the indexes
+			foreach my $indexDecl (_SQL_CREATE_INDEXES($basename,@indexesToPrint,@columnsToPrint)) {
+				print $SQL $indexDecl,";\n\n";
+			}
 			
 			# And now, let's process complicated columns
 			foreach my $column (@subcolumns) {
