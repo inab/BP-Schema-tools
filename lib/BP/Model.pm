@@ -551,12 +551,17 @@ sub digestModel($) {
 		$self->{_cvDir} = $cvdir;
 		
 		foreach my $cv ($cvDecl->childNodes()) {
-			next  unless($cv->nodeType == XML::LibXML::XML_ELEMENT_NODE && $cv->localname eq 'cv');
+			next  unless($cv->nodeType == XML::LibXML::XML_ELEMENT_NODE && ($cv->localname eq 'cv' || $cv->localname eq 'meta-cv'));
 			
-			my $p_structCV = BP::Model::CV->parseCV($cv,$model);
+			my $p_structCV = undef;
+			if($cv->localname eq 'cv') {
+				$p_structCV = BP::Model::CV->parseCV($cv,$model);
+			} else {
+				$p_structCV = BP::Model::CV::Meta->parseMetaCV($cv,$model);
+			}
 			
 			# Let's store named CVs here, not anonymous ones
-			if(defined($p_structCV->name)) {
+			if(Scalar::Util::blessed($p_structCV) && defined($p_structCV->name)) {
 				$cv{$p_structCV->name}=$p_structCV;
 				push(@cvArray,$p_structCV);
 			}
@@ -1141,6 +1146,8 @@ sub clearIndexes() {
 
 package BP::Model::Index;
 
+# Indexes must be interpreted as hints, as not all the platforms support explicit index declarations
+
 # This is an static method.
 # ParseIndexes parameters:
 #	container: a XML::LibXML::Element container of 'dcc:index' elements
@@ -1203,6 +1210,49 @@ sub isUnique {
 # attributes (attribute name, ascending/descending)
 sub indexAttributes {
 	return $_[0]->[1];
+}
+
+# hasValidColumns parameters:
+#	columns: A reference to an array or a hash (only the keys are used)
+# It validates the attribute names against this set of column names, returning
+# true if all the attributes are present in the input columns, and false otherwise
+sub hasValidColumns($) {
+	my $self = shift;
+	
+	my $p_columns = shift;
+	$p_columns = { map { $_ => undef} @{$p_columns} }  if(ref($p_columns) eq 'ARRAY');
+	
+	foreach my $attr (@{$self->indexAttributes}) {
+		return undef  unless(exists($p_columns->{$attr->[0]}));
+	}
+	
+	return 1;
+}
+
+# This is a constructor
+# relatedIndex parameters:
+#	columns: A reference to a hash (keys and values are used)
+# It validates the attribute names against this set of column names, returning
+# a new BP::Model::Index instance 
+sub relatedIndex($) {
+	my $self = shift;
+	
+	my $p_columns = shift;
+	Carp::croak("This method expects an instance of a hash of column names")  unless(ref($p_columns) eq 'HASH');
+	
+	my @indexAttr = map { [@{$_}] } @{$self->indexAttributes};
+	my $retval = bless([$self->isUnique,\@indexAttr]);
+	
+	foreach my $attr (@indexAttr) {
+		if(exists($p_columns->{$attr->[0]})) {
+			$attr->[0] = $p_columns->{$attr->[0]};
+		} else {
+			$retval = undef;
+			last;
+		}
+	}
+	
+	return $retval;
 }
 
 1;
@@ -1690,7 +1740,23 @@ sub id() {
 	Carp::croak("Unimplemented method!");
 }
 
+sub name() {
+	Carp::croak("Unimplemented method!");
+}
+
 sub isLax() {
+	Carp::croak("Unimplemented method!");
+}
+
+# An instance of a BP::Model::AnnotationSet, holding the annotations
+# for this CV
+sub annotations {
+	Carp::croak("Unimplemented method!");
+}
+
+# An instance of a BP::Model::DescriptionSet, holding the documentation
+# for this CV
+sub description {
 	Carp::croak("Unimplemented method!");
 }
 
@@ -1725,6 +1791,8 @@ sub getEnclosedCVs() {
 package BP::Model::CV;
 
 use base qw(BP::Model::CV::Abstract);
+
+use boolean 0.32;
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
 use constant {
@@ -1790,7 +1858,7 @@ sub parseCV($$) {
 	
 	$self->[BP::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
 	
-	$self->[BP::Model::CV::CVLAX] = 1  if($cv->hasAttribute('lax') && $cv->getAttribute('lax') eq 'true');
+	$self->[BP::Model::CV::CVLAX] = boolean($cv->hasAttribute('lax') && $cv->getAttribute('lax') eq 'true');
 	
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
@@ -1951,7 +2019,7 @@ sub isLocal() {
 }
 
 # With this method a term or a term-alias is validated
-# TODO: fetch on demand the CV is it is not materialized
+# TODO: fetch on demand the CV if it is not materialized
 sub isValid($) {
 	my $self = shift;
 	
@@ -2273,20 +2341,89 @@ package BP::Model::CV::Meta;
 use base qw(BP::Model::CV::Abstract);
 
 use constant {
-	CVID		=>	0	# The CV id (used by SQL and MongoDB uniqueness purposes)
+	CVID		=>	0,	# The CV id (used by SQL and MongoDB uniqueness purposes)
+	CVNAME		=>	1,	# The optional CV name
+	CVDESC		=>	2,	# the documentation paragraphs
+	CVANNOT		=>	3,	# the annotations
+	CVLAX		=>	4,	# Disable checks on this CV
+	CVFIRST		=>	5	# The first element from the embedded controlled vocabularies
 };
 
 # This is the empty constructor
-sub new() {
+sub new(;$$) {
 	my($self)=shift;
 	my($class)=ref($self) || $self;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
+	my $name = shift;
+	my $isLax = shift;
+	
 	$self = $class->SUPER::new()  unless(ref($self));
 	$self->[BP::Model::CV::Meta::CVID] = undef;
+	$self->[BP::Model::CV::Meta::CVNAME] = $name;
+	$self->[BP::Model::CV::Meta::CVLAX] = defined($isLax)?boolean($isLax):undef;
+	$self->[BP::Model::CV::Meta::CVANNOT] = BP::Model::AnnotationSet->new();
+	$self->[BP::Model::CV::Meta::CVDESC] = BP::Model::DescriptionSet->new();
 	
 	return $self;
+}
+
+# This is the constructor and/or the parser
+# parseCV parameters:
+#	container: a XML::LibXML::Element, either 'dcc:column-type' or 'dcc:meta-cv' nodes
+#	model: a BP::Model instance
+# returns either a BP::Model::CV, a BP::Model::CV::Meta or a Regexp
+sub parseMetaCV($$) {
+	my $self = shift;
+	
+	# Dual instance/class method
+	unless(ref($self)) {
+		my $class = $self;
+		$self = $class->new();
+	}
+	
+	my $container = shift;
+	my $model = shift;
+	
+	my $restriction = undef;
+	my $metaCVname = undef;
+	my $isLax = undef;
+	
+	if($container->hasAttribute('name')) {
+		$metaCVname = $container->getAttribute('name');
+	}
+	$isLax = boolean($container->hasAttribute('lax') && $container->getAttribute('lax') eq 'true')  if($container->hasAttribute('lax'));
+
+	my @restrictChildren = $container->childNodes();
+	foreach my $restrictChild (@restrictChildren) {
+		next  unless($restrictChild->nodeType == XML::LibXML::XML_ELEMENT_NODE && $restrictChild->namespaceURI() eq BP::Model::dccNamespace);
+		
+		if($restrictChild->localName eq 'cv') {
+			$restriction = BP::Model::CV::Meta->new($metaCVname,$isLax)  unless(defined($restriction));
+			
+			$restriction->add(BP::Model::CV->parseCV($restrictChild,$model));
+		} elsif($restrictChild->localName eq 'cv-ref') {
+			my $namedCV = $model->getNamedCV($restrictChild->getAttribute('name'));
+			if(defined($namedCV)) {
+				$restriction = BP::Model::CV::Meta->new($metaCVname,$isLax)  unless(defined($restriction));
+				
+				$restriction->add($namedCV);
+			} else {
+				Carp::croak("Element cv-ref tried to use undeclared CV ".$namedCV."\nOffending XML fragment:\n".$container->toString()."\n");
+			}
+		} elsif($restrictChild->localName eq 'pattern') {
+			$restriction = BP::Model::__parse_pattern($restrictChild);
+		}
+	}
+	
+	# Only when we have a meta cv is when we look for documentation and/or annotations
+	if(Scalar::Util::blessed($restriction) && $restriction->isa(__PACKAGE__)) {
+		$restriction->description->parseDescriptions($container);
+		$restriction->annotations->parseAnnotations($container);
+	}
+	
+	return $restriction;
 }
 
 # This method add enclosed CVs to the meta-CV
@@ -2298,23 +2435,57 @@ sub add(@) {
 	# It stores only the ones which are from BP::Model::CV
 	foreach my $p_cv (@_) {
 		if(Scalar::Util::blessed($p_cv) && $p_cv->isa('BP::Model::CV::Abstract')) {
-			my $baseNumCV = scalar(@{$self})-1;
+			#my $baseNumCV = scalar(@{$self})-(BP::Model::CV::Meta::CVFIRST);
 			push(@{$self},@{$p_cv->getEnclosedCVs});
-			my $newNumCV = scalar(@{$self})-1;
 			
-			# When there is only one enclosed CV, be water my friend :P
-			if($baseNumCV==0 && $newNumCV==1) {
-				$self->[BP::Model::CV::Meta::CVID] = $self->[1]->id;
-			} elsif($baseNumCV<=1 && $newNumCV>1) {
-				$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
-			}
+			#unless(defined($self->name)) {
+			#	my $newNumCV = scalar(@{$self})-(BP::Model::CV::Meta::CVFIRST);
+			#	
+			#	# When there is only one enclosed CV, be water my friend :P
+			#	if($baseNumCV==0 && $newNumCV==1) {
+			#		$self->[BP::Model::CV::Meta::CVID] = $self->[BP::Model::CV::Meta::CVFIRST]->id;
+			#	} elsif($baseNumCV<=1 && $newNumCV>1) {
+			#		$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
+			#	}
+			#}
 		}
 	}
 }
 
 # The id
-sub id {
-	return $_[0]->[BP::Model::CV::Meta::CVID];
+sub id() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	unless(defined($self->[BP::Model::CV::Meta::CVID])) {
+		if(defined($self->name)) {
+			$self->[BP::Model::CV::Meta::CVID] = $self->name;
+		} elsif((scalar(@{$self})-(BP::Model::CV::Meta::CVFIRST))==1) {
+			$self->[BP::Model::CV::Meta::CVID] = $self->[BP::Model::CV::Meta::CVFIRST]->id;
+		} else {
+			$self->[BP::Model::CV::Meta::CVID] = $self->_anonId;
+		}
+	}
+	
+	return $self->[BP::Model::CV::Meta::CVID];
+}
+
+# The name
+sub name {
+	return $_[0]->[BP::Model::CV::Meta::CVNAME];
+}
+
+# An instance of a BP::Model::AnnotationSet, holding the annotations
+# for this CV
+sub annotations {
+	return $_[0]->[BP::Model::CV::Meta::CVANNOT];
+}
+
+# An instance of a BP::Model::DescriptionSet, holding the documentation
+# for this CV
+sub description {
+	return $_[0]->[BP::Model::CV::Meta::CVDESC];
 }
 
 # lax checks?
@@ -2323,18 +2494,21 @@ sub isLax() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $isLax = undef;
-	foreach my $p_cv (@{$self}[1..$#{$self}]) {
-		$isLax = $p_cv->isLax();
-		
-		last  if($isLax);
+	my $isLax = $self->[BP::Model::CV::Meta::CVLAX];
+	
+	unless(defined($isLax)) {
+		foreach my $p_cv (@{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}]) {
+			$isLax = $p_cv->isLax();
+			
+			last  if($isLax);
+		}
 	}
 	
 	return $isLax;
 }
 
 # With this method a term or a term-alias is validated
-# TODO: fetch on demand the CV is it is not materialized
+# TODO: fetch on demand the CV if it is not materialized
 sub isValid($) {
 	my $self = shift;
 	
@@ -2343,7 +2517,7 @@ sub isValid($) {
 	my $cvkey = shift;
 	
 	my $isValid = undef;
-	foreach my $p_cv (@{$self}[1..$#{$self}]) {
+	foreach my $p_cv (@{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}]) {
 		$isValid = $p_cv->isValid($cvkey);
 		
 		last  if($isValid);
@@ -2361,7 +2535,7 @@ sub getTerm($) {
 	my $cvkey = shift;
 	
 	my $term = undef;
-	foreach my $p_cv (@{$self}[1..$#{$self}]) {
+	foreach my $p_cv (@{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}]) {
 		$term = $p_cv->getTerm($cvkey);
 		
 		last  if(defined($term));
@@ -2376,7 +2550,7 @@ sub getEnclosedCVs() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my @enclosedCVs = @{$self}[1..$#{$self}];
+	my @enclosedCVs = @{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}];
 	
 	return \@enclosedCVs;
 }
@@ -2804,36 +2978,14 @@ sub parseColumnType($$$) {
 				Carp::croak("Column $columnName tried to use undeclared compound type ".$colType->getAttribute('compound-type')."\nOffending XML fragment:\n".$colType->toString()."\n");
 			}
 		} else {
-			my @restrictChildren = $colType->childNodes();
-			foreach my $restrictChild (@restrictChildren) {
-				next  unless($restrictChild->nodeType == XML::LibXML::XML_ELEMENT_NODE && $restrictChild->namespaceURI() eq BP::Model::dccNamespace);
-				
-				if($restrictChild->localName eq 'cv') {
-					$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
-					
-					$restriction->add(BP::Model::CV->parseCV($restrictChild,$model));
-				} elsif($restrictChild->localName eq 'cv-ref') {
-					my $namedCV = $model->getNamedCV($restrictChild->getAttribute('name'));
-					if(defined($namedCV)) {
-						$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
-						
-						$restriction->add($namedCV);
-					} else {
-						Carp::croak("Element cv-ref tried to use undeclared CV ".$colType->getAttribute('name')."\nOffending XML fragment:\n".$colType->toString()."\n");
-					}
-				} elsif($restrictChild->localName eq 'pattern') {
-					$restriction = BP::Model::__parse_pattern($restrictChild);
-				}
-			}
+			$restriction = BP::Model::CV::Meta->parseMetaCV($colType,$model);
 			
 			# No children, so try using the attributes
 			unless(defined($restriction)) {
 				if($colType->hasAttribute('cv')) {
 					my $namedCV = $model->getNamedCV($colType->getAttribute('cv'));
 					if(defined($namedCV)) {
-						$restriction = BP::Model::CV::Meta->new()  unless(defined($restriction));
-					
-						$restriction->add($namedCV);
+						$restriction = $namedCV;
 					} else {
 						Carp::croak("Column $columnName tried to use undeclared CV ".$colType->getAttribute('cv')."\nOffending XML fragment:\n".$colType->toString()."\n");
 					}
@@ -3411,12 +3563,18 @@ sub new($$@) {
 	my @idColumnNames = ();
 	my %columnDecl = ();
 	my @indexDecl = ();
+	my %indexDeclHash = ();
 	# Inheriting column information from parent columnSet
 	if(Scalar::Util::blessed($parentColumnSet)) {
 		@idColumnNames = @{$parentColumnSet->idColumnNames};
 		@columnNames = @{$parentColumnSet->columnNames};
 		%columnDecl = %{$parentColumnSet->columns};
-		@indexDecl = @{$parentColumnSet->indexes};
+		# As these indexes were validated in the parent
+		# they are not validated again
+		foreach my $index (@{$parentColumnSet->indexes}) {
+			push(@indexDecl,$index);
+			$indexDeclHash{$index+0} = undef;
+		}
 	}
 	
 	# Array with the idref column names
@@ -3441,8 +3599,19 @@ sub new($$@) {
 		push(@checkDefault,$column)  if(ref($column->columnType->default));
 	}
 	
-	# TODO: validate duplicated index declarations
-	push(@indexDecl,@{$p_indexes});
+	# Skip duplicated index declarations
+	foreach my $index (@{$p_indexes}) {
+		my $indexKey = $index+0;
+		unless(exists($indexDeclHash{$indexKey})) {
+			# Store it after validating columns
+			#if($index->hasValidColumns(\%columnDecl)) {
+				push(@indexDecl,$index);
+				$indexDeclHash{$indexKey} = undef;
+			#} else {
+			#	Carp::croak('Invalid index declaration ('.join(',',map { $_->[0] } @{$index->indexAttributes}).') for columns ['.join(',',@columnNames).']');
+			#}
+		}
+	}
 	
 	# And now, second pass, where we check the consistency of default values
 	foreach my $column (@checkDefault) {
@@ -3510,7 +3679,13 @@ sub combineColumnSets($@) {
 	my @columnNames = @{$firstColumnSet->columnNames};
 	my @idColumnNames = @{$firstColumnSet->idColumnNames};
 	my %columnDecl = %{$firstColumnSet->columns};
-	my @indexDecl = @{$firstColumnSet->indexes};
+	my @indexDecl = ();
+	my %indexDeclHash = ();
+	
+	foreach my $index (@{$firstColumnSet->indexes}) {
+		push(@indexDecl,$index);
+		$indexDeclHash{$index+0} = undef;
+	}
 	
 	# Array with the idref column names
 	# Array with column names (all)
@@ -3538,8 +3713,15 @@ sub combineColumnSets($@) {
 			$columnDecl{$columnName} = $p_columns->{$columnName};
 		}
 	
-		# TODO: validate duplicated index declarations
-		push(@indexDecl,@{$columnSet->indexes});
+		# Skip duplicated index declarations
+		# no need to validate indexes, as columns are not removed
+		foreach my $index (@{$columnSet->indexes}) {
+			my $indexKey = $index+0;
+			unless(exists($indexDeclHash{$indexKey})) {
+				push(@indexDecl,$index);
+				$indexDeclHash{$indexKey} = undef;
+			}
+		}
 	}
 	
 	return bless(\@combinedColumnSet,$class);
@@ -3593,8 +3775,12 @@ sub idColumns($;$$) {
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
 	my %columns = map { $_ => $p_columns->{$_}->cloneRelated($idConcept,undef,$doMask,$weakAnnotations) } @columnNames;
-	# TODO: keep indexes defined over idColumns
+	
+	# Keep indexes defined over idColumns
 	my @indexDecl = ();
+	foreach my $index (@{$self->indexes}) {
+		push(@indexDecl,$index)  if($index->hasValidColumns(\%columns));
+	}
 	
 	my @columnSet = (
 		\@columnNames,
@@ -3625,14 +3811,20 @@ sub relatedColumns(;$$) {
 	my @columnNames = @{$self->idColumnNames};
 	my $p_columns = $self->columns;
 	my @refColumnNames = ();
+	my %columnCorrespondence = ();
 	my %columns = map {
 		my $refColumn = $p_columns->{$_}->cloneRelated($myConcept,$relatedConcept);
 		my $refColumnName = $refColumn->name;
+		$columnCorrespondence{$_} = $refColumnName;
 		push(@refColumnNames,$refColumnName);
 		$refColumnName => $refColumn
 	} @columnNames;
-	# TODO: keep indexes defined over refColumns
+	
+	# keep and rework indexes defined over refColumns
 	my @indexDecl = ();
+	foreach my $index (@{$self->indexes}) {
+		push(@indexDecl,$index->relatedIndex(\%columnCorrespondence))  if($index->hasValidColumns(\%columnCorrespondence));
+	}
 	
 	my @columnSet = (
 		\@refColumnNames,
@@ -3734,8 +3926,17 @@ sub addColumns($;$) {
 		$p_columnsHash->{$inputColumnName} = $inputColumn;
 	}
 	
-	# TODO: validate repetitions on index declarations
-	push(@{$self->indexes},@{$inputColumnSet->indexes});
+	# Skip repetitions on index declarations
+	my %indexDeclHash = map { $_ => undef } @{$self->indexes};
+	
+	foreach my $index (@{$inputColumnSet->indexes}) {
+		my $indexKey = $index+0;
+		unless(exists($indexDeclHash{$indexKey})) {
+			push(@{$self->indexes},$index);
+			
+			$indexDeclHash{$indexKey} = undef;
+		}
+	}
 }
 
 # resolveDefaultCalculatedValues parameters:

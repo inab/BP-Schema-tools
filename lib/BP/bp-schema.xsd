@@ -217,6 +217,14 @@
         </xs:attribute>
     </xs:attributeGroup>
     
+    <xs:attributeGroup name="laxGroup">
+    	<xs:attribute name="lax" type="xs:boolean" use="optional" default="false">
+    		<xs:annotation>
+    			<xs:documentation>Should we use lax checks with this controlled vocabulary?</xs:documentation>
+    		</xs:annotation>
+    	</xs:attribute>
+    </xs:attributeGroup>
+    
     <xs:element name="e">
         <xs:annotation>
             <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
@@ -312,6 +320,16 @@
                                                         <xs:documentation>Ensembl MySQL dump with Ensembl Genes or Transcripts identifiers</xs:documentation>
                                                     </xs:annotation>
                                                 </xs:enumeration>
+                                            	<xs:enumeration value="GencodeLevel3Classes">
+                                            		<xs:annotation>
+                                            			<xs:documentation>Gencode level 3 annotation classes with Ensembl Genes and Transcripts identifiers</xs:documentation>
+                                            		</xs:annotation>
+                                            	</xs:enumeration>
+                                            	<xs:enumeration value="GencodeDump">
+                                            		<xs:annotation>
+                                            			<xs:documentation>Gencode list with Ensembl Genes or Transcripts identifiers</xs:documentation>
+                                            		</xs:annotation>
+                                            	</xs:enumeration>
                                                 <xs:enumeration value="ISO_3166-1">
                                                     <xs:annotation>
                                                         <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
@@ -347,11 +365,7 @@ Any alias must have one and only one colon, which separates a "namespace" from t
             </xs:element>
         </xs:sequence>
     	
-    	<xs:attribute name="lax" type="xs:boolean" use="optional" default="false">
-    		<xs:annotation>
-    			<xs:documentation>Should we use lax checks with this controlled vocabulary?</xs:documentation>
-    		</xs:annotation>
-    	</xs:attribute>
+    	<xs:attributeGroup ref="bp:laxGroup"/>
     </xs:complexType>
     
     <xs:complexType name="patternType">
@@ -366,6 +380,15 @@ Any alias must have one and only one colon, which separates a "namespace" from t
     </xs:complexType>
     
     <!-- Second, the reusable elements -->
+	<xs:element name="cv-ref">
+		<xs:annotation>
+			<xs:documentation>One or more references to named, controlled vocabularies</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attributeGroup ref="bp:nameGroup" />
+		</xs:complexType>
+	</xs:element>
+	
     <xs:element name="column">
         <xs:annotation>
             <xs:documentation>A column of data. It contains the data type, pattern and enumeration restrictions</xs:documentation>
@@ -397,14 +420,7 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                             				<xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
                             			</xs:annotation>
                             		</xs:element>
-                            		<xs:element name="cv-ref">
-                            			<xs:annotation>
-                            				<xs:documentation>One or more references to named, controlled vocabularies</xs:documentation>
-                            			</xs:annotation>
-                            			<xs:complexType>
-                            				<xs:attributeGroup ref="bp:nameGroup" />
-                            			</xs:complexType>
-                            		</xs:element>
+									<xs:element ref="bp:cv-ref"/>
 								</xs:choice>
                                 <xs:element name="pattern" type="bp:patternType">
                                     <xs:annotation>
@@ -921,8 +937,8 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:documentation>Controlled Vocabulary declarations, either from a file or inline</xs:documentation>
                     </xs:annotation>
                     <xs:complexType>
-                        <xs:sequence>
-                            <xs:element name="cv" minOccurs="0" maxOccurs="unbounded">
+                    	<xs:choice minOccurs="0" maxOccurs="unbounded">
+                            <xs:element name="cv">
                                 <xs:annotation>
                                     <xs:documentation>A named controlled vocabulary either inline or stored</xs:documentation>
                                 </xs:annotation>
@@ -941,7 +957,29 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                     <xs:field xpath="@v"/>
                                 </xs:unique>
                             </xs:element>
-                        </xs:sequence>
+                        	<xs:element name="meta-cv">
+                        		<xs:annotation>
+                        			<xs:documentation>A named "meta" controlled vocabulary, either inline or stored</xs:documentation>
+                        		</xs:annotation>
+                        		<xs:complexType>
+                        			<xs:sequence>
+                        				<xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
+                        				<xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+                        				
+                        				<xs:choice minOccurs="2" maxOccurs="unbounded">
+                        					<xs:element name="cv" type="bp:cvType">
+                        						<xs:annotation>
+                        							<xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
+                        						</xs:annotation>
+                        					</xs:element>
+                        					<xs:element ref="bp:cv-ref"/>
+                        				</xs:choice>
+                        			</xs:sequence>
+                        			<xs:attributeGroup ref="bp:nameGroup" />
+                        			<xs:attributeGroup ref="bp:laxGroup" />
+                        		</xs:complexType>
+                        	</xs:element>
+                        </xs:choice>
                         <xs:attribute name="dir" use="optional" type="bp:nonEmptyStringType">
                             <xs:annotation>
                                 <xs:documentation>The directory where the controlled vocabulary files (in TSV format) are stored</xs:documentation>
@@ -949,7 +987,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         </xs:attribute>
                     </xs:complexType>
                     <xs:key name="cv-name-key">
-                        <xs:selector xpath="bp:cv"/>
+                        <xs:selector xpath="bp:cv | bp:meta-cv"/>
                         <xs:field xpath="@name"/>
                     </xs:key>
                 </xs:element>
