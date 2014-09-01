@@ -1277,10 +1277,12 @@ sub _bulkInsert($\@) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $destination = shift;
-	my($p_dest_hash,$p_main_mappings) = @{$destination};
-	my $bulkData = shift;
 	
 	Carp::croak("ERROR: _bulkInsert needs the destination as an array whose first element is a hash of prepared statements")  unless(ref($destination) eq 'ARRAY' && ref($destination->[0]) eq 'HASH');
+	
+	my($p_dest_hash,$p_main_mappings) = @{$destination};
+	
+	my $bulkData = shift;
 	Carp::croak("ERROR: _bulkInsert needs the data as a hash")  unless(ref($bulkData) eq 'HASH');
 	
 	# The order is preserved because we are using a Tie::IxHash for $destination
