@@ -214,17 +214,25 @@ sub freeDestination(;$) {
 }
 
 # _bulkPrepare parameters:
-#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (i.e. an array of hashes)
 # It returns the bulkData to be used for the load
 sub _bulkPrepare($) {
 	Carp::croak('Unimplemented method!');
 }
 
 
-# bulkInsert parameters:
+# _bulkInsert parameters:
 #	destination: The destination of the bulk insertion.
 #	bulkData: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
+	Carp::croak('Unimplemented method!');
+}
+
+# _incrementalUpdate parameters:
+#	destination: The destination of the bulk insertion.
+#	existingId: Id of the entry to update
+#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
+sub _incrementalUpdate($$$\@) {
 	Carp::croak('Unimplemented method!');
 }
 
@@ -236,6 +244,17 @@ sub bulkInsert(\@) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	return $self->_bulkInsert($self->{_destination},@_);
+}
+
+# incrementalUpdate parameters:
+#	existingId: Id of the entry to update
+#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
+sub incrementalUpdate($$\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->_incrementalUpdate($self->{_destination},@_);
 }
 
 # parseOrderingHints parameters:
@@ -321,6 +340,25 @@ sub _fancyColumnOrdering($) {
 	return (@idcolorder,@colorder);
 }
 
+# validateAndEnactEntry parameters:
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (i.e. an array of hashes)
+# It validates the correctness of the entries in entorp, and it fills in-line the default values
+sub validateAndEnactEntry($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $entorp = shift;
+	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
+	#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
+	
+	foreach my $entry (@{$entorp}) {
+		# TODO
+	}
+	
+	return $entorp;
+}
+
 # readEntry parameters:
 #	BMAX: The max number of entries to fetch
 # It reads the entry from the previously registered correlatedConcept
@@ -334,6 +372,8 @@ sub readEntry($) {
 	my $BMAX = shift;
 	
 	my $entorp = $correlatedConcept->readEntry($BMAX);
+	
+	$entorp = $self->validateAndEnactEntry($entorp);
 	
 	return $self->_bulkPrepare($entorp);
 }
