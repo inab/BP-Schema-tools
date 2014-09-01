@@ -453,8 +453,9 @@ sub _incrementalUpdate($$$\@) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $destination = shift;
 	my $existingId = shift;
-	my $facetedbulkData = shift;
+	my $facetedBulkData = shift;
 	
 	$destination->update({
 		id => $existingId,
