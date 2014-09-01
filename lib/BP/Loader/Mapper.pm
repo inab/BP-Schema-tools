@@ -214,10 +214,9 @@ sub freeDestination(;$) {
 }
 
 # _bulkPrepare parameters:
-#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
 # It returns the bulkData to be used for the load
-sub _bulkPrepare($$) {
+sub _bulkPrepare($) {
 	Carp::croak('Unimplemented method!');
 }
 
@@ -336,7 +335,7 @@ sub readEntry($) {
 	
 	my $entorp = $correlatedConcept->readEntry($BMAX);
 	
-	return $self->_bulkPrepare($correlatedConcept,$entorp);
+	return $self->_bulkPrepare($entorp);
 }
 
 # mapData parameters:

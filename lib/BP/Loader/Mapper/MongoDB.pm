@@ -146,6 +146,8 @@ sub createCollection($) {
 		_EnsureIndexes($coll,@{$collection->indexes});
 	}
 	
+	# And now, let's fetch all the index declarations related to all the concepts being stored here
+	
 	return $coll;
 }
 
@@ -204,15 +206,13 @@ sub _freeDestination($$) {
 }
 
 # _bulkPrepare parameters:
-#	correlatedConcept: A BP::Loader::CorrelatableConcept instance
 #	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
 # It returns the bulkData to be used for the load
-sub _bulkPrepare($$) {
+sub _bulkPrepare($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $correlatedConcept = shift;
 	my $entorp = shift;
 	
 	return $entorp->[0];
