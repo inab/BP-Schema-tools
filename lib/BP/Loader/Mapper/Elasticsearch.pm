@@ -411,7 +411,7 @@ sub _freeDestination($$) {
 }
 
 # _bulkPrepare parameters:
-#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (i.e. an array of hashes)
 # It returns the bulkData to be used for the load
 sub _bulkPrepare($) {
 	my $self = shift;
@@ -419,8 +419,9 @@ sub _bulkPrepare($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $entorp = shift;
+	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
 	
-	return $entorp->[0];
+	return $entorp;
 }
 
 
@@ -438,9 +439,31 @@ sub _bulkInsert($\@) {
 	
 	my $p_batch = shift;
 	
-	foreach my $doc (@{$p_batch}) {
-		$destination->index({source=>$doc});
-	}
+	$destination->index(map { {source=>$_} } @{$p_batch});
+	
+	return 1;
+}
+
+# _incrementalUpdate parameters:
+#	destination: The destination of the bulk insertion.
+#	existingId: Id of the entry to update
+#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
+sub _incrementalUpdate($$$\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $existingId = shift;
+	my $facetedbulkData = shift;
+	
+	$destination->update({
+		id => $existingId,
+		lang => 'mvel',
+		script => join('; ',map { 'ctx._source.'.$_->[0].' += newdoc_'.$_->[0] } @{$facetedBulkData}),
+		params => {
+			map { ('newdoc_'.$_->[0]) => $_->[1] } @{$facetedBulkData}
+		}
+	});
 	
 	return 1;
 }
