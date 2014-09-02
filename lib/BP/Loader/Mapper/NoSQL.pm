@@ -30,8 +30,6 @@ sub new($$) {
 	my $self  = $class->SUPER::new($model,$config);
 	bless($self,$class);
 	
-	return $self;
-	
 	# Finding the correspondence between collections and concepts
 	# needed for type mapping
 	my %colcon = ();
@@ -68,6 +66,8 @@ sub new($$) {
 	
 	$self->{_colConcept} = \%colcon;
 	$self->{_conceptCol} = \%concol;
+	
+	return $self;
 }
 
 # These methods are called by JSON library, which gives the structure to
