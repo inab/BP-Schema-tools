@@ -214,8 +214,9 @@ sub _bulkPrepare($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $entorp = shift;
+	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
 	
-	return $entorp->[0];
+	return $entorp;
 }
 
 # _bulkInsert parameters:
