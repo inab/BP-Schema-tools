@@ -321,21 +321,22 @@ my %SORTMAPS = (
 	BP::Model::ColumnType::DECIMAL_TYPE	=>	'g'
 );
 
-# existingEntries parameters:
+# _existingEntries parameters:
+#	correlatedConcept: Either a BP::Model::Concept or a BP::Loader::CorrelatableConcept instance
 #	colNames: The column names to fetch with this scroll helper
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
-sub existingEntries($) {
+sub _existingEntries($$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $correlatedConcept = shift;
 	# TODO: In the future, when grouping functionality has been developed for BP::Model, these column names will be derived from the correlated concept
 	my $p_colNames = shift;
 	
 	my $existingFile = shift;
 	
-	my $correlatedConcept = $self->{_correlatedConcept};
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 	my $conid = $concept+0;
 	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
@@ -435,9 +436,11 @@ sub _bulkInsert($\@) {
 	
 	my $destination = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs an array instance")  unless(ref($destination) eq 'ARRAY');
+	Carp::croak("ERROR: bulkInsert needs a Search::Elasticsearch::Bulk instance")  unless(Scalar::Util::blessed($destination) && $destination->can('index'));
 	
 	my $p_batch = shift;
+	
+	Carp::croak("ERROR: bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
 	$destination->index(map { {source=>$_} } @{$p_batch});
 	
