@@ -253,7 +253,7 @@ sub bulkInsert(\@) {
 
 # incrementalUpdate parameters:
 #	bulkData: a reference to an array of hashes which contain the values to update.
-sub incrementalUpdate($\@) {
+sub incrementalUpdate(\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
