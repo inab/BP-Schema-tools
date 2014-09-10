@@ -285,10 +285,14 @@ sub storeNativeModel() {
 	#}
 }
 
+# It sets up the destination to be used in bulkInsert calls
 # _genDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept or BP::Concept
 #	isTemp: should it be a temporary destination?
-# It returns a reference to a two element array, with index name and mapping type
+# It returns a reference to a three element array:
+#	an instance of Search::Elasticsearch::Bulk
+#	a list of keys corresponding to the grouping keys used for incremental updates
+#	a list of keys corresponding to the submappings taken into account for incremental updates
 sub _genDestination($;$) {
 	my $self = shift;
 	
@@ -309,21 +313,15 @@ sub _genDestination($;$) {
 		type    => $mappingName
 	);
 	
-	return $bes;
+	return [$bes,undef,undef];
 }
-
-use constant {
-	GZIP	=>	'pigz'
-};
-
-my %SORTMAPS = (
-	BP::Model::ColumnType::INTEGER_TYPE	=>	'n',
-	BP::Model::ColumnType::DECIMAL_TYPE	=>	'g'
-);
 
 # _existingEntries parameters:
 #	correlatedConcept: Either a BP::Model::Concept or a BP::Loader::CorrelatableConcept instance
-#	colNames: The column names to fetch with this scroll helper
+#	p_destination: An array with
+#		an instance of Search::Elasticsearch::Bulk
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
 sub _existingEntries($$$) {
@@ -332,71 +330,78 @@ sub _existingEntries($$$) {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $correlatedConcept = shift;
-	# TODO: In the future, when grouping functionality has been developed for BP::Model, these column names will be derived from the correlated concept
-	my $p_colNames = shift;
+	
+	my $p_destination = shift;
 	
 	my $existingFile = shift;
 	
-	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
-	my $conid = $concept+0;
-	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-	my $indexName = $collection->path();
-	my $mappingName = $concept->id();
-	
-	my $es = $self->connect();
-
-	my $scroll = $es->scroll_helper(
-		'index'	=> $indexName,
-		'type'	=> $mappingName,
-		'size'	=> 5000,
-		'search_type'	=> 'scan', # With this, no sort is applied
-		#'search_type'	=> 'query_and_fetch',
-		'body'	=> {
-			#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
-			# Each fetched document comes with its unique identifier
-			'fields'=> $p_colNames,
-			'query'	=> {
-				'match_all' => {}
-			}
-		}
-	);
-	
-	my $sortColDef = '';
-	my $kidx = 2;
-	foreach my $colName (@{$p_colNames}) {
-		$sortColDef .= " -k${kidx},${kidx}";
-		if(exists($concept->columnSet->columns->{$colName})) {
-			my $columnBaseType = $concept->columnSet->columns->{$colName}->columnType->type;
-			$sortColDef .= $SORTMAPS{$columnBaseType}  if(exists($SORTMAPS{$columnBaseType}));
-		}
-		$kidx++;
-	}
-	
 	my $counter = 0;
-	if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
-		until($scroll->is_finished) {
-			$scroll->refill_buffer();
-			my @docs = $scroll->drain_buffer();
-			$counter += scalar(@docs);
-			foreach my $doc (@docs) {
-		#		#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
-				my $fields = $doc->{fields};
-		#		#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
-		#		#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
-		#		print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
-				print $EXISTING join("\t",$doc->{_id},map { $fields->{$_}[0] } @{$p_colNames}),"\n";
+	if(defined($p_destination->[1])) {
+		my $p_colNames = $p_destination->[1];
+		
+		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
+		my $conid = $concept+0;
+		my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
+		my $indexName = $collection->path();
+		my $mappingName = $concept->id();
+		
+		my $es = $self->connect();
+
+		my $scroll = $es->scroll_helper(
+			'index'	=> $indexName,
+			'type'	=> $mappingName,
+			'size'	=> 5000,
+			'search_type'	=> 'scan', # With this, no sort is applied
+			#'search_type'	=> 'query_and_fetch',
+			'body'	=> {
+				#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
+				# Each fetched document comes with its unique identifier
+				'fields'=> $p_colNames,
+				'query'	=> {
+					'match_all' => {}
+				}
 			}
+		);
+		
+		my $sortColDef = '';
+		my $kidx = 2;
+		foreach my $colName (@{$p_colNames}) {
+			$sortColDef .= " -k${kidx},${kidx}";
+			if(exists($concept->columnSet->columns->{$colName})) {
+				my $columnBaseType = $concept->columnSet->columns->{$colName}->columnType->type;
+				$sortColDef .= $BP::Loader::CorrelatableConcept::SORTMAPS{$columnBaseType}  if(exists($BP::Loader::CorrelatableConcept::SORTMAPS{$columnBaseType}));
+			}
+			$kidx++;
 		}
-		close($EXISTING);
+		
+		if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
+			until($scroll->is_finished) {
+				$scroll->refill_buffer();
+				my @docs = $scroll->drain_buffer();
+				$counter += scalar(@docs);
+				foreach my $doc (@docs) {
+			#		#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
+					my $fields = $doc->{fields};
+			#		#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
+			#		#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
+			#		print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
+					print $EXISTING join("\t",$doc->{_id},map { $fields->{$_}[0] } @{$p_colNames}),"\n";
+				}
+			}
+			close($EXISTING);
+		}
+		# Explicitly freeing the scroll helper
+		$scroll->finish;
 	}
-	# Explicitly freeing the scroll helper
-	$scroll->finish;
 	
 	return $counter;
 }
 
 # _freeDestination parameters:
-#	destination: An instance of MongoDB::Collection
+#	p_destination: An array with
+#		an instance of Search::Elasticsearch::Bulk
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
 #	errflag: The error flag
 # As it is not needed to explicitly free them, only it is assured the data is flushed.
 sub _freeDestination($$) {
@@ -404,15 +409,16 @@ sub _freeDestination($$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $destination = shift;
+	my $p_destination = shift;
 	my $errflag = shift;
-	
+		
 	# Assure last entries are flushed
+	my $destination = $p_destination->[0];
 	$destination->flush();
 }
 
 # _bulkPrepare parameters:
-#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (i.e. an array of hashes)
+#	entorp: The output of BP::Loader::CorrelatableConcept->readEntry (usually an array of hashes)
 # It returns the bulkData to be used for the load
 sub _bulkPrepare($) {
 	my $self = shift;
@@ -427,49 +433,66 @@ sub _bulkPrepare($) {
 
 
 # _bulkInsert parameters:
-#	destination: A reference to a two element array, with index name and mapping type
+#	p_destination: An array with
+#		an instance of Search::Elasticsearch::Bulk
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $destination = shift;
+	my $p_destination = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs a Search::Elasticsearch::Bulk instance")  unless(Scalar::Util::blessed($destination) && $destination->can('index'));
+	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
+	my $destination = $p_destination->[0];
+	Carp::croak("ERROR: _bulkInsert needs a Search::Elasticsearch::Bulk instance")  unless(Scalar::Util::blessed($destination) && $destination->can('index'));
 	
 	my $p_batch = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
+	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
-	$destination->index(map { {source=>$_} } @{$p_batch});
+	my @insertBatch = ();
+	
+	foreach my $p_entry (@{$p_batch}) {
+		push(@insertBatch,{ source => $p_entry })  unless($self->_incrementalUpdate($p_destination,$p_entry));
+	}
+	
+	$destination->index(@insertBatch)  if(scalar(@insertBatch)>0);
 	
 	return 1;
 }
 
 # _incrementalUpdate parameters:
-#	destination: The destination of the bulk insertion.
-#	existingId: Id of the entry to update
-#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
-sub _incrementalUpdate($$$\@) {
+#	p_destination: An array with
+#		an instance of Search::Elasticsearch::Bulk
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
+#	p_entry: The entry to be incrementally updated
+sub _incrementalUpdate($$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $destination = shift;
-	my $existingId = shift;
-	my $facetedBulkData = shift;
+	my $p_destination = shift;
+	my $p_entry = shift;
 	
-	$destination->update({
-		id => $existingId,
-		lang => 'mvel',
-		script => join('; ',map { 'ctx._source.'.$_->[0].' += newdoc_'.$_->[0] } @{$facetedBulkData}),
-		params => {
-			map { ('newdoc_'.$_->[0]) => $_->[1] } @{$facetedBulkData}
-		}
-	});
+	my $retval = undef;
 	
-	return 1;
+	if(defined($p_destination->[2]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
+		$p_destination->[0]->update({
+			id => $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID},
+			lang => 'mvel',
+			script => join('; ',map { 'ctx._source.'.$_.' += newdoc_'.$_ } @{$p_destination->[2]}),
+			params => {
+				map { ('newdoc_'.$_) => $p_entry->{$_} } @{$p_destination->[2]}
+			}
+		});
+		$retval = 1;
+	}
+	
+	return $retval;
 }
 
 1;
