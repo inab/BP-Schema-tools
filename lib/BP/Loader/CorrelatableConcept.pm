@@ -25,6 +25,10 @@ use constant {
 	SORT	=>	'sort'
 };
 
+use constant {
+	ANNOTATION_GROUPING_HINT	=>	'grouping-hint'
+};
+
 our $NUMCPUS = Sys::CPU::cpu_count();
 
 our %SORTMAPS = (
@@ -49,6 +53,71 @@ sub new($@) {
 	@{$self->{conceptFiles}} = map { BP::Loader::CorrelatableConcept::File->new($_) } @conceptFiles;
 	$self->{correlatedConcepts} = undef;
 	
+	# And the grouping hints!
+	if(exists($self->{concept}->annotations->hash->{+ANNOTATION_GROUPING_HINT})) {
+		my $groupingHintElem = $self->{concept}->annotations->hash->{+ANNOTATION_GROUPING_HINT};
+		if(blessed($groupingHintElem) && $groupingHintElem->isa('XML::LibXML::Element')) {
+			my @groupingColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'grouping-columns');
+			if(scalar(@groupingColumnsElems) > 0) {
+				my @groupingColumns = map { $_->textContent } $groupingColumnsElems[0]->getChildrenByTagNameNS(BP::Model::dccNamespace,'column');
+				
+				if(scalar(@groupingColumns) > 0) {
+				
+					my @incrementalColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'incremental-columns');
+					if(scalar(@incrementalColumnsElems)>0) {
+						my @incrementalColumns = map { $_->textContent } $incrementalColumnsElems[0]->getChildrenByTagNameNS(BP::Model::dccNamespace,'column');
+						
+						if(scalar(@incrementalColumns) > 0) {
+							# Let's validate both column sets!
+							my $columnHash = $self->{concept}->columnSet->columns;
+							
+							# Grouping columns must be either required or idref
+							# and they mustn't be compound ones or have
+							# array, set or hash attributions
+							foreach my $columnName (@groupingColumns) {
+								if(exists($columnHash->{$columnName})) {
+									my $columnType = $columnHash->{$columnName}->columnType;
+									
+									if($columnType->use!=BP::Model::ColumnType::REQUIRED && $columnType->use!=BP::Model::ColumnType::IDREF) {
+										Carp::croak("ERROR: grouping column $columnName must be required or idref");
+									}
+									
+									if($columnType->type eq BP::Model::ColumnType::COMPOUND_TYPE) {
+										Carp::croak("ERROR: grouping column $columnName must not have a compound type");
+									}
+									
+									if($columnType->containerType!=BP::Model::ColumnType::SCALAR_CONTAINER) {
+										Carp::croak("ERROR: grouping column $columnName must have a scalar attribute container");
+									}
+								} else {
+									Carp::croak("ERROR: grouping hint references to unknown grouping column $columnName.\nOffending XML fragment:\n".$groupingHintElem->toString()."\n");
+								}
+							}
+							
+							# Incremental columns must have array or set attributions
+							# and they cannot belong to the grouping columns set
+							foreach my $columnName (@incrementalColumns) {
+								if(exists($columnHash->{$columnName})) {
+									my $columnType = $columnHash->{$columnName}->columnType;
+									
+									unless($columnType->containerType==BP::Model::ColumnType::ARRAY_CONTAINER || $columnType->containerType==BP::Model::ColumnType::SET_CONTAINER) {
+										Carp::croak("ERROR: incremental column $columnName must have either a set or an array attribute container");
+									}
+								} else {
+									Carp::croak("ERROR: grouping hint references to unknown incremental column $columnName.\nOffending XML fragment:\n".$groupingHintElem->toString()."\n");
+								}
+							}
+							
+							# Now, save them!
+							$self->{groupingColumns} = \@groupingColumns;
+							$self->{incrementalColumns} = \@incrementalColumns;
+						}
+					}
+				}
+			}
+		}
+	}
+	
 	# TODO: command line tool detection (pigz vs gzip)
 
 	return $self;
@@ -62,6 +131,16 @@ sub concept {
 # It returns whether we have read all the lines
 sub eof {
 	return exists($_[0]->{eof});
+}
+
+# The defined groupingColumns
+sub groupingColumns {
+	return exists($_[0]->{groupingColumns})?$_[0]->{groupingColumns}:undef;
+}
+
+# The defined incrementalColumns
+sub incrementalColumns {
+	return exists($_[0]->{incrementalColumns})?$_[0]->{incrementalColumns}:undef;
 }
 
 # Labelling this correlating concept as 'slave' of the identifying one, so it is going
