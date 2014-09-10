@@ -13,6 +13,9 @@ use Scalar::Util qw(blessed);
 # Therefore, it is better defined here.
 use constant FILE_PREFIX_KEY => 'file-prefix';
 
+# This constant is a key which flags a switch from insertion to incremental update
+use constant COL_INCREMENTAL_UPDATE_ID => '_incrementalUpdateId';
+
 our $SECTION;
 our $DEFAULTSECTION;
 BEGIN {
