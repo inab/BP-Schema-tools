@@ -179,11 +179,14 @@ sub storeNativeModel() {
 	}
 }
 
+# It sets up the destination to be used in bulkInsert calls
 # _genDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
 #	isTemp: should it be a temporary destination?
-# It sets up the destination to be used in bulkInsert calls, in this case
-# a MongoDB::Collection instance
+# It returns a reference to a three element array:
+#	a MongoDB::Collection instance
+#	a list of keys corresponding to the grouping keys used for incremental updates
+#	a list of keys corresponding to the submappings taken into account for incremental updates
 sub _genDestination($;$) {
 	my $self = shift;
 	
@@ -195,11 +198,69 @@ sub _genDestination($;$) {
 	my $destColl = $isTemp?'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1)):$correlatedConcept->concept->collection->path;
 	my $db = $self->connect();
 	
-	return $db->get_collection($destColl);
+	return [$db->get_collection($destColl),undef,undef];
+}
+
+# _existingEntries parameters:
+#	correlatedConcept: Either a BP::Model::Concept or a BP::Loader::CorrelatableConcept instance
+#	p_destination: An array with
+#		a MongoDB::Collection instance
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
+#	existingFile: Destination where the file is being saved
+# It dumps all the values of these columns to the file, and it returns the number of lines of the file
+sub _existingEntries($$$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $correlatedConcept = shift;
+	
+	my $p_destination = shift;
+	
+	my $existingFile = shift;
+	
+	my $counter = 0;
+	if(defined($p_destination->[1])) {
+		my $destination  = $p_destination->[0];
+		my $p_colNames = $p_destination->[1];
+		
+		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
+		
+		my $cursor = $destination->query->fields(map { { $_ => 1 } } @{$p_colNames});
+		
+		my $sortColDef = '';
+		my $kidx = 2;
+		foreach my $colName (@{$p_colNames}) {
+			$sortColDef .= " -k${kidx},${kidx}";
+			if(exists($concept->columnSet->columns->{$colName})) {
+				my $columnBaseType = $concept->columnSet->columns->{$colName}->columnType->type;
+				$sortColDef .= $BP::Loader::CorrelatableConcept::SORTMAPS{$columnBaseType}  if(exists($BP::Loader::CorrelatableConcept::SORTMAPS{$columnBaseType}));
+			}
+			$kidx++;
+		}
+		
+		if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
+			while(my $doc = $cursor->next) {
+				$counter ++;
+			#	#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
+			#	#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
+			#	#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
+			#	print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
+				print $EXISTING join("\t",@{$doc}{'_id',@{$p_colNames}}),"\n";
+			}
+			close($EXISTING);
+		}
+	}
+	
+	return $counter;
 }
 
 # _freeDestination parameters:
-#	destination: An instance of MongoDB::Collection
+#	p_destination: An array with
+#		a MongoDB::Collection instance
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
 #	errflag: The error flag
 # As it is not needed to explicitly free them, it is an empty method.
 sub _freeDestination($$) {
@@ -220,19 +281,87 @@ sub _bulkPrepare($) {
 }
 
 # _bulkInsert parameters:
-#	destination: The destination of the bulk insertion (a MongoDB::Collection instance)
+#	p_destination: An array with
+#		a MongoDB::Collection instance
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $destination = shift;
+	my $p_destination = shift;
+	
+	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
+	my $destination = $p_destination->[0];
+	Carp::croak("ERROR: _bulkInsert needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
+	
 	my $p_batch = shift;
 	
-	Carp::croak("ERROR: bulkInsert needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
+	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
-	return $destination->batch_insert($p_batch);
+	my @insertBatch = ();
+	
+	my $count = 0;
+	foreach my $p_entry (@{$p_batch}) {
+		unless($self->_incrementalUpdate($p_destination,$p_entry)) {
+			push(@insertBatch,$p_entry);
+		} else {
+			$count++;
+		}
+	}
+	
+	if(scalar(@insertBatch)>0) {
+		$count += $destination->batch_insert(\@insertBatch);
+		
+		my $db = $self->connect();
+		my $lastE = $db->last_error();
+		
+		unless(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
+			Carp::croak("ERROR: Failed batch insert. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+		}
+	}
+	
+	return $count;
+}
+
+# _incrementalUpdate parameters:
+#	p_destination: An array with
+#		a MongoDB::Collection instance
+#		a list of keys corresponding to the grouping keys used for incremental updates
+#		a list of keys corresponding to the submappings taken into account for incremental updates
+#	p_entry: The entry to be incrementally updated
+sub _incrementalUpdate($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_destination = shift;
+	my $p_entry = shift;
+	
+	my $retval = undef;
+	
+	if(defined($p_destination->[2]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
+		$p_destination->[0]->update(
+			{
+				'_id'	=> $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID}
+			},
+			{
+				'$push'	=> { map { $_ => { '$each' => $p_entry->{$_} } } @{$p_destination->[2]} }
+			}
+		);
+		my $db = $self->connect();
+		my $lastE = $db->last_error();
+		
+		if(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
+			$retval = 1;
+		} else {
+			Carp::croak("ERROR: Failed update. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+		}
+	}
+	
+	return $retval;
 }
 
 1;
