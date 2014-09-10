@@ -942,6 +942,7 @@ use constant {
 	MAPPING_FOREIGN_KEYS	=>	6,
 	MAPPING_VALUE_IDX	=>	7,
 	MAPPING_REQUIRED_COLUMNS	=>	8,
+	MAPPING_INCREMENTAL_UPDATE_SUBMAPPING_KEYS	=>	9,
 };
 
 # _genDestination parameters:
@@ -986,7 +987,8 @@ sub _genDestination($) {
 		# 6. (local refkey names -> local refkey indexes)
 		# 7. value_idx (the column which holds the value when it is an array of scalar values)
 		# 8. required columns
-		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef, {} ];
+		# 9. incremental update submapping keys
+		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef, {}, undef];
 		
 		my $idx = 0;
 		my $colidx = 0;
@@ -1190,10 +1192,12 @@ sub _bulkPrepare($) {
 			
 			my @columnData = ();
 			
+			my $skip = !defined($value_idx) && defined($p_mappings->[MAPPING_INCREMENTAL_UPDATE_SUBMAPPING_KEYS]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID});
+			
 			# First, the values
 			# The (partial) key
 			if(defined($key_idx)) {
-				push(@{$p_data_columns->[$key_idx]}, $p_key);
+				push(@{$p_data_columns->[$key_idx]}, $p_key)  unless($skip);
 				$columnData[$key_idx] = $p_key;
 			}
 			
@@ -1202,7 +1206,7 @@ sub _bulkPrepare($) {
 				while(my($colname,$colidx)=each(%{$p_parentColumns})) {
 					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_parentData->{$colname}) && defined($p_parentData->{$colname})));
 					
-					push(@{$p_data_columns->[$colidx]}, $p_parentData->{$colname});
+					push(@{$p_data_columns->[$colidx]}, $p_parentData->{$colname})  unless($skip);
 					$columnData[$colidx] = $p_parentData->{$colname};
 				}
 			}
@@ -1215,13 +1219,14 @@ sub _bulkPrepare($) {
 				while(my($colname,$colidx)=each(%{$p_value_mapping})) {
 					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_entry->{$colname}) && defined($p_entry->{$colname})));
 					
-					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname});
+					push(@{$p_data_columns->[$colidx]}, $p_entry->{$colname})  unless($skip);
 					$columnData[$colidx] = $p_entry->{$colname};
 				}
 			}
 			
-			# Then, the submappings
-			foreach my $sub_key (keys(%{$p_sub_mappings})) {
+			# Then, the submappings (or a part of them)
+			my @sub_keys = $skip ? @{$p_mappings->[MAPPING_INCREMENTAL_UPDATE_SUBMAPPING_KEYS]} : keys(%{$p_sub_mappings});
+			foreach my $sub_key (@sub_keys) {
 				my $sub_mappings = $p_sub_mappings->{$sub_key};
 				if(exists($p_entry->{$sub_key}) || $sub_mappings->[MAPPING_TYPE]!=BP::Model::ColumnType::SCALAR_CONTAINER) {
 					# Then, building the parent data for the submappings which need it
