@@ -198,7 +198,7 @@ sub _genDestination($;$) {
 	my $destColl = $isTemp?'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1)):$correlatedConcept->concept->collection->path;
 	my $db = $self->connect();
 	
-	return [$db->get_collection($destColl),undef,undef];
+	return [$db->get_collection($destColl),$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
 }
 
 # _existingEntries parameters:
@@ -353,21 +353,36 @@ sub _incrementalUpdate($$) {
 	my $retval = undef;
 	
 	if(defined($p_destination->[2]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
-		$p_destination->[0]->update(
-			{
-				'_id'	=> $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID}
-			},
-			{
-				'$push'	=> { map { $_ => { '$each' => $p_entry->{$_} } } @{$p_destination->[2]} }
+		my @existingCols = ();
+		my $pushed = undef;
+		# Filtering out optional columns with no value
+		foreach my $columnName (@{$p_destination->[2]}) {
+			if(exists($p_entry->{$columnName})) {
+				push(@existingCols,$columnName);
+				$pushed=1;
 			}
-		);
-		my $db = $self->connect();
-		my $lastE = $db->last_error();
+		}
 		
-		if(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
-			$retval = 1;
+		if($pushed) {
+			$p_destination->[0]->update(
+				{
+					'_id'	=> $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID}
+				},
+				{
+					'$push'	=> { map { $_ => { '$each' => $p_entry->{$_} } } @existingCols }
+				}
+			);
+			my $db = $self->connect();
+			my $lastE = $db->last_error();
+			
+			if(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
+				$retval = 1;
+			} else {
+				Carp::croak("ERROR: Failed update. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+			}
 		} else {
-			Carp::croak("ERROR: Failed update. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+			# No-op, but it must not be inserted later!
+			$retval = 1;
 		}
 	}
 	

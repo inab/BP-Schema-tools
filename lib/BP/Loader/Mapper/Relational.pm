@@ -968,8 +968,8 @@ sub _genDestination($) {
 	tie(%destHash,'Tie::IxHash');
 	
 	my $__genDest = undef;
-	$__genDest = sub($$;\@$) {
-		my($basename,$columnSet,$p_colorder,$concept) = @_;
+	$__genDest = sub($$;\@$$) {
+		my($basename,$columnSet,$p_colorder,$concept,$p_incrementalColumns) = @_;
 		
 		$p_colorder = $columnSet->columnNames  unless(defined($p_colorder));
 		
@@ -988,7 +988,7 @@ sub _genDestination($) {
 		# 7. value_idx (the column which holds the value when it is an array of scalar values)
 		# 8. required columns
 		# 9. incremental update submapping keys
-		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef, {}, undef];
+		my $p_main_mappings = [ $basename, BP::Model::ColumnType::SET_CONTAINER, {}, {}, undef, undef, undef, undef, {}, $p_incrementalColumns];
 		
 		my $idx = 0;
 		my $colidx = 0;
@@ -1113,7 +1113,7 @@ sub _genDestination($) {
 	my @colorder = BP::Loader::Mapper::_fancyColumnOrdering($concept);
 	my $columnSet = $concept->columnSet;
 	
-	my $p_main_mappings = $__genDest->($desttable,$columnSet,\@colorder,$concept);
+	my $p_main_mappings = $__genDest->($desttable,$columnSet,\@colorder,$concept,$correlatedConcept->incrementalColumns);
 	
 	$__genDest = undef;
 	

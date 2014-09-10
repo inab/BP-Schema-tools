@@ -313,7 +313,7 @@ sub _genDestination($;$) {
 		type    => $mappingName
 	);
 	
-	return [$bes,undef,undef];
+	return [$bes,$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
 }
 
 # _existingEntries parameters:
@@ -491,14 +491,27 @@ sub _incrementalUpdate($$) {
 	my $retval = undef;
 	
 	if(defined($p_destination->[2]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
-		$p_destination->[0]->update({
-			id => $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID},
-			lang => 'mvel',
-			script => join('; ',map { 'ctx._source.'.$_.' += newdoc_'.$_ } @{$p_destination->[2]}),
-			params => {
-				map { ('newdoc_'.$_) => $p_entry->{$_} } @{$p_destination->[2]}
+		my @existingCols = ();
+		my $pushed = undef;
+		# Filtering out optional columns with no value
+		foreach my $columnName (@{$p_destination->[2]}) {
+			if(exists($p_entry->{$columnName})) {
+				push(@existingCols,$columnName);
+				$pushed=1;
 			}
-		});
+		}
+		
+		if($pushed) {
+			$p_destination->[0]->update({
+				id => $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID},
+				lang => 'mvel',
+				script => join('; ',map { 'ctx._source.'.$_.' += newdoc_'.$_ } @existingCols),
+				params => {
+					map { ('newdoc_'.$_) => $p_entry->{$_} } @existingCols
+				}
+			});
+		}
+		# No-op, but it must not be inserted later!
 		$retval = 1;
 	}
 	
