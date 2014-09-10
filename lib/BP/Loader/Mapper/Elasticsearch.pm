@@ -394,6 +394,12 @@ sub _existingEntries($$$) {
 		$scroll->finish;
 	}
 	
+	# Short circuiting this when it is empty
+	if($counter==0) {
+		$p_destination->[1] = undef;
+		$p_destination->[2] = undef;
+	}
+	
 	return $counter;
 }
 
