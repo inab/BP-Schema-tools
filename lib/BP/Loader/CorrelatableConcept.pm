@@ -27,6 +27,12 @@ use constant {
 
 our $NUMCPUS = Sys::CPU::cpu_count();
 
+our %SORTMAPS = (
+	BP::Model::ColumnType::INTEGER_TYPE	=>	'n',
+	BP::Model::ColumnType::DECIMAL_TYPE	=>	'g'
+);
+
+
 # Constructor parameters:
 #	concept: a BP::Model::Concept
 #	conceptFiles: the file(name)s with the content
