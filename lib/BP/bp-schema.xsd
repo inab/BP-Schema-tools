@@ -169,6 +169,38 @@
             </xs:choice>
         </xs:complexType>
     </xs:element>
+	
+	
+	<xs:element name="grouping-hints">
+		<xs:annotation>
+			<xs:documentation><![CDATA[This hint is parsed by BP::Loader::CorrelatableConcept, reading the 'grouping-hint' key]]></xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="grouping-columns">
+					<xs:annotation>
+						<xs:documentation><![CDATA[Grouping columns must be either required or idref, and they mustn't be compound ones or have array, set or hash attributions]]></xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="column" type="bp:columnNameType" minOccurs="1" maxOccurs="unbounded"/>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="incremental-columns">
+					<xs:annotation>
+						<xs:documentation><![CDATA[Incremental columns must have array or set attributions, and they cannot belong to the grouping columns set]]></xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="column" type="bp:columnNameType" minOccurs="1" maxOccurs="unbounded"/>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	
     
     <xs:element name="description">
         <xs:annotation>
@@ -191,6 +223,7 @@
                 <xs:choice minOccurs="1" maxOccurs="1">
                     <xs:element ref="bp:color" />
                     <xs:element ref="bp:ordering-hints" />
+                	<xs:element ref="bp:grouping-hints" />
                 </xs:choice>
             </xs:choice>
         	<xs:attribute name="key" type="bp:conceptTypeNameType" use="required">
