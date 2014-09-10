@@ -26,6 +26,7 @@ BEGIN {
 # The registered storage models
 our %storage_names;
 
+
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
 	['batch-size' => 20000],
@@ -231,17 +232,9 @@ sub _bulkInsert($\@) {
 	Carp::croak('Unimplemented method!');
 }
 
-# _incrementalUpdate parameters:
-#	destination: The destination of the bulk insertion.
-#	existingId: Id of the entry to update
-#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
-sub _incrementalUpdate($$\@) {
-	Carp::croak('Unimplemented method!');
-}
-
 # _existingEntries parameters:
 #	correlatedConcept: Either a BP::Model::Concept or a BP::Loader::CorrelatableConcept instance
-#	colNames: The column names to fetch with this scroll helper
+#	destination: The destination of the bulk insertion.
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
 sub _existingEntries($$$) {
@@ -259,26 +252,24 @@ sub bulkInsert(\@) {
 }
 
 # incrementalUpdate parameters:
-#	existingId: Id of the entry to update
-#	facetedBulkData: a reference to an array of arrays which are pairs of (facetName,bulkData)
+#	bulkData: a reference to an array of hashes which contain the values to update.
 sub incrementalUpdate($\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return $self->_incrementalUpdate($self->{_destination},@_);
+	return $self->bulkInsert(@_);
 }
 
 # existingEntries parameters:
-#	colNames: The column names to fetch with this scroll helper
 #	existingFile: Destination where the file is being saved
-# It dumps all the values of these columns to the file, and it returns the number of lines of the file
-sub existingEntries($$) {
+# It dumps all the values of the grouping columns to the file, and it returns the number of lines of the file
+sub existingEntries($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return $self->_existingEntries($self->{_correlatedConcept},@_);
+	return $self->_existingEntries($self->{_correlatedConcept},$self->{_destination},@_);
 }
 
 # parseOrderingHints parameters:
