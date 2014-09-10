@@ -587,4 +587,11 @@ sub createCollection($) {
 	Carp::croak('Unimplemented method!');
 }
 
+# _incrementalUpdate parameters:
+#	destination: The destination of the bulk insertion.
+#	p_entry: an entry to be updated
+sub _incrementalUpdate($$) {
+	Carp::croak('Unimplemented method!');
+}
+
 1;
