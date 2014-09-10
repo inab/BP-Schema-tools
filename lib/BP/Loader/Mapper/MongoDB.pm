@@ -301,19 +301,23 @@ sub _bulkInsert($\@) {
 	
 	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
-	my @insertBatch = ();
+	my $p_insertBatch = $p_batch;
 	
 	my $count = 0;
-	foreach my $p_entry (@{$p_batch}) {
-		unless($self->_incrementalUpdate($p_destination,$p_entry)) {
-			push(@insertBatch,$p_entry);
-		} else {
-			$count++;
+	if(defined($p_destination->[2])) {
+		my @insertBatch = ();
+		foreach my $p_entry (@{$p_batch}) {
+			unless($self->_incrementalUpdate($p_destination,$p_entry)) {
+				push(@insertBatch,$p_entry);
+			} else {
+				$count++;
+			}
 		}
+		$p_insertBatch = \@insertBatch;
 	}
 	
-	if(scalar(@insertBatch)>0) {
-		$count += $destination->batch_insert(\@insertBatch);
+	if(scalar(@{$p_insertBatch})>0) {
+		$count += $destination->batch_insert($p_insertBatch);
 		
 		my $db = $self->connect();
 		my $lastE = $db->last_error();

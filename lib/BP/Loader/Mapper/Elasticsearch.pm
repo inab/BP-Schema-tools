@@ -455,8 +455,12 @@ sub _bulkInsert($\@) {
 	
 	my @insertBatch = ();
 	
-	foreach my $p_entry (@{$p_batch}) {
-		push(@insertBatch,{ source => $p_entry })  unless($self->_incrementalUpdate($p_destination,$p_entry));
+	if(defined($p_destination->[2])) {
+		foreach my $p_entry (@{$p_batch}) {
+			push(@insertBatch,{ source => $p_entry })  unless($self->_incrementalUpdate($p_destination,$p_entry));
+		}
+	} else {
+		@insertBatch = map { { source => $_ } } @{$p_batch};
 	}
 	
 	$destination->index(@insertBatch)  if(scalar(@insertBatch)>0);
