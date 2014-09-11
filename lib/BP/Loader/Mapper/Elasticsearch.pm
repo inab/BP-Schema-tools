@@ -80,7 +80,7 @@ my %ABSTYPE2ES = (
 	BP::Model::ColumnType::DURATION_TYPE	=> ['string',['index' => 'not_analyzed']],
 	#BP::Model::ColumnType::COMPOUND_TYPE	=> ['object',undef],
 	# By default, compound types should be treated as 'nested'
-	BP::Model::ColumnType::COMPOUND_TYPE	=> ['nested',undef],
+	BP::Model::ColumnType::COMPOUND_TYPE	=> ['nested',['include_in_parent' => boolean::true]],
 );
 
 # Constructor parameters:
@@ -189,6 +189,7 @@ sub _FillMapping($) {
 			$p_typeDecl = {
 				'dynamic'	=> boolean::true,
 				'type'		=> 'nested',
+				'include_in_parent'	=> boolean::true,
 				'dynamic_templates'	=> [
 					{
 						'template_'.$columnName => {
