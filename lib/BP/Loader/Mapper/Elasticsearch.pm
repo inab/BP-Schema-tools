@@ -72,7 +72,7 @@ my @DEFAULTS = (
 
 my %ABSTYPE2ES = (
 	BP::Model::ColumnType::STRING_TYPE	=> ['string',['index' => 'not_analyzed']],
-	BP::Model::ColumnType::TEXT_TYPE	=> ['string',undef],
+	BP::Model::ColumnType::TEXT_TYPE	=> ['string',['include_in_all' => boolean::true]],
 	BP::Model::ColumnType::INTEGER_TYPE	=> ['long',undef],
 	BP::Model::ColumnType::DECIMAL_TYPE	=> ['double',undef],
 	BP::Model::ColumnType::BOOLEAN_TYPE	=> ['boolean',undef],
@@ -80,7 +80,7 @@ my %ABSTYPE2ES = (
 	BP::Model::ColumnType::DURATION_TYPE	=> ['string',['index' => 'not_analyzed']],
 	#BP::Model::ColumnType::COMPOUND_TYPE	=> ['object',undef],
 	# By default, compound types should be treated as 'nested'
-	BP::Model::ColumnType::COMPOUND_TYPE	=> ['nested',undef],
+	BP::Model::ColumnType::COMPOUND_TYPE	=> ['nested',['include_in_parent' => boolean::true]],
 );
 
 # Constructor parameters:
@@ -174,11 +174,35 @@ sub _FillMapping($) {
 	
 	my %mappingDesc = ();
 	
+	my %idColumnMap = map { $_ => undef } @{$p_columnSet->idColumnNames};
+	
 	foreach my $column (values(%{$p_columnSet->columns()})) {
 		my $columnType = $column->columnType();
+		my $columnName = $column->name();
 		my $esType = $ABSTYPE2ES{$columnType->type()};
 		
 		my %typeDecl = defined($esType->[1]) ? @{$esType->[1]}: ();
+		
+		my $p_typeDecl = \%typeDecl;
+		
+		if($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER) {
+			$p_typeDecl = {
+				'dynamic'	=> boolean::true,
+				'type'		=> 'nested',
+				'include_in_parent'	=> boolean::true,
+				'dynamic_templates'	=> [
+					{
+						'template_'.$columnName => {
+							'match'		=> '*',
+							'mapping'	=> $p_typeDecl,
+						}
+					}
+				]
+			};
+		}
+		
+		$typeDecl{'dynamic'} = boolean::false;	# 'strict' is too strict
+		
 		$typeDecl{'type'} = $esType->[0];
 		
 		# Is this a compound type?
@@ -186,11 +210,17 @@ sub _FillMapping($) {
 		if(Scalar::Util::blessed($restriction) && $restriction->isa('BP::Model::CompoundType')) {
 			my $p_subMapping = _FillMapping($restriction->columnSet);
 			@typeDecl{keys(%{$p_subMapping})} = values(%{$p_subMapping});
-		} elsif(defined($columnType->default()) && !ref($columnType->default())) {
-			$typeDecl{'null_value'} = $columnType->default();
+		} else {
+			if(exists($idColumnMap{$columnName})) {
+				$typeDecl{'include_in_all'} = boolean::true;
+			}
+			
+			if(defined($columnType->default()) && !ref($columnType->default())) {
+				$typeDecl{'null_value'} = $columnType->default();
+			}
 		}
 		
-		$mappingDesc{$column->name()} = \%typeDecl;
+		$mappingDesc{$columnName} = $p_typeDecl;
 	}
 	
 	return {
@@ -218,7 +248,6 @@ sub createCollection($) {
 	my $indexName = $collection->path;
 	
 	# At least, let's create the index
-	#$es->indices->delete('index' => $indexName);
 	$es->indices->create('index' => $indexName)  unless($es->indices->exists('index' => $indexName));
 	my $colid = $collection+0;
 	
@@ -226,7 +255,8 @@ sub createCollection($) {
 		foreach my $concept (@{$self->{_colConcept}{$colid}}) {
 			my $conceptId = $concept->id();
 			
-			#unless($es->indices->exists_type('index' => $indexName,type' => $conceptId)) {
+			#$es->indices->delete_mapping('index' => $indexName,'type' => $conceptId)  if($es->indices->exists_type('index' => $indexName,'type' => $conceptId));
+			#unless($es->indices->exists_type('index' => $indexName,'type' => $conceptId)) {
 				# Build the mapping
 				my $p_mappingDesc = _FillMapping($concept->columnSet());
 				
