@@ -363,14 +363,23 @@ sub validateAndEnactEntry($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $entorp = shift;
-	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
-	#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
+	my $entorp = undef;
+	my @entries = @_;
 	
-	foreach my $entry (@{$entorp}) {
-		# TODO
+	if(scalar(@entries) > 0) {
+		if(scalar(@entries)>1 || ref($entries[0]) ne 'ARRAY') {
+			$entorp = \@entries;
+		} else {
+			$entorp = $entries[0];
+		}
+		
+		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
+		
+		foreach my $entry (@{$entorp}) {
+			# TODO
+		}
 	}
-	
+
 	return $entorp;
 }
 
