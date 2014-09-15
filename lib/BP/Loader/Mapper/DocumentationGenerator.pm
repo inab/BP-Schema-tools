@@ -564,11 +564,15 @@ sub _ParseModelColor($) {
 		if($colorText =~ /^#([0-9a-fA-F]{3,6})$/) {
 			my $component = $1;
 			# Let's give it an upgrade
+			my @rgb = ();
+			
 			if(length($component)==3) {
-				$component = (substr($component,0,1) x 2) . (substr($component,1,1) x 2) . (substr($component,2,1) x 2);
+				@rgb = ( (substr($component,0,1) x 2) , (substr($component,1,1) x 2) , (substr($component,2,1) x 2) );
+			} else {
+				@rgb = ( substr($component,0,2) , substr($component,2,2) , substr($component,4,2) );
 			}
-			$colorModel = 'HTML';
-			push(@colorComponents,$component);
+			$colorModel = 'RGB';
+			push(@colorComponents,map { hex($_) } @rgb);
 		} elsif($colorText =~ /^rgb\(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]),([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\)$/) {
 			my $r = $1;
 			my $g = $2;
