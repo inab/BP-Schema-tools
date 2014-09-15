@@ -196,7 +196,7 @@ sub parseTab($;\%) {
 			next  if(length($cvline)==0);
 			
 			# Now, let's split the line
-			my @tok = split($sep,$cvline);
+			my @tok = split($sep,$cvline,-1);
 
 			# Reading/skipping the header
 			if(defined($doReadHeader)) {
@@ -303,7 +303,7 @@ sub parseTab($;\%) {
 			next  if(length($cvline)==0);
 			
 			# Now, let's split the line
-			my @tok = split($sep,$cvline);
+			my @tok = split($sep,$cvline,-1);
 
 			if(scalar(@tok)!=$numcols) {
 				Carp::croak("ERROR: Expected $numcols columns, got ".scalar(@tok));
