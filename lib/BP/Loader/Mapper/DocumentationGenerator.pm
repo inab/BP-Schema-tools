@@ -557,7 +557,7 @@ sub _ParseModelColor($) {
 	my @colorComponents = ();
 	
 	if(blessed($color) && $color->isa('XML::LibXML::Element')
-		&& $color->namespaceURI eq BP::Model::dccNamespace
+		&& $color->namespaceURI eq BP::Model::Common::dccNamespace
 		&& $color->localname eq 'color'
 	) {
 		my $colorText = $color->textContent();
@@ -601,10 +601,10 @@ sub _ParseOrderingHints($) {
 	
 	my $retvalBlock = undef;
 	if(blessed($ordHints) && $ordHints->isa('XML::LibXML::Element')
-		&& $ordHints->namespaceURI eq BP::Model::dccNamespace
+		&& $ordHints->namespaceURI eq BP::Model::Common::dccNamespace
 		&& $ordHints->localname eq 'ordering-hints'
 	) {
-		foreach my $block ($ordHints->getChildrenByTagNameNS(BP::Model::dccNamespace,'block')) {
+		foreach my $block ($ordHints->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'block')) {
 			$retvalBlock = $block->textContent;
 			last;
 		}

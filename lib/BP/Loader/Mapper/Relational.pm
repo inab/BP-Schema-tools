@@ -189,23 +189,23 @@ sub new($$) {
 	# These definitions are needed to generate the proper SQL sentences for hashes and arrays
 	#########
 	my $kdoc = XML::LibXML::Document->new('1.0','UTF-8');
-	my $root = $kdoc->createElementNS(BP::Model::dccNamespace,'column-set');
+	my $root = $kdoc->createElementNS(BP::Model::Common::dccNamespace,'column-set');
 	$kdoc->setDocumentElement($root);
 	
-	my $keyColumnElem = $kdoc->createElementNS(BP::Model::dccNamespace,'column');
+	my $keyColumnElem = $kdoc->createElementNS(BP::Model::Common::dccNamespace,'column');
 	$keyColumnElem->setAttribute('name','key');
 	$root->appendChild($keyColumnElem);
 
-	my $keyCT = $kdoc->createElementNS(BP::Model::dccNamespace,'column-type');
+	my $keyCT = $kdoc->createElementNS(BP::Model::Common::dccNamespace,'column-type');
 	$keyCT->setAttribute('column-kind','idref');
 	$keyCT->setAttribute('item-type','string');
 	$keyColumnElem->appendChild($keyCT);
 	
-	my $indexColumnElem = $kdoc->createElementNS(BP::Model::dccNamespace,'column');
+	my $indexColumnElem = $kdoc->createElementNS(BP::Model::Common::dccNamespace,'column');
 	$indexColumnElem->setAttribute('name','idx');
 	$root->appendChild($indexColumnElem);
 	
-	my $indexCT = $kdoc->createElementNS(BP::Model::dccNamespace,'column-type');
+	my $indexCT = $kdoc->createElementNS(BP::Model::Common::dccNamespace,'column-type');
 	$indexCT->setAttribute('column-kind','idref');
 	$indexCT->setAttribute('item-type','integer');
 	$indexColumnElem->appendChild($indexCT);

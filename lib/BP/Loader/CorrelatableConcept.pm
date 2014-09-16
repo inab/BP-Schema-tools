@@ -57,15 +57,15 @@ sub new($@) {
 	if(exists($self->{concept}->annotations->hash->{+ANNOTATION_GROUPING_HINT})) {
 		my $groupingHintElem = $self->{concept}->annotations->hash->{+ANNOTATION_GROUPING_HINT};
 		if(blessed($groupingHintElem) && $groupingHintElem->isa('XML::LibXML::Element')) {
-			my @groupingColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'grouping-columns');
+			my @groupingColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'grouping-columns');
 			if(scalar(@groupingColumnsElems) > 0) {
-				my @groupingColumns = map { $_->textContent } $groupingColumnsElems[0]->getChildrenByTagNameNS(BP::Model::dccNamespace,'column');
+				my @groupingColumns = map { $_->textContent } $groupingColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
 				
 				if(scalar(@groupingColumns) > 0) {
 				
-					my @incrementalColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::dccNamespace,'incremental-columns');
+					my @incrementalColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'incremental-columns');
 					if(scalar(@incrementalColumnsElems)>0) {
-						my @incrementalColumns = map { $_->textContent } $incrementalColumnsElems[0]->getChildrenByTagNameNS(BP::Model::dccNamespace,'column');
+						my @incrementalColumns = map { $_->textContent } $incrementalColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
 						
 						if(scalar(@incrementalColumns) > 0) {
 							# Let's validate both column sets!
