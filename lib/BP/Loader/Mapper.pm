@@ -177,6 +177,7 @@ sub setDestination($;$) {
 	
 	$self->{_destination} = $self->_genDestination(@_);
 	$self->{_correlatedConcept} = $correlatedConcept;
+	$self->{_concept} = $correlatedConcept->concept();
 }
 
 # getInternalDestination parameters:
@@ -214,6 +215,7 @@ sub freeDestination(;$) {
 		
 		$self->{_correlatedConcept}->closeFiles();
 		delete($self->{_correlatedConcept});
+		delete($self->{_concept});
 	}
 }
 
@@ -248,7 +250,7 @@ sub bulkInsert(\@) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $entorp = $self->validateAndEnactEntry(@_);
+	my $entorp = $self->{_concept}->validateAndEnactInstances(@_);
 	
 	$entorp = $self->_bulkPrepare($entorp);
 	
@@ -367,24 +369,7 @@ sub validateAndEnactEntry($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	my $entorp = undef;
-	my @entries = @_;
-	
-	if(scalar(@entries) > 0) {
-		if(scalar(@entries)>1 || ref($entries[0]) ne 'ARRAY') {
-			$entorp = \@entries;
-		} else {
-			$entorp = $entries[0];
-		}
-		
-		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
-		
-		foreach my $entry (@{$entorp}) {
-			# TODO
-		}
-	}
-
-	return $entorp;
+	return $self->{_concept}->validateAndEnactInstances(@_);
 }
 
 # mapData parameters:

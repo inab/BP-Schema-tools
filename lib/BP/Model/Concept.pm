@@ -363,4 +363,31 @@ sub id() {
 	return $id;
 }
 
+# validateAndEnactInstances parameters:
+# It validates the correctness of the entries in entorp, and it fills in-line the default values
+sub validateAndEnactInstances($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $entorp = undef;
+	my @entries = @_;
+	
+	if(scalar(@entries) > 0) {
+		if(scalar(@entries)>1 || ref($entries[0]) ne 'ARRAY') {
+			$entorp = \@entries;
+		} else {
+			$entorp = $entries[0];
+		}
+		
+		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
+		
+		foreach my $entry (@{$entorp}) {
+			# TODO
+		}
+	}
+
+	return $entorp;
+}
+
 1;
