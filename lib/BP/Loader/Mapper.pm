@@ -248,7 +248,11 @@ sub bulkInsert(\@) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
-	return $self->_bulkInsert($self->{_destination},@_);
+	my $entorp = $self->validateAndEnactEntry(@_);
+	
+	$entorp = $self->_bulkPrepare($entorp);
+	
+	return $self->_bulkInsert($self->{_destination},$entorp);
 }
 
 # incrementalUpdate parameters:
@@ -383,25 +387,6 @@ sub validateAndEnactEntry($) {
 	return $entorp;
 }
 
-# readEntry parameters:
-#	BMAX: The max number of entries to fetch
-# It reads the entry from the previously registered correlatedConcept
-# It returns a reference to a bulk of data which can be managed by bulkInsert
-sub readEntry($) {
-	my $self = shift;
-	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
-	
-	my $correlatedConcept = $self->{_correlatedConcept};
-	my $BMAX = shift;
-	
-	my $entorp = $correlatedConcept->readEntry($BMAX);
-	
-	$entorp = $self->validateAndEnactEntry($entorp);
-	
-	return $self->_bulkPrepare($entorp);
-}
-
 # mapData parameters:
 #	p_mainCorrelatableConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances.
 #	p_otherCorrelatedConcepts: a reference to an array of BP::Loader::CorrelatableConcept instances (the "free slaves" ones).
@@ -426,7 +411,7 @@ sub mapData(\@\@) {
 			# Let's store!!!!
 			my $errflag = undef;
 			my $batchData = undef;
-			for($batchData = $self->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $self->readEntry($BMAX)) {
+			for($batchData = $correlatedConcept->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $correlatedConcept->readEntry($BMAX)) {
 				$self->bulkInsert($batchData);
 			}
 			$self->freeDestination($errflag);
@@ -447,7 +432,7 @@ sub mapData(\@\@) {
 			# Let's store!!!!
 			my $errflag = undef;
 			my $batchData = undef;
-			for($batchData = $self->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $self->readEntry($BMAX)) {
+			for($batchData = $correlatedConcept->readEntry($BMAX) ; $correlatedConcept->eof() ; $batchData = $correlatedConcept->readEntry($BMAX)) {
 				$self->bulkInsert($batchData);
 			}
 			$self->freeDestination($errflag);
