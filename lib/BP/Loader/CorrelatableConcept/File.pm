@@ -1,5 +1,7 @@
 #!/usr/bin/perl -W
 
+use v5.12;
+no warnings qw(experimental);
 use strict;
 use Carp;
 use BP::Model;

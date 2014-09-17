@@ -1,7 +1,6 @@
 #!/usr/bin/perl -W
 
 use strict;
-use warnings;
 use Carp;
 use IO::File;	# For getline
 

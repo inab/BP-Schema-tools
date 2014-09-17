@@ -1,5 +1,6 @@
 #!/usr/bin/perl -W
 
+use v5.12;
 use strict;
 
 use Carp;
