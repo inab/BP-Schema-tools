@@ -49,7 +49,7 @@ sub parseIndex($) {
 	my $ind = shift;
 	
 	# Is index unique?, attributes (attribute name, ascending/descending)
-	my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[]);
+	my @index = (($ind->hasAttribute('unique') && $ind->getAttribute('unique') eq 'true')?1:undef,[],undef);
 
 	foreach my $attr ($ind->childNodes()) {
 		next  unless($attr->nodeType == XML::LibXML::XML_ELEMENT_NODE && $attr->localname eq 'attr');
@@ -83,6 +83,11 @@ sub isUnique {
 # attributes (attribute name, ascending/descending)
 sub indexAttributes {
 	return $_[0]->[1];
+}
+
+# The prefix of the index
+sub prefix {
+	return $_[0]->[2];
 }
 
 # hasValidColumns parameters:
@@ -130,23 +135,16 @@ sub relatedIndex($) {
 
 # This is a constructor
 # clonePrefixed parameters:
-#	prefix: The prefix to prepend to the column names.
+#	prefix: The prefix under the one live the columns.
 # This method returns a cloned BP::Model::Index instance, whose
 # attributes optionally have prepended the prefix given as input parameters
-sub clonePrefixed($) {
+sub clonePrefixed(;$) {
 	my $self = shift;
 	
 	my $prefix = shift;
 	
 	my @indexAttr = map { [@{$_}] } @{$self->indexAttributes};
-	my $retval = bless([$self->isUnique,\@indexAttr]);
-	
-	if(defined($prefix)) {
-		$prefix = $prefix . '.';
-		foreach my $attr (@indexAttr) {
-			$attr->[0] = $prefix . $attr->[0];
-		}
-	}
+	my $retval = bless([$self->isUnique,\@indexAttr,$prefix]);
 	
 	return $retval;
 }

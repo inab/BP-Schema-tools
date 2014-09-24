@@ -122,8 +122,10 @@ sub _EnsureIndexes($@) {
 	my($coll,@indexes) = @_;
 	foreach my $index  (@indexes) {
 		my $idxDecl = Tie::IxHash->new();
+		my $prefix = $index->prefix;
+		$prefix = defined($prefix) ? ($prefix.'.') : '';
 		foreach my $p_colIdx (@{$index->indexAttributes}) {
-			$idxDecl->Push(@{$p_colIdx});
+			$idxDecl->Push($prefix.$p_colIdx->[0],$p_colIdx->[1]);
 		}
 		$coll->ensure_index($idxDecl,{'unique'=>($index->isUnique?1:0)});
 	}
