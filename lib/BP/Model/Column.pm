@@ -227,4 +227,14 @@ sub cloneRelated($;$$$) {
 	return $retval;
 }
 
+sub derivedIndexes(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $prefix = shift;
+	
+	return $self->columnType->derivedIndexes(defined($prefix)?($prefix.'.'.$self->name):$self->name);
+}
+
 1;

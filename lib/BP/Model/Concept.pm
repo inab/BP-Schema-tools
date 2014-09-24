@@ -363,6 +363,15 @@ sub id() {
 	return $id;
 }
 
+# It returns an array of derived indexes
+sub derivedIndexes() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	return $self->columnSet->derivedIndexes();
+}
+
 # validateAndEnactInstances parameters:
 # It validates the correctness of the entries in entorp, and it fills in-line the default values
 sub validateAndEnactInstances($) {

@@ -154,4 +154,14 @@ sub isValid($) {
 	return $self->dataChecker->($val);
 }
 
+sub derivedIndexes($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $prefix = shift;
+	
+	return $self->columnSet->derivedIndexes($prefix);
+}
+
 1;

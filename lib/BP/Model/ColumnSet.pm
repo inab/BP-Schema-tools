@@ -244,6 +244,24 @@ sub indexes {
 	return $_[0]->[BP::Model::ColumnSet::INDEXES];
 }
 
+# derivedIndexes parameters:
+#	prefix: the prefix for the column names
+sub derivedIndexes(;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $prefix = shift;
+	
+	my @retval = map { $_->clonePrefixed($prefix) } @{$self->indexes};
+	
+	foreach my $column (values(%{$self->columns})) {
+		push(@retval,$column->derivedIndexes($prefix));
+	}
+	
+	return @retval;
+}
+
 # idColumns parameters:
 #	idConcept: The BP::Model::Concept instance owning the id columns
 #	doMask: Are the columns masked for storage?

@@ -488,4 +488,14 @@ sub clone(;$$) {
 	return $retval;
 }
 
+sub derivedIndexes($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $prefix = shift;
+	
+	return (Scalar::Util::blessed($self->restriction) && $self->restriction->can('derivedIndexes'))?$self->restriction->derivedIndexes($prefix):();
+}
+
 1;
