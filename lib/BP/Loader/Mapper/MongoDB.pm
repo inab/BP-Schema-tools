@@ -147,6 +147,16 @@ sub createCollection($) {
 	}
 	
 	# And now, let's fetch all the index declarations related to all the concepts being stored here
+	my $colid = $collection+0;
+	if(exists($self->{_colConcept}{$colid})) {
+		foreach my $concept (@{$self->{_colConcept}{$colid}}) {
+			my @derivedIndexes = $concept->derivedIndexes();
+			
+			_EnsureIndexes($coll,@derivedIndexes)  if(scalar(@derivedIndexes) > 0);
+			
+			# TODO: deal with weak entities
+		}
+	}
 	
 	return $coll;
 }
