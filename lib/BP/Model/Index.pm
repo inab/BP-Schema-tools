@@ -128,4 +128,27 @@ sub relatedIndex($) {
 	return $retval;
 }
 
+# This is a constructor
+# clonePrefixed parameters:
+#	prefix: The prefix to prepend to the column names.
+# This method returns a cloned BP::Model::Index instance, whose
+# attributes optionally have prepended the prefix given as input parameters
+sub clonePrefixed($) {
+	my $self = shift;
+	
+	my $prefix = shift;
+	
+	my @indexAttr = map { [@{$_}] } @{$self->indexAttributes};
+	my $retval = bless([$self->isUnique,\@indexAttr]);
+	
+	if(defined($prefix)) {
+		$prefix = $prefix . '.';
+		foreach my $attr (@indexAttr) {
+			$attr->[0] = $prefix . $attr->[0];
+		}
+	}
+	
+	return $retval;
+}
+
 1;
