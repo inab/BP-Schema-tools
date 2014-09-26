@@ -169,24 +169,28 @@ sub storeNativeModel() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $metadataCollection = undef;
+	if(defined($self->{model}->metadataCollection())) {
+		$metadataCollection = $self->{model}->metadataCollection();
+		$metadataCollection->clearIndexes();
+		# Let's add the needed meta-indexes for CV terms
+		$metadataCollection->addIndexes(BP::Model::Index->new('terms',undef,['term',1]),BP::Model::Index->new('terms',undef,['parents',1]),BP::Model::Index->new('terms',undef,['ancestors',1]));
+	}	
+	
 	# First, let's create the collections and their indexes
 	foreach my $collection (values(%{$self->{model}->collections})) {
 		$self->createCollection($collection);
 	}
 	
 	# Do we have to store the JSON description of the model?
-	if(defined($self->{model}->metadataCollection())) {
+	if(defined($metadataCollection)) {
 		my $p_generatedObjects = $self->generateNativeModel(undef,exists($self->{_BSONSIZE})?$self->{_BSONSIZE}:undef,$self->{'max-array-terms'});
 		
-		my $metadataCollection = $self->{model}->metadataCollection();
-		$metadataCollection->clearIndexes();
-		# Let's add the needed meta-indexes for CV terms
-		$metadataCollection->addIndexes(BP::Model::Index->new(undef,['terms.term',1]),BP::Model::Index->new(undef,['terms.parents',1]),BP::Model::Index->new(undef,['terms.ancestors',1]));
-		
-		my $metaColl = $self->createCollection($metadataCollection);
+		my $db = $self->connect();
+		my $metaColl = [$db->get_collection($metadataCollection->path),undef,undef];
 		
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
-			$self->bulkInsert($metaColl,[$p_generatedObject]);
+			$self->_bulkInsert($metaColl,$self->_bulkPrepare($p_generatedObject));
 		}
 	}
 }

@@ -304,14 +304,21 @@ sub storeNativeModel() {
 	#	$self->createCollection($metadataCollection);
         #
 	#	# Fourth, insert
-	#	my $cvdest = $self->getDestination($cvConcept);
-	#	my $modeldest = $self->getDestination($modelConcept);
-	#	
+	#	$self->setDestination($modelConcept);
 	#	foreach my $p_generatedObject (@{$p_generatedObjects}) {
-	#		my $dest = (exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}))?$cvdest:$modeldest;
+	#		next  if(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
 	#		
-	#		$self->bulkInsert($dest,[ {'index' => $p_generatedObject} ]);
+	#		$self->bulkInsert($p_generatedObject);
 	#	}
+	#	$self->freeDestination();
+	#
+	#	$self->setDestination($cvConcept);
+	#	foreach my $p_generatedObject (@{$p_generatedObjects}) {
+	#		next  unless(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
+	#		
+	#		$self->bulkInsert($p_generatedObject);
+	#	}
+	#	$self->freeDestination();
 	#}
 }
 

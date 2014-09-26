@@ -62,17 +62,19 @@ sub parseIndex($) {
 
 # This is the constructor
 # new parameters:
+#	prefix: A prefix for the index declaration
 #	isUnique: Whether the index is unique or not
-#	indexColumns: The columns, i.e. an array of pairs [column name,ascending(1)/descending(-1) ordering]
-sub new($@) {
+#	indexAttributes: The columns, i.e. an array of pairs [column name,ascending(1)/descending(-1) ordering]
+sub new($$@) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
 	
+	my $prefix = shift;
 	my $isUnique = shift;
-	my @indexColumns = @_;
+	my @indexAttributes = @_;
 	
-	return bless([$isUnique,\@indexColumns],$class);
+	return bless([$isUnique,\@indexAttributes,$prefix],$class);
 }
 
 # Is index unique?
