@@ -247,7 +247,7 @@ sub BP::Model::ColumnType::TO_JSON() {
 	
 	if(defined($self->default)) {
 		if(ref($self->default)) {
-			$jsonColumnType{'defaultCol'} = blessed($self->default->name)?$self->default->name:${$self->default};
+			$jsonColumnType{'defaultCol'} = blessed($self->default)?$self->default->name:${$self->default};
 		} else {
 			$jsonColumnType{'default'} = $self->default;
 		}
