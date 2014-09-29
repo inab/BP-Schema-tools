@@ -242,7 +242,7 @@ sub BP::Model::ColumnType::TO_JSON() {
 	my %jsonColumnType = (
 		'type'	=> $self->type,
 		'use'	=> $self->use,
-		'isArray'	=> boolean::boolean(defined($self->arraySeps)),
+		'isArray'	=> boolean::boolean(defined($self->arraySeps) || defined($self->setSeps)),
 	);
 	
 	if(defined($self->default)) {
@@ -356,7 +356,7 @@ sub _TO_JSON($;$$$) {
 	my($val,$colpath,$bsonsize,$maxterms)=@_;
 	
 	# First step
-	$val = $val->TO_JSON()  if(blessed($val) && $val->can('TO_JSON'));
+	$val = $val->TO_JSON()  if(blessed($val) && $val->can('TO_JSON') && !$val->isa('boolean'));
 	
 	my @results = ();
 	
