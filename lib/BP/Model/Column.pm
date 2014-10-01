@@ -234,7 +234,7 @@ sub derivedIndexes(;$) {
 	
 	my $prefix = shift;
 	
-	return $self->columnType->derivedIndexes(defined($prefix)?($prefix.'.'.$self->name):$self->name);
+	return $self->columnType->derivedIndexes($prefix,$self->name);
 }
 
 1;

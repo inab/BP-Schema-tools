@@ -488,14 +488,25 @@ sub clone(;$$) {
 	return $retval;
 }
 
-sub derivedIndexes($) {
+sub derivedIndexes($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $prefix = shift;
+	my $columnName = shift;
 	
-	return (Scalar::Util::blessed($self->restriction) && $self->restriction->can('derivedIndexes'))?$self->restriction->derivedIndexes($prefix):();
+	# The full text index
+	my @declIndex = ();
+	if($self->type eq BP::Model::ColumnType::TEXT_TYPE && $self->containerType ne BP::Model::ColumnType::HASH_CONTAINER) {
+		push(@declIndex,BP::Model::Index->new($prefix,undef,[$columnName => 'text']));
+	} elsif(Scalar::Util::blessed($self->restriction) && $self->restriction->can('derivedIndexes')) {
+		# Preparing the real prefix
+		$prefix = defined($prefix)?($prefix.'.'.$columnName):$columnName;
+		push(@declIndex,$self->restriction->derivedIndexes($prefix));
+	}
+	
+	return @declIndex;
 }
 
 1;
