@@ -16,6 +16,8 @@ use constant FILE_PREFIX_KEY => 'file-prefix';
 # This constant is a key which flags a switch from insertion to incremental update
 use constant COL_INCREMENTAL_UPDATE_ID => '_incrementalUpdateId';
 
+use constant BATCH_SIZE_KEY => 'batch-size';
+
 our $SECTION;
 our $DEFAULTSECTION;
 BEGIN {
@@ -29,7 +31,7 @@ our %storage_names;
 
 my @DEFAULTS = (
 	[BP::Loader::Mapper::FILE_PREFIX_KEY => 'model'],
-	['batch-size' => 20000],
+	[BP::Loader::Mapper::BATCH_SIZE_KEY => 20000],
 	['release' => 'true'],
 );
 
@@ -97,6 +99,10 @@ sub new($$) {
 	
 	# "Digitalizing" release configuration variable
 	$self->{release}=(defined($self->{release}) && ($self->{release} eq 'true' || $self->{release} eq '1'))?1:undef;
+	
+	# The upsert queue (it can be overriden in the subclasses)
+	$self->{_queue} = [];
+	$self->{_queued} = 0;
 	
 	return $self;
 }
@@ -209,7 +215,9 @@ sub freeDestination(;$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
+	my $retval = undef;
 	if(exists($self->{_destination})) {
+		$retval = $self->flush();
 		$self->_freeDestination($self->{_destination},@_);
 		delete($self->{_destination});
 		
@@ -217,6 +225,8 @@ sub freeDestination(;$) {
 		delete($self->{_correlatedConcept});
 		delete($self->{_concept});
 	}
+	
+	return $retval;
 }
 
 # _bulkPrepare parameters:
@@ -243,18 +253,62 @@ sub _existingEntries($$$) {
 	Carp::croak('Unimplemented method!');
 }
 
+# bulkBatchSize takes no parameters.
+# It returns the batch size used
+sub bulkBatchSize {
+	return $_[0]->{+BATCH_SIZE_KEY};
+}
+
 # bulkInsert parameters:
 #	bulkData: a reference to an array of hashes which contain the values to store.
+# It returns the number of queued entries, or the result of last batch upsert
 sub bulkInsert(\@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $entorp = $self->{_concept}->validateAndEnactInstances(@_);
+	if($self->{_queue}) {
+		push(@{$self->{_queue}},@{$entorp});
+		my $numEntorp = scalar(@{$entorp});
+		$self->{_queued} += $numEntorp;
+		
+		if($self->{_queued} >= $self->bulkBatchSize) {
+			# Over the watermark we write all of them
+			$entorp = $self->{_queue};
+			$self->{_queue} = [];
+			$self->{_queued} = 0;
+		} else {
+			return $numEntorp;
+		}
+	}
 	
-	$entorp = $self->_bulkPrepare($entorp);
+	if(defined($entorp)) {
+		$entorp = $self->_bulkPrepare($entorp);
 	
-	return $self->_bulkInsert($self->{_destination},$entorp);
+		return $self->_bulkInsert($self->{_destination},$entorp);
+	}
+	
+	return undef;
+}
+
+# flush takes no parameter:
+# It sends pending upserts to the database
+sub flush() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $retval = undef;
+	if($self->{_queue} && $self->{_queued} > 0) {
+		my $entorp = $self->_bulkPrepare($self->{_queue});
+		$retval = $self->_bulkInsert($self->{_destination},$entorp);
+		
+		$self->{_queue} = [];
+		$self->{_queued}  = 0;
+	}
+	
+	return $retval;
 }
 
 # incrementalUpdate parameters:
@@ -383,7 +437,7 @@ sub mapData(\@\@) {
 	my $p_mainCorrelatableConcepts = shift;
 	my $p_otherCorrelatedConcepts = shift;
 	
-	my $BMAX = $self->{'batch-size'};
+	my $BMAX = $self->bulkBatchSize;
 	
 	my $db = $self->connect();
 	
@@ -430,6 +484,13 @@ sub mapData(\@\@) {
 			Carp::croak("ERROR: While storing the main concepts. Reason: $@");
 		}
 	}
+}
+
+sub DESTROY {
+	my $self = shift;
+	
+	# Assuring all writes are performed
+	$self->freeDestination();
 }
 
 1;

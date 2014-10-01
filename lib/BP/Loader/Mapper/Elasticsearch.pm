@@ -132,6 +132,9 @@ sub new($$) {
 		}
 	}
 	
+	# We don't need the internal queue
+	$self->{_queue} = undef;
+	
 	return $self;
 }
 
@@ -345,10 +348,13 @@ sub _genDestination($;$) {
 	my $mappingName = $concept->id();
 	
 	my $es = $self->connect();
-	my $bes = $es->bulk_helper(
+	my @bes_params = (
 		index   => $indexName,
-		type    => $mappingName
+		type    => $mappingName,
 	);
+	
+	push(@bes_params,'max_count' => $self->bulkBatchSize)  if($self->bulkBatchSize);
+	my $bes = $es->bulk_helper(@bes_params);
 	
 	return [$bes,$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
 }
@@ -509,6 +515,20 @@ sub _bulkInsert($\@) {
 	$destination->index(@insertBatch)  if(scalar(@insertBatch)>0);
 	
 	return 1;
+}
+
+# flush takes no parameter:
+# It sends pending upserts to the database
+sub flush() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $p_destination = $self->getInternalDestination;
+	my $retval = undef;
+	$retval = $p_destination->[0]->flush()  if($p_destination);
+	
+	return $retval;
 }
 
 # _incrementalUpdate parameters:

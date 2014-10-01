@@ -97,6 +97,31 @@ sub _connect() {
 	return $db;
 }
 
+# existsDestination parameters:
+#	collection: a BP::Model::Collection instance
+# It returns true if the collection was already created
+sub existsDestination($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $destName = $collection->path;
+	
+	my $db = $self->connect();
+	
+	my @collNames = $db->collection_names();
+	
+	foreach my $collName (@collNames) {
+		return 1  if($collName eq $destName);
+	}
+	
+	return undef;
+}
+
 # getNativeDestination parameters:
 #	collection: a BP::Model::Collection instance
 # It returns a native collection object, to be used by bulkInsert, for instance
@@ -120,11 +145,15 @@ sub getNativeDestination($) {
 #	indexes: An array of BP::Model::Index instances
 sub _EnsureIndexes($@) {
 	my($coll,@indexes) = @_;
+	INDEXCREAT:
 	foreach my $index  (@indexes) {
 		my $idxDecl = Tie::IxHash->new();
 		my $prefix = $index->prefix;
 		$prefix = defined($prefix) ? ($prefix.'.') : '';
 		foreach my $p_colIdx (@{$index->indexAttributes}) {
+			# MongoDB 2.4.x and 2.6.x cannot create more than one text index on a given collection (sigh)
+			next INDEXCREAT  if($p_colIdx->[1] eq 'text');
+			
 			$idxDecl->Push($prefix.$p_colIdx->[0],$p_colIdx->[1]);
 		}
 		$coll->ensure_index($idxDecl,{'unique'=>($index->isUnique?1:0)});
@@ -170,12 +199,15 @@ sub storeNativeModel() {
 	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
 	
 	my $metadataCollection = undef;
+	my $metadataExists = undef;
 	if(defined($self->{model}->metadataCollection())) {
 		$metadataCollection = $self->{model}->metadataCollection();
+		# This must be checked before the creation of the collections
+		$metadataExists = $self->existsDestination($metadataCollection);
 		$metadataCollection->clearIndexes();
 		# Let's add the needed meta-indexes for CV terms
 		$metadataCollection->addIndexes(BP::Model::Index->new('terms',undef,['term',1]),BP::Model::Index->new('terms',undef,['parents',1]),BP::Model::Index->new('terms',undef,['ancestors',1]));
-	}	
+	}
 	
 	# First, let's create the collections and their indexes
 	foreach my $collection (values(%{$self->{model}->collections})) {
@@ -183,7 +215,7 @@ sub storeNativeModel() {
 	}
 	
 	# Do we have to store the JSON description of the model?
-	if(defined($metadataCollection)) {
+	if(defined($metadataCollection) && !$metadataExists) {
 		my $p_generatedObjects = $self->generateNativeModel(undef,exists($self->{_BSONSIZE})?$self->{_BSONSIZE}:undef,$self->{'max-array-terms'});
 		
 		my $db = $self->connect();
@@ -213,8 +245,9 @@ sub _genDestination($;$) {
 	
 	my $destColl = $isTemp?'TEMP_'.$correlatedConcept->concept->key.'_'.int(rand(2**32-1)):$correlatedConcept->concept->collection->path;
 	my $db = $self->connect();
+	my $destination = $db->get_collection($destColl);
 	
-	return [$db->get_collection($destColl),$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
+	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
 }
 
 # _existingEntries parameters:
@@ -339,14 +372,23 @@ sub _bulkInsert($\@) {
 	}
 	
 	if(scalar(@{$p_insertBatch})>0) {
-		$count += $destination->batch_insert($p_insertBatch);
-		
-		my $db = $self->connect();
-		my $lastE = $db->last_error();
-		
-		unless(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
-			Carp::croak("ERROR: Failed batch insert. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+		my $bulk = $destination->initialize_unordered_bulk_op();
+		foreach my $p_entry (@{$p_insertBatch}) {
+			$bulk->insert($p_entry);
 		}
+		
+		my $result = $bulk->execute();
+		$count += $result->nInserted;
+		
+		#my @ids = $destination->batch_insert($p_insertBatch);
+		#$count += scalar(@ids);
+		#
+		#my $db = $self->connect();
+		#my $lastE = $db->last_error();
+		#
+		#unless(exists($lastE->{ok}) && $lastE->{ok} eq '1') {
+		#	Carp::croak("ERROR: Failed batch insert. Reason: ".$lastE->{err}.' '.$lastE->{errmsg});
+		#}
 	}
 	
 	return $count;
