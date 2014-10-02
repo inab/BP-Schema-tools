@@ -356,7 +356,7 @@ sub _genDestination($;$) {
 	push(@bes_params,'max_count' => $self->bulkBatchSize)  if($self->bulkBatchSize);
 	my $bes = $es->bulk_helper(@bes_params);
 	
-	return [$bes,$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
+	return [$bes,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames];
 }
 
 # _existingEntries parameters:

@@ -133,13 +133,15 @@ sub eof {
 	return exists($_[0]->{eof});
 }
 
-# The defined groupingColumnsNames
+# The defined groupingColumnNames
 sub groupingColumnNames {
 	return exists($_[0]->{groupingColumnNames})?$_[0]->{groupingColumnNames}:undef;
 }
 
 sub groupingColumns {
-	return $_[0]->groupingColumnNames;
+	my $self = shift;
+	
+	return exists($self->{groupingColumnNames})?[@{$self->{concept}->columnSet->columns}{@{$self->{groupingColumnNames}}}]:undef;
 }
 
 # The defined incrementalColumnNames
@@ -148,7 +150,9 @@ sub incrementalColumnNames {
 }
 
 sub incrementalColumns {
-	return $_[0]->incrementalColumnNames;
+	my $self = shift;
+	
+	return exists($self->{incrementalColumnNames})?[@{$self->{concept}->columnSet->columns}{@{$self->{incrementalColumnNames}}}]:undef;
 }
 
 # Labelling this correlating concept as 'slave' of the identifying one, so it is going

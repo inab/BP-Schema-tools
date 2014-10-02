@@ -234,7 +234,8 @@ sub storeNativeModel() {
 # It returns a reference to a three element array:
 #	a MongoDB::Collection instance
 #	a list of keys corresponding to the grouping keys used for incremental updates
-#	a list of keys corresponding to the submappings taken into account for incremental updates
+#	a list of key names corresponding to the grouping keys used for incremental updates
+#	a list of key names corresponding to the submappings taken into account for incremental updates
 sub _genDestination($;$) {
 	my $self = shift;
 	
@@ -247,15 +248,21 @@ sub _genDestination($;$) {
 	my $db = $self->connect();
 	my $destination = $db->get_collection($destColl);
 	
-	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->incrementalColumns];
+	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames];
 }
+
+my %ISMONGOTEXT = (
+	BP::Model::ColumnType::STRING_TYPE => undef,
+	BP::Model::ColumnType::TEXT_TYPE => undef,
+);
 
 # _existingEntries parameters:
 #	correlatedConcept: Either a BP::Model::Concept or a BP::Loader::CorrelatableConcept instance
 #	p_destination: An array with
 #		a MongoDB::Collection instance
 #		a list of keys corresponding to the grouping keys used for incremental updates
-#		a list of keys corresponding to the submappings taken into account for incremental updates
+#		a list of key names corresponding to the grouping keys used for incremental updates
+#		a list of key names corresponding to the submappings taken into account for incremental updates
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
 sub _existingEntries($$$) {
@@ -272,11 +279,39 @@ sub _existingEntries($$$) {
 	my $counter = 0;
 	if(defined($p_destination->[1])) {
 		my $destination  = $p_destination->[0];
-		my $p_colNames = $p_destination->[1];
+		my $p_cols = $p_destination->[1];
+		my $p_colNames = $p_destination->[2];
 		
 		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 		
-		my $cursor = $destination->query->fields({map { $_ => 1 } @{$p_colNames}});
+		#my $cursor = $destination->query->snapshot->fields({map { $_ => 1 } @{$p_colNames}});
+		
+		my @projections;
+		my %projectionString = ();
+		my $p_projectionString;
+		
+		foreach my $column (@{$p_cols}) {
+			unless(exists($ISMONGOTEXT{$column->columnType->type})) {
+				$projectionString{$column->name} = { '$substr' => [ '$'.$column->name, 0, -1 ] };
+				$p_projectionString = \%projectionString;
+			} else {
+				$projectionString{$column->name} = 1;
+			}
+		}
+		
+		push(@projections,{'$project' => $p_projectionString})  if(defined($p_projectionString));
+		
+		my @qTokens = map { '$'.$_ => "\t" } @{$p_colNames};
+		$qTokens[-1] = "\n";
+		push(@projections,{
+			'$project' => {
+				'_c_' => {
+					'$concat' => \@qTokens
+				}
+			}
+		});
+		
+		my $cursor = $destination->aggregate(\@projections,{'cursor' => {'batchSize' => 5000}});
 		
 		my $sortColDef = '';
 		my $kidx = 2;
@@ -294,9 +329,8 @@ sub _existingEntries($$$) {
 				$counter ++;
 			#	#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
 			#	#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
-			#	#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
-			#	print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
-				print $EXISTING join("\t",@{$doc}{'_id',@{$p_colNames}}),"\n";
+			#	print $EXISTING join("\t",@{$doc}{'_id',@{$p_colNames}}),"\n";
+				print $EXISTING $doc->{_id},"\t",$doc->{_c_};
 			}
 			close($EXISTING);
 		}
@@ -306,6 +340,7 @@ sub _existingEntries($$$) {
 	if($counter==0) {
 		$p_destination->[1] = undef;
 		$p_destination->[2] = undef;
+		$p_destination->[3] = undef;
 	}
 	
 	return $counter;
@@ -315,7 +350,8 @@ sub _existingEntries($$$) {
 #	p_destination: An array with
 #		a MongoDB::Collection instance
 #		a list of keys corresponding to the grouping keys used for incremental updates
-#		a list of keys corresponding to the submappings taken into account for incremental updates
+#		a list of key names corresponding to the grouping keys used for incremental updates
+#		a list of key names corresponding to the submappings taken into account for incremental updates
 #	errflag: The error flag
 # As it is not needed to explicitly free them, it is an empty method.
 sub _freeDestination($$) {
@@ -339,7 +375,8 @@ sub _bulkPrepare($) {
 #	p_destination: An array with
 #		a MongoDB::Collection instance
 #		a list of keys corresponding to the grouping keys used for incremental updates
-#		a list of keys corresponding to the submappings taken into account for incremental updates
+#		a list of key names corresponding to the grouping keys used for incremental updates
+#		a list of key names corresponding to the submappings taken into account for incremental updates
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
@@ -359,7 +396,7 @@ sub _bulkInsert($\@) {
 	my $p_insertBatch = $p_batch;
 	
 	my $count = 0;
-	if(defined($p_destination->[2])) {
+	if(defined($p_destination->[3])) {
 		my @insertBatch = ();
 		foreach my $p_entry (@{$p_batch}) {
 			unless($self->_incrementalUpdate($p_destination,$p_entry)) {
@@ -398,7 +435,8 @@ sub _bulkInsert($\@) {
 #	p_destination: An array with
 #		a MongoDB::Collection instance
 #		a list of keys corresponding to the grouping keys used for incremental updates
-#		a list of keys corresponding to the submappings taken into account for incremental updates
+#		a list of key names corresponding to the grouping keys used for incremental updates
+#		a list of key names corresponding to the submappings taken into account for incremental updates
 #	p_entry: The entry to be incrementally updated
 sub _incrementalUpdate($$) {
 	my $self = shift;
@@ -410,11 +448,11 @@ sub _incrementalUpdate($$) {
 	
 	my $retval = undef;
 	
-	if(defined($p_destination->[2]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
+	if(defined($p_destination->[3]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
 		my @existingCols = ();
 		my $pushed = undef;
 		# Filtering out optional columns with no value
-		foreach my $columnName (@{$p_destination->[2]}) {
+		foreach my $columnName (@{$p_destination->[3]}) {
 			if(exists($p_entry->{$columnName})) {
 				push(@existingCols,$columnName);
 				$pushed=1;
