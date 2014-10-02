@@ -59,22 +59,22 @@ sub new($@) {
 		if(blessed($groupingHintElem) && $groupingHintElem->isa('XML::LibXML::Element')) {
 			my @groupingColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'grouping-columns');
 			if(scalar(@groupingColumnsElems) > 0) {
-				my @groupingColumns = map { $_->textContent } $groupingColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
+				my @groupingColumnNames = map { $_->textContent } $groupingColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
 				
-				if(scalar(@groupingColumns) > 0) {
+				if(scalar(@groupingColumnNames) > 0) {
 				
 					my @incrementalColumnsElems = $groupingHintElem->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'incremental-columns');
 					if(scalar(@incrementalColumnsElems)>0) {
-						my @incrementalColumns = map { $_->textContent } $incrementalColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
+						my @incrementalColumnNames = map { $_->textContent } $incrementalColumnsElems[0]->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column');
 						
-						if(scalar(@incrementalColumns) > 0) {
+						if(scalar(@incrementalColumnNames) > 0) {
 							# Let's validate both column sets!
 							my $columnHash = $self->{concept}->columnSet->columns;
 							
 							# Grouping columns must be either required or idref
 							# and they mustn't be compound ones or have
 							# array, set or hash attributions
-							foreach my $columnName (@groupingColumns) {
+							foreach my $columnName (@groupingColumnNames) {
 								if(exists($columnHash->{$columnName})) {
 									my $columnType = $columnHash->{$columnName}->columnType;
 									
@@ -96,7 +96,7 @@ sub new($@) {
 							
 							# Incremental columns must have array or set attributions
 							# and they cannot belong to the grouping columns set
-							foreach my $columnName (@incrementalColumns) {
+							foreach my $columnName (@incrementalColumnNames) {
 								if(exists($columnHash->{$columnName})) {
 									my $columnType = $columnHash->{$columnName}->columnType;
 									
@@ -109,8 +109,8 @@ sub new($@) {
 							}
 							
 							# Now, save them!
-							$self->{groupingColumns} = \@groupingColumns;
-							$self->{incrementalColumns} = \@incrementalColumns;
+							$self->{groupingColumnNames} = \@groupingColumnNames;
+							$self->{incrementalColumnNames} = \@incrementalColumnNames;
 						}
 					}
 				}
@@ -133,14 +133,22 @@ sub eof {
 	return exists($_[0]->{eof});
 }
 
-# The defined groupingColumns
-sub groupingColumns {
-	return exists($_[0]->{groupingColumns})?$_[0]->{groupingColumns}:undef;
+# The defined groupingColumnsNames
+sub groupingColumnNames {
+	return exists($_[0]->{groupingColumnNames})?$_[0]->{groupingColumnNames}:undef;
 }
 
-# The defined incrementalColumns
+sub groupingColumns {
+	return $_[0]->groupingColumnNames;
+}
+
+# The defined incrementalColumnNames
+sub incrementalColumnNames {
+	return exists($_[0]->{incrementalColumnNames})?$_[0]->{incrementalColumnNames}:undef;
+}
+
 sub incrementalColumns {
-	return exists($_[0]->{incrementalColumns})?$_[0]->{incrementalColumns}:undef;
+	return $_[0]->incrementalColumnNames;
 }
 
 # Labelling this correlating concept as 'slave' of the identifying one, so it is going
