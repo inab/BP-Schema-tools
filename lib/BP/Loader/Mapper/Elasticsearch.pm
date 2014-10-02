@@ -399,7 +399,13 @@ sub _existingEntries($$$) {
 			'body'	=> {
 				#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
 				# Each fetched document comes with its unique identifier
-				'fields'=> $p_colNames,
+				'script_fields' => {
+					'_c_' => {
+						'script' => (join('+"\t"+',map { '_fields.'.$_.'.value' } ('_id',@{$p_colNames})).'+"\n"')
+					}
+				},
+				#'fields'=> $p_colNames,
+				'fields' => [],
 				'query'	=> {
 					'match_all' => {}
 				}
@@ -426,9 +432,8 @@ sub _existingEntries($$$) {
 			#		#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
 					my $fields = $doc->{fields};
 			#		#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
-			#		#print $O join("\t",$doc->{_id},exists($fields->{chromosome})?@{$fields->{chromosome}}:(),exists($fields->{chromosome_start})?@{$fields->{chromosome_start}}:(),exists($doc->{mutated_from_allele})?@{$doc->{mutated_from_allele}}:(),exists($fields->{mutated_to_allele})?@{$fields->{mutated_to_allele}}:()),"\n";
-			#		print $O join("\t",$doc->{_id},$fields->{chromosome}[0],$fields->{chromosome_start}[0],$fields->{mutated_from_allele}[0],$fields->{mutated_to_allele}[0]),"\n";
-					print $EXISTING join("\t",$doc->{_id},map { $fields->{$_}[0] } @{$p_colNames}),"\n";
+					#print $EXISTING join("\t",$doc->{_id},map { $fields->{$_}[0] } @{$p_colNames}),"\n";
+					print $EXISTING $fields->{_c_}[0];
 				}
 			}
 			close($EXISTING);
