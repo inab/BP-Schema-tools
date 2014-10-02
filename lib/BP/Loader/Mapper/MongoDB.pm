@@ -276,7 +276,7 @@ sub _existingEntries($$$) {
 		
 		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 		
-		my $cursor = $destination->query->fields(map { { $_ => 1 } } @{$p_colNames});
+		my $cursor = $destination->query->fields({map { $_ => 1 } @{$p_colNames}});
 		
 		my $sortColDef = '';
 		my $kidx = 2;
