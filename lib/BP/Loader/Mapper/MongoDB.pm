@@ -31,6 +31,11 @@ my @DEFAULTS = (
 	['max-array-terms' => 256]
 );
 
+# This one mimics elasticsearch
+use constant CUSTOM_TYPE_KEY	=>	'_type';
+use constant CUSTOM_EXISTING_KEY	=>	'_c_';
+use constant MONGO_ID_KEY	=>	'_id';
+
 # Constructor parameters:
 #	model: a BP::Model instance
 #	config: a Config::IniFiles instance
@@ -173,6 +178,9 @@ sub createCollection($) {
 	Carp::croak("ERROR: Input parameter must be a collection")  unless(blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
 	my $coll = $self->getNativeDestination($collection);
+	# First, custom index on custom field
+	_EnsureIndexes($coll,BP::Model::Index->new(undef,undef,[CUSTOM_TYPE_KEY => 1]));
+	
 	if(ref($collection->indexes) eq 'ARRAY' && scalar(@{$collection->indexes})>0) {
 		_EnsureIndexes($coll,@{$collection->indexes});
 	}
@@ -183,9 +191,9 @@ sub createCollection($) {
 		foreach my $concept (@{$self->{_colConcept}{$colid}}) {
 			my @derivedIndexes = $concept->derivedIndexes();
 			
-			_EnsureIndexes($coll,@derivedIndexes)  if(scalar(@derivedIndexes) > 0);
+			_EnsureIndexes($coll,@derivedIndexes)  if(scalar(@derivedIndexes)>0);
 			
-			# TODO: deal with weak entities
+			# TODO: deal with weak entities, and perhaps their custom _type indexes
 		}
 	}
 	
@@ -227,6 +235,14 @@ sub storeNativeModel() {
 	}
 }
 
+use constant {
+	MONGODB_COLLECTION_COL	=>	0,
+	GROUPING_COLUMNS_COL	=>	1,
+	GROUPING_COLUMN_NAMES_COL	=>	2,
+	INCREMENTAL_COLUMN_NAMES_COL	=>	3,
+	CONCEPT_ID_COL	=>	4,
+};
+
 # It sets up the destination to be used in bulkInsert calls
 # _genDestination parameters:
 #	correlatedConcept: An instance of BP::Loader::CorrelatableConcept
@@ -236,6 +252,7 @@ sub storeNativeModel() {
 #	a list of keys corresponding to the grouping keys used for incremental updates
 #	a list of key names corresponding to the grouping keys used for incremental updates
 #	a list of key names corresponding to the submappings taken into account for incremental updates
+#	the concept id
 sub _genDestination($;$) {
 	my $self = shift;
 	
@@ -248,7 +265,7 @@ sub _genDestination($;$) {
 	my $db = $self->connect();
 	my $destination = $db->get_collection($destColl);
 	
-	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames];
+	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames,$correlatedConcept->concept->id()];
 }
 
 my %ISMONGOTEXT = (
@@ -263,6 +280,7 @@ my %ISMONGOTEXT = (
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
+#		the concept id
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
 sub _existingEntries($$$) {
@@ -277,10 +295,10 @@ sub _existingEntries($$$) {
 	my $existingFile = shift;
 	
 	my $counter = 0;
-	if(defined($p_destination->[1])) {
-		my $destination  = $p_destination->[0];
-		my $p_cols = $p_destination->[1];
-		my $p_colNames = $p_destination->[2];
+	if(defined($p_destination->[GROUPING_COLUMNS_COL])) {
+		my $destination  = $p_destination->[MONGODB_COLLECTION_COL];
+		my $p_cols = $p_destination->[GROUPING_COLUMNS_COL];
+		my $p_colNames = $p_destination->[GROUPING_COLUMN_NAMES_COL];
 		
 		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 		
@@ -305,7 +323,7 @@ sub _existingEntries($$$) {
 		$qTokens[-1] = "\n";
 		push(@projections,{
 			'$project' => {
-				'_c_' => {
+				+CUSTOM_EXISTING_KEY => {
 					'$concat' => \@qTokens
 				}
 			}
@@ -329,8 +347,8 @@ sub _existingEntries($$$) {
 				$counter ++;
 			#	#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";
 			#	#print STDERR "DEBUG: ",join(',',keys(%{$fields})),"\n";
-			#	print $EXISTING join("\t",@{$doc}{'_id',@{$p_colNames}}),"\n";
-				print $EXISTING $doc->{_id},"\t",$doc->{_c_};
+			#	print $EXISTING join("\t",@{$doc}{+MONGO_ID_KEY,@{$p_colNames}}),"\n";
+				print $EXISTING $doc->{+MONGO_ID_KEY},"\t",$doc->{+CUSTOM_EXISTING_KEY};
 			}
 			close($EXISTING);
 		}
@@ -338,9 +356,9 @@ sub _existingEntries($$$) {
 	
 	# Short circuiting this when it is empty
 	if($counter==0) {
-		$p_destination->[1] = undef;
-		$p_destination->[2] = undef;
-		$p_destination->[3] = undef;
+		$p_destination->[GROUPING_COLUMNS_COL] = undef;
+		$p_destination->[GROUPING_COLUMN_NAMES_COL] = undef;
+		$p_destination->[INCREMENTAL_COLUMN_NAMES_COL] = undef;
 	}
 	
 	return $counter;
@@ -352,6 +370,7 @@ sub _existingEntries($$$) {
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
+#		the concept id
 #	errflag: The error flag
 # As it is not needed to explicitly free them, it is an empty method.
 sub _freeDestination($$) {
@@ -368,6 +387,13 @@ sub _bulkPrepare($) {
 	my $entorp = shift;
 	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
 	
+	my $conceptId = $self->getInternalDestination()->[CONCEPT_ID_COL];
+	
+	# Adding the _type attribute
+	foreach my $p_entry (@{$entorp}) {
+		$p_entry->{+CUSTOM_TYPE_KEY} = $conceptId;
+	}
+	
 	return $entorp;
 }
 
@@ -377,6 +403,7 @@ sub _bulkPrepare($) {
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
+#		the concept id
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
@@ -386,7 +413,7 @@ sub _bulkInsert($\@) {
 	my $p_destination = shift;
 	
 	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
-	my $destination = $p_destination->[0];
+	my $destination = $p_destination->[MONGODB_COLLECTION_COL];
 	Carp::croak("ERROR: _bulkInsert needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
 	
 	my $p_batch = shift;
@@ -396,7 +423,7 @@ sub _bulkInsert($\@) {
 	my $p_insertBatch = $p_batch;
 	
 	my $count = 0;
-	if(defined($p_destination->[3])) {
+	if(defined($p_destination->[INCREMENTAL_COLUMN_NAMES_COL])) {
 		my @insertBatch = ();
 		foreach my $p_entry (@{$p_batch}) {
 			unless($self->_incrementalUpdate($p_destination,$p_entry)) {
@@ -437,6 +464,7 @@ sub _bulkInsert($\@) {
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
+#		the concept id
 #	p_entry: The entry to be incrementally updated
 sub _incrementalUpdate($$) {
 	my $self = shift;
@@ -448,11 +476,11 @@ sub _incrementalUpdate($$) {
 	
 	my $retval = undef;
 	
-	if(defined($p_destination->[3]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
+	if(defined($p_destination->[INCREMENTAL_COLUMN_NAMES_COL]) && exists($p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID})) {
 		my @existingCols = ();
 		my $pushed = undef;
 		# Filtering out optional columns with no value
-		foreach my $columnName (@{$p_destination->[3]}) {
+		foreach my $columnName (@{$p_destination->[INCREMENTAL_COLUMN_NAMES_COL]}) {
 			if(exists($p_entry->{$columnName})) {
 				push(@existingCols,$columnName);
 				$pushed=1;
@@ -460,9 +488,9 @@ sub _incrementalUpdate($$) {
 		}
 		
 		if($pushed) {
-			$p_destination->[0]->update(
+			$p_destination->[MONGODB_COLLECTION_COL]->update(
 				{
-					'_id'	=> $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID}
+					+MONGO_ID_KEY	=> $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID}
 				},
 				{
 					'$push'	=> { map { $_ => { '$each' => $p_entry->{$_} } } @existingCols }
