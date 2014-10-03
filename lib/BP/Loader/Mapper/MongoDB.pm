@@ -240,7 +240,6 @@ use constant {
 	GROUPING_COLUMNS_COL	=>	1,
 	GROUPING_COLUMN_NAMES_COL	=>	2,
 	INCREMENTAL_COLUMN_NAMES_COL	=>	3,
-	CONCEPT_ID_COL	=>	4,
 };
 
 # It sets up the destination to be used in bulkInsert calls
@@ -252,7 +251,6 @@ use constant {
 #	a list of keys corresponding to the grouping keys used for incremental updates
 #	a list of key names corresponding to the grouping keys used for incremental updates
 #	a list of key names corresponding to the submappings taken into account for incremental updates
-#	the concept id
 sub _genDestination($;$) {
 	my $self = shift;
 	
@@ -265,7 +263,9 @@ sub _genDestination($;$) {
 	my $db = $self->connect();
 	my $destination = $db->get_collection($destColl);
 	
-	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames,$correlatedConcept->concept->id()];
+	$self->{_conceptId} = $correlatedConcept->concept->id();
+	
+	return [$destination,$correlatedConcept->groupingColumns,$correlatedConcept->groupingColumnNames,$correlatedConcept->incrementalColumnNames];
 }
 
 my %ISMONGOTEXT = (
@@ -280,7 +280,6 @@ my %ISMONGOTEXT = (
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
-#		the concept id
 #	existingFile: Destination where the file is being saved
 # It dumps all the values of these columns to the file, and it returns the number of lines of the file
 sub _existingEntries($$$) {
@@ -370,7 +369,6 @@ sub _existingEntries($$$) {
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
-#		the concept id
 #	errflag: The error flag
 # As it is not needed to explicitly free them, it is an empty method.
 sub _freeDestination($$) {
@@ -387,7 +385,7 @@ sub _bulkPrepare($) {
 	my $entorp = shift;
 	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
 	
-	my $conceptId = $self->getInternalDestination()->[CONCEPT_ID_COL];
+	my $conceptId = $self->{_conceptId};
 	
 	# Adding the _type attribute
 	foreach my $p_entry (@{$entorp}) {
@@ -403,7 +401,6 @@ sub _bulkPrepare($) {
 #		a list of keys corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the grouping keys used for incremental updates
 #		a list of key names corresponding to the submappings taken into account for incremental updates
-#		the concept id
 #	p_batch: a reference to an array of hashes which contain the values to store.
 sub _bulkInsert($\@) {
 	my $self = shift;
