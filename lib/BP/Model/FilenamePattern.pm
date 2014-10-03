@@ -15,6 +15,7 @@ use Archive::Zip;
 use Archive::Zip::MemberRead;
 use Scalar::Util;
 
+use BP::Model::Common;
 use BP::Model::ColumnType::Common;
 
 package BP::Model::FilenamePattern;
@@ -37,7 +38,7 @@ use constant FileTypeSymbolPrefixes => {
 sub parseFilenameFormat($$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $filenameFormatDecl = shift;
 	my $model = shift;
@@ -182,7 +183,7 @@ sub registeredConceptDomains {
 sub match($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $filename = shift;
 	
@@ -221,7 +222,7 @@ sub match($) {
 sub matchConcept($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $filename = shift;
 	
@@ -250,7 +251,7 @@ sub matchConcept($) {
 sub registerConceptDomain($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $conceptDomain = shift;
 	

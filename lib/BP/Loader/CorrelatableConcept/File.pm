@@ -15,6 +15,8 @@ use Sys::CPU;
 use boolean;
 use DateTime::Format::ISO8601;
 
+use BP::Model::Common;
+
 package BP::Loader::CorrelatableConcept::File;
 
 use Scalar::Util qw(blessed);
@@ -51,7 +53,7 @@ sub filename {
 sub readColDesc($$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	unless(exists($self->{coldesc})) {
 		my $concept = shift;
@@ -176,7 +178,7 @@ sub readColDesc($$$) {
 sub hasUnknownColumns() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return exists($self->{hasUnknown});
 }
@@ -187,7 +189,7 @@ sub hasUnknownColumns() {
 sub getColumnMap() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{colMap};
 }
@@ -197,7 +199,7 @@ sub getColumnMap() {
 sub generatePipeSentence(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $referenceFile = shift;
 	
@@ -257,7 +259,7 @@ sub generatePipeSentence(;$) {
 sub checkValues(\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# The cells
 	my $p_cells = shift;
@@ -280,7 +282,7 @@ sub checkValues(\@) {
 sub mapValues(\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# The cells
 	my $p_cells = shift;
@@ -312,7 +314,7 @@ sub mapValues(\@) {
 sub entry() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return ($self->{entry},$self->{PKkeyvals});
 }
@@ -339,7 +341,7 @@ sub __keyMatches(\@\@) {
 sub keyMatches(\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_PK = shift;
 	
@@ -349,7 +351,7 @@ sub keyMatches(\@) {
 sub cleanup() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	delete($self->{entry});
 	delete($self->{PKkeyvals});

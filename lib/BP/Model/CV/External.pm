@@ -26,7 +26,7 @@ package BP::Model::CV::External;
 sub parseCVExternal($) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $el = shift;
 	

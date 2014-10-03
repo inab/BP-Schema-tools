@@ -78,7 +78,7 @@ sub new($$) {
 sub BP::Model::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# We need collections by path, not by id
 	my %jsonColls = map { $_->path => $_ } values(%{$self->collections()});
@@ -98,7 +98,7 @@ sub BP::Model::TO_JSON() {
 sub BP::Model::Collection::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %jsonCollection = (
 		'name'	=> $self->name,
@@ -112,7 +112,7 @@ sub BP::Model::Collection::TO_JSON() {
 sub BP::Model::Index::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return {
 		'unique'	=> boolean::boolean($self->isUnique),
@@ -123,7 +123,7 @@ sub BP::Model::Index::TO_JSON() {
 sub BP::Model::DescriptionSet::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	if(scalar(@{$self})>0) {
 		my @arrayRef = @{$self};
@@ -145,7 +145,7 @@ sub BP::Model::DescriptionSet::TO_JSON() {
 sub BP::Model::AnnotationSet::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	if(scalar(keys(%{$self->hash}))>0) {
 		my %hashRes = %{$self->hash};
@@ -167,7 +167,7 @@ sub BP::Model::AnnotationSet::TO_JSON() {
 sub BP::Model::CV::Term::_jsonId() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvPrefix = defined($self->parentCV)?$self->parentCV->id:'_null_';
 	
@@ -177,7 +177,7 @@ sub BP::Model::CV::Term::_jsonId() {
 sub BP::Model::CV::Term::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %hashRes = (
 		'_id'	=> $self->_jsonId,
@@ -200,7 +200,7 @@ sub BP::Model::CV::Term::TO_JSON() {
 sub BP::Model::CV::Abstract::_jsonId() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return 'cv:'.$self->id;
 }
@@ -208,7 +208,7 @@ sub BP::Model::CV::Abstract::_jsonId() {
 sub BP::Model::CV::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %hashRes = (
 		'_id'	=> $self->_jsonId,
@@ -224,7 +224,7 @@ sub BP::Model::CV::TO_JSON() {
 sub BP::Model::CV::Meta::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %hashRes = (
 		'_id'	=> $self->_jsonId,
@@ -237,7 +237,7 @@ sub BP::Model::CV::Meta::TO_JSON() {
 sub BP::Model::ColumnType::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %jsonColumnType = (
 		'type'	=> $self->type,
@@ -269,7 +269,7 @@ sub BP::Model::ColumnType::TO_JSON() {
 sub BP::Model::Column::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %jsonColumn = (
 		'name'	=> $self->name,
@@ -286,7 +286,7 @@ sub BP::Model::Column::TO_JSON() {
 sub BP::Model::ConceptDomain::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %jsonConceptDomain = (
 		'_id'	=> $self->name,
@@ -306,7 +306,7 @@ sub BP::Model::ConceptDomain::TO_JSON() {
 sub BP::Model::Concept::_jsonId() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->id();
 }
@@ -314,7 +314,7 @@ sub BP::Model::Concept::_jsonId() {
 sub BP::Model::Concept::TO_JSON() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $id = $self->_jsonId;
 	my %jsonConcept = (
@@ -447,7 +447,7 @@ sub _TO_JSON($;$$$) {
 sub hasConceptsInCollection($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $collection = shift;
 	
@@ -467,7 +467,7 @@ sub hasConceptsInCollection($) {
 sub generateNativeModel(\$;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $workingDir = shift;
 	

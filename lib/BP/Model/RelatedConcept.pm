@@ -28,7 +28,7 @@ package BP::Model::RelatedConcept;
 sub parseRelatedConcept($) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $relatedDecl = shift;
 	
@@ -105,7 +105,7 @@ sub id {
 sub setRelatedConcept($$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $concept = shift;
 	my $columnSet = shift;
@@ -121,7 +121,7 @@ sub setRelatedConcept($$) {
 sub clone() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my @cloneData = @{$self};
 	my $retval = bless(\@cloneData,ref($self));
@@ -133,7 +133,7 @@ sub clone() {
 sub setConceptDomainName($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $newConceptDomainName = shift;
 	
@@ -146,7 +146,7 @@ sub setConceptDomainName($) {
 sub setConceptName($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $newConceptName = shift;
 	my $newConceptDomainName = shift;

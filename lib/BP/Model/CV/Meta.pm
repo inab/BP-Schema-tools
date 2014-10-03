@@ -39,7 +39,7 @@ sub new(;$$) {
 	my($self)=shift;
 	my($class)=ref($self) || $self;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $name = shift;
 	my $isLax = shift;
@@ -115,7 +115,7 @@ sub parseMetaCV($$) {
 sub add(@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# It stores only the ones which are from BP::Model::CV
 	foreach my $p_cv (@_) {
@@ -141,7 +141,7 @@ sub add(@) {
 sub id() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	unless(defined($self->[BP::Model::CV::Meta::CVID])) {
 		if(defined($self->name)) {
@@ -177,7 +177,7 @@ sub description {
 sub isLax() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $isLax = $self->[BP::Model::CV::Meta::CVLAX];
 	
@@ -197,7 +197,7 @@ sub isLax() {
 sub isValid($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvkey = shift;
 	
@@ -215,7 +215,7 @@ sub isValid($) {
 sub getTerm($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvkey = shift;
 	
@@ -233,7 +233,7 @@ sub getTerm($) {
 sub getEnclosedCVs() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my @enclosedCVs = @{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}];
 	

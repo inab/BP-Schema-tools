@@ -44,7 +44,7 @@ sub ParseIndexes($) {
 sub parseIndex($) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $ind = shift;
 	
@@ -68,7 +68,7 @@ sub parseIndex($) {
 sub new($$@) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $prefix = shift;
 	my $isUnique = shift;
@@ -99,6 +99,8 @@ sub prefix {
 sub hasValidColumns($) {
 	my $self = shift;
 	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
 	my $p_columns = shift;
 	$p_columns = { map { $_ => undef} @{$p_columns} }  if(ref($p_columns) eq 'ARRAY');
 	
@@ -116,6 +118,8 @@ sub hasValidColumns($) {
 # a new BP::Model::Index instance 
 sub relatedIndex($) {
 	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_columns = shift;
 	Carp::croak("This method expects an instance of a hash of column names")  unless(ref($p_columns) eq 'HASH');
@@ -142,6 +146,8 @@ sub relatedIndex($) {
 # attributes optionally have prepended the prefix given as input parameters
 sub clonePrefixed(;$) {
 	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $prefix = shift;
 	

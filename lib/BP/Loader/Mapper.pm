@@ -112,7 +112,7 @@ sub new($$) {
 sub setFilePrefix($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	$self->{BP::Loader::Mapper::FILE_PREFIX_KEY} = shift;
 }
@@ -135,7 +135,7 @@ sub generateNativeModel($) {
 sub connect() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	$self->{conn} = $self->_connect()  unless(exists($self->{conn}));
 	
@@ -170,7 +170,7 @@ sub _genDestination($;$) {
 sub setDestination($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	Carp::croak('Destination was already setup!')  if(exists($self->{_destination}));
 	
@@ -192,7 +192,7 @@ sub setDestination($;$) {
 sub getInternalDestination() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return exists($self->{_destination})?$self->{_destination}:undef;
 }
@@ -213,7 +213,7 @@ sub _freeDestination($;$) {
 sub freeDestination(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $retval = undef;
 	if(exists($self->{_destination})) {
@@ -265,7 +265,7 @@ sub bulkBatchSize {
 sub bulkInsert(\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $entorp = $self->{_concept}->validateAndEnactInstances(@_);
 	if($self->{_queue}) {
@@ -297,7 +297,7 @@ sub bulkInsert(\@) {
 sub flush() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $retval = undef;
 	if($self->{_queue} && $self->{_queued} > 0) {
@@ -316,7 +316,7 @@ sub flush() {
 sub incrementalUpdate(\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->bulkInsert(@_);
 }
@@ -327,7 +327,7 @@ sub incrementalUpdate(\@) {
 sub existingEntries($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->_existingEntries($self->{_correlatedConcept},$self->{_destination},@_);
 }
@@ -421,7 +421,7 @@ sub _fancyColumnOrdering($) {
 sub validateAndEnactEntry($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_concept}->validateAndEnactInstances(@_);
 }
@@ -432,7 +432,7 @@ sub validateAndEnactEntry($) {
 sub mapData(\@\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_mainCorrelatableConcepts = shift;
 	my $p_otherCorrelatedConcepts = shift;

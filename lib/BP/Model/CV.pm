@@ -30,7 +30,6 @@ use base qw(BP::Model::CV::Abstract);
 
 use boolean 0.32;
 
-
 use constant {
 	INLINE	=>	'inline',
 	NULLVALUES	=>	'null-values',
@@ -65,7 +64,7 @@ sub new() {
 	my($self)=shift;
 	my($class)=ref($self) || $self;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	$self = $class->SUPER::new()  unless(ref($self));
 	
@@ -165,7 +164,7 @@ sub parseCV($$) {
 sub validateAndEnactAncestors(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $doRecover = shift;
 	
@@ -260,7 +259,7 @@ sub id {
 sub isLocal() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvkey = shift;
 	
@@ -272,7 +271,7 @@ sub isLocal() {
 sub isValid($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvkey = shift;
 	
@@ -283,7 +282,7 @@ sub isValid($) {
 sub getTerm($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvkey = shift;
 	
@@ -300,7 +299,7 @@ sub getEnclosedCVs() {
 sub addTerm($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $term = shift;
 
@@ -349,7 +348,7 @@ sub addTerm($) {
 sub __parseCVFORMAT($$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $CVH = shift;
 	my $model = shift;
@@ -384,7 +383,7 @@ sub __parseCVFORMAT($$) {
 sub __parseOBO($$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $CVH = shift;
 	my $model = shift;
@@ -401,10 +400,14 @@ sub __parseOBO($$) {
 		$model->digestCVline($cvline);
 		
 		# Removing the trailing comments
-		$cvline =~ s/\s*!.*$//;
+		if((my $exclpos = index($cvline,'!'))!=-1) {
+			$cvline = substr($cvline,0,$exclpos);
+		}
 		
 		# And removing the trailing modifiers, because we don't need that info
-		$cvline =~ s/\s*\{.*\}\s*$//;
+		$cvline =~ s/\{.*\}\s*$//  if(index($cvline,'{')!=-1);
+		
+		$cvline =~ s/\s+$// if(substr($cvline,length($cvline)-1,1) eq ' ');
 		
 		# Skipping empty lines
 		next  if(length($cvline)==0);
@@ -523,7 +526,7 @@ sub toOBO($) {
 sub OBOserialize($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $O = shift;
 	my $comments = shift;
@@ -567,7 +570,7 @@ sub OBOserialize($;$) {
 sub version() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $dataVersion = undef;
 	$dataVersion = $self->annotations->hash->{'data-version'}  if(exists($self->annotations->hash->{'data-version'}));

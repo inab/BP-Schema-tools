@@ -39,7 +39,7 @@ use constant {
 sub new($$;$$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $key = shift;
 	my $keys = undef;
@@ -67,7 +67,7 @@ sub new($$;$$) {
 sub parseAlias($) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $termAlias = shift;
 	my $key = $termAlias->getAttribute('name');
@@ -149,7 +149,7 @@ sub _setParentCV {
 sub calculateAncestors($;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# The pool where I should find my parents
 	my $p_CV = shift;
@@ -216,7 +216,7 @@ sub calculateAncestors($;$$) {
 sub OBOserialize($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $O = shift;
 	

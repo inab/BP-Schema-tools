@@ -78,7 +78,7 @@ sub getTerm($) {
 sub dataChecker {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->isLax() ? \&BP::Model::ColumnType::__true : sub($) {
 		$self->isValid($_[0]);

@@ -63,7 +63,7 @@ use constant STR2TYPE => {
 sub parseColumnType($$$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $containerDecl = shift;
 	my $model = shift;
@@ -415,7 +415,7 @@ sub dataChecker {
 sub isValid($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $val = shift;
 	
@@ -425,7 +425,7 @@ sub isValid($) {
 sub setDefault($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $val = shift;
 	
@@ -435,7 +435,7 @@ sub setDefault($) {
 sub setUse($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $val = shift;
 	
@@ -450,7 +450,7 @@ sub setUse($) {
 sub clone(;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $relatedConcept = shift;
 	my $scalarize = shift;
@@ -491,7 +491,7 @@ sub clone(;$$) {
 sub derivedIndexes($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $prefix = shift;
 	my $columnName = shift;

@@ -30,7 +30,7 @@ package BP::Model::CompoundType;
 sub parseCompoundType($$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $compoundTypeElem = shift;
 	my $model = shift;
@@ -147,7 +147,7 @@ sub dataChecker {
 sub isValid($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $val = shift;
 	
@@ -157,7 +157,7 @@ sub isValid($) {
 sub derivedIndexes($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $prefix = shift;
 	

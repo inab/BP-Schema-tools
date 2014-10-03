@@ -68,7 +68,7 @@ sub parseConceptTypeLineage($$;$) {
 sub parseConceptType($$;$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $ctypeElem = shift;
 	my $model = shift;

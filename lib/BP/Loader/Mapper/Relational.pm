@@ -340,7 +340,7 @@ sub _SQL_CREATE_INDEXES($\@\@) {
 sub generateNativeModel($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $workingDir = shift;
 	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};
@@ -831,7 +831,7 @@ TCVEOF
 sub _dsn() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my @dsnValues=();
 	
@@ -850,7 +850,7 @@ sub _dsn() {
 sub _connect() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $dsn = $self->_dsn;
 	
@@ -878,7 +878,7 @@ sub _connect() {
 sub storeNativeModel() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $dbh = $self->connect();
 	
@@ -952,7 +952,7 @@ use constant {
 sub _genDestination($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $correlatedConcept = shift;
 	
@@ -1131,7 +1131,7 @@ sub _genDestination($) {
 sub _freeDestination(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 
 	my $destination = shift;
 	my $errflag = shift;
@@ -1157,7 +1157,7 @@ sub _freeDestination(;$) {
 sub _bulkPrepare($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $entorp = shift;
 	
@@ -1279,29 +1279,29 @@ sub _bulkPrepare($) {
 sub _bulkInsert($\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $destination = shift;
 	
-	Carp::croak("ERROR: _bulkInsert needs the destination as an array whose first element is a hash of prepared statements")  unless(ref($destination) eq 'ARRAY' && ref($destination->[0]) eq 'HASH');
+	Carp::croak("ERROR: ".(caller(0))[3]." needs the destination as an array whose first element is a hash of prepared statements")  unless(ref($destination) eq 'ARRAY' && ref($destination->[0]) eq 'HASH');
 	
 	my($p_dest_hash,$p_main_mappings) = @{$destination};
 	
 	my $bulkData = shift;
-	Carp::croak("ERROR: _bulkInsert needs the data as a hash")  unless(ref($bulkData) eq 'HASH');
+	Carp::croak("ERROR: ".(caller(0))[3]." needs the data as a hash")  unless(ref($bulkData) eq 'HASH');
 	
 	# The order is preserved because we are using a Tie::IxHash for $destination
 	foreach my $bulkKey (keys(%{$p_dest_hash})) {
 		if(exists($bulkData->{$bulkKey})) {
 			my $bulkArray = $bulkData->{$bulkKey};
-			Carp::croak("ERROR: _bulkInsert needs an array of arrays for the prepared statement")  unless(ref($bulkArray) eq 'ARRAY');
+			Carp::croak("ERROR: ".(caller(0))[3]." needs an array of arrays for the prepared statement")  unless(ref($bulkArray) eq 'ARRAY');
 			
 			# Only when we have something to insert it is worth doing all this work
 			if(scalar(@{$bulkArray}) > 0) {
 				my $destInfo = $p_dest_hash->{$bulkKey};
 				my $destSentence = (ref($destInfo) eq 'ARRAY' && exists($destInfo->[0]))?$destInfo->[0]:undef;
 				
-				Carp::croak("ERROR: _bulkInsert needs a prepared statement")  unless(blessed($destSentence) && $destSentence->can('execute'));
+				Carp::croak("ERROR: ".(caller(0))[3]." needs a prepared statement")  unless(blessed($destSentence) && $destSentence->can('execute'));
 				
 				my $colnum = 1;
 				foreach my $p_column (@{$bulkArray}) {

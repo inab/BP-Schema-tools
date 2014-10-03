@@ -24,7 +24,7 @@ package BP::Model::AnnotationSet;
 sub new(;$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $seedAnnotationSet = shift;
 	
@@ -96,7 +96,7 @@ sub order {
 sub addAnnotation($$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	my $key = shift;
 	my $value = shift;
 	
@@ -109,7 +109,7 @@ sub addAnnotation($$) {
 sub addAnnotations($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	my $annotations = shift;
 	
 	my $hash = $self->hash;
@@ -124,7 +124,7 @@ sub addAnnotations($) {
 sub clone() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my %hash = %{$self->hash};
 	my @order = @{$self->order};

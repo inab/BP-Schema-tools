@@ -187,7 +187,7 @@ sub new($;$) {
 sub modelPath() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_modelAbsPath};
 }
@@ -198,7 +198,7 @@ sub modelPath() {
 sub openModel() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Is it inside a Zip?
 	if(exists($self->{_BPZIP})) {
@@ -225,7 +225,7 @@ sub openModel() {
 sub librarySchemaPath() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	unless(exists($self->{_schemaPath})) {
 		if(exists($self->{_BPZIP})) {
@@ -251,7 +251,7 @@ sub librarySchemaPath() {
 sub schemaModel() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Schema preparation
 	my $dccschema = XML::LibXML::Schema->new(location => $self->librarySchemaPath());
@@ -266,7 +266,7 @@ sub schemaModel() {
 sub reformatModel() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Used later
 	my $modelDoc = $self->{modelDoc};
@@ -320,7 +320,7 @@ sub reformatModel() {
 sub readSignatures(@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	Carp::croak("Signatures can only be read from a bpmodel")  unless(exists($self->{_BPZIP}));
 	
@@ -341,7 +341,7 @@ sub readSignatures(@) {
 sub __keys2string(@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my(@keys) = @_;
 	
@@ -354,7 +354,7 @@ sub __keys2string(@) {
 sub saveBPModel($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $filename = shift;
 	
@@ -412,7 +412,7 @@ sub saveBPModel($) {
 sub digestModel($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $modelDoc = shift;
 	my $modelRoot = $modelDoc->documentElement();
@@ -612,7 +612,7 @@ sub digestModel($) {
 sub sanitizeCVpath($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvPath = shift;
 	
@@ -632,7 +632,7 @@ sub sanitizeCVpath($) {
 sub openCVpath($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvPath = shift;
 	
@@ -657,7 +657,7 @@ sub openCVpath($) {
 sub digestCVline($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvline = shift;
 	$cvline = Encode::encode_utf8($cvline);
@@ -674,7 +674,7 @@ sub digestCVline($) {
 sub registerCV($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $CV = shift;
 	
@@ -687,7 +687,7 @@ sub registerCV($) {
 sub collections() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{COLLECTIONS};
 }
@@ -695,7 +695,7 @@ sub collections() {
 sub getCollection($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $collName = shift;
 	
@@ -705,7 +705,7 @@ sub getCollection($) {
 sub getItemType($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $itemType = shift;
 	
@@ -715,7 +715,7 @@ sub getItemType($) {
 sub isValidNull($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $val = shift;
 	
@@ -725,7 +725,7 @@ sub isValidNull($) {
 sub getNamedCV($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $name = shift;
 	
@@ -735,7 +735,7 @@ sub getNamedCV($) {
 sub getNamedPattern($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $name = shift;
 	
@@ -745,7 +745,7 @@ sub getNamedPattern($) {
 sub getCompoundType($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $name = shift;
 	
@@ -755,7 +755,7 @@ sub getCompoundType($) {
 sub getConceptType($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $name = shift;
 	
@@ -765,7 +765,7 @@ sub getConceptType($) {
 sub getFilenamePattern($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $name = shift;
 	
@@ -776,7 +776,7 @@ sub getFilenamePattern($) {
 sub conceptDomains() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{CDOMAINS};
 }
@@ -785,7 +785,7 @@ sub conceptDomains() {
 sub conceptDomainsHash() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{CDOMAINHASH};
 }
@@ -796,7 +796,7 @@ sub conceptDomainsHash() {
 sub getConceptDomain($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $conceptDomainName = shift;
 	
@@ -808,7 +808,7 @@ sub getConceptDomain($) {
 sub matchConceptsFromFilename($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $filename = shift;
 	
@@ -832,7 +832,7 @@ sub matchConceptsFromFilename($) {
 sub annotations() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{ANNOTATIONS};
 }
@@ -841,7 +841,7 @@ sub annotations() {
 sub projectName() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{project};
 }
@@ -850,7 +850,7 @@ sub projectName() {
 sub schemaVer() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{schemaVer};
 }
@@ -859,7 +859,7 @@ sub schemaVer() {
 sub modelSHA1() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_modelSHA1};
 }
@@ -867,7 +867,7 @@ sub modelSHA1() {
 sub fullmodelSHA1() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_fullmodelSHA1};
 }
@@ -875,7 +875,7 @@ sub fullmodelSHA1() {
 sub CVSHA1() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_cvSHA1};
 }
@@ -883,7 +883,7 @@ sub CVSHA1() {
 sub schemaSHA1() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_schemaSHA1};
 }
@@ -892,7 +892,7 @@ sub schemaSHA1() {
 sub versionString() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{schemaVer};
 }
@@ -901,7 +901,7 @@ sub versionString() {
 sub documentationDir() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_docsDir};
 }
@@ -910,7 +910,7 @@ sub documentationDir() {
 sub namedCVs() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{CVARRAY};
 }
@@ -919,7 +919,7 @@ sub namedCVs() {
 sub nullCV() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{NULLCV};
 }
@@ -927,7 +927,7 @@ sub nullCV() {
 sub types() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{TYPES};
 }
@@ -936,7 +936,7 @@ sub types() {
 sub metadataCollection() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->{_metaColl};
 }

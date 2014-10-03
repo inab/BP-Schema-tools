@@ -79,7 +79,7 @@ sub nestedCorrelatedConcepts {
 sub _connect() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $MONGODB = $self->{db};
 	my $MONGOHOST = $self->{host};
@@ -108,7 +108,7 @@ sub _connect() {
 sub existsDestination($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $collection = shift;
 	
@@ -133,7 +133,7 @@ sub existsDestination($) {
 sub getNativeDestination($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $collection = shift;
 	
@@ -171,7 +171,7 @@ sub _EnsureIndexes($@) {
 sub createCollection($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $collection = shift;
 	
@@ -204,7 +204,7 @@ sub createCollection($) {
 sub storeNativeModel() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $metadataCollection = undef;
 	my $metadataExists = undef;
@@ -254,7 +254,7 @@ use constant {
 sub _genDestination($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $correlatedConcept = shift;
 	my $isTemp = shift;
@@ -285,7 +285,7 @@ my %ISMONGOTEXT = (
 sub _existingEntries($$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $correlatedConcept = shift;
 	
@@ -380,7 +380,7 @@ sub _freeDestination($$) {
 sub _bulkPrepare($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $entorp = shift;
 	$entorp = [ $entorp ]  unless(ref($entorp) eq 'ARRAY');
@@ -405,17 +405,17 @@ sub _bulkPrepare($) {
 sub _bulkInsert($\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_destination = shift;
 	
-	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
+	Carp::croak("ERROR: ".(caller(0))[3]." needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
 	my $destination = $p_destination->[MONGODB_COLLECTION_COL];
-	Carp::croak("ERROR: _bulkInsert needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
+	Carp::croak("ERROR: ".(caller(0))[3]." needs a MongoDB::Collection instance")  unless(blessed($destination) && $destination->isa('MongoDB::Collection'));
 	
 	my $p_batch = shift;
 	
-	Carp::croak("ERROR: _bulkInsert needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
+	Carp::croak("ERROR: ".(caller(0))[3]." needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
 	my $p_insertBatch = $p_batch;
 	
@@ -466,7 +466,7 @@ sub _bulkInsert($\@) {
 sub _incrementalUpdate($$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_destination = shift;
 	my $p_entry = shift;

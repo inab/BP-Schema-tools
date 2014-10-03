@@ -37,7 +37,7 @@ sub parseCollections($) {
 sub parseCollection($) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $coll = shift;
 	
@@ -68,7 +68,7 @@ sub indexes {
 sub addIndexes(@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	while(scalar(@_)>0) {
 		my $index = shift;
@@ -83,7 +83,7 @@ sub addIndexes(@) {
 sub clearIndexes() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	$self->[2] = [];
 }

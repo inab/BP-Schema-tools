@@ -158,7 +158,7 @@ sub parseColumnSet($$$) {
 sub combineColumnSets($@) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my($dontCroak,$firstColumnSet,@columnSets) = @_;
 	
@@ -218,7 +218,7 @@ sub combineColumnSets($@) {
 sub clone() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# A cheap way to clone itself
 	return ref($self)->combineColumnSets(1,$self);
@@ -249,7 +249,7 @@ sub indexes {
 sub derivedIndexes(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $prefix = shift;
 	
@@ -271,7 +271,7 @@ sub derivedIndexes(;$) {
 sub idColumns($;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $idConcept = shift;
 	my $doMask = shift;
@@ -307,7 +307,7 @@ sub idColumns($;$$) {
 sub relatedColumns(;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $myConcept = shift;
 	
@@ -352,7 +352,7 @@ sub relatedColumns(;$$) {
 sub addColumn($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $inputColumn = shift;
 	my $isPKFriendly = shift;
@@ -395,7 +395,7 @@ sub addColumn($;$) {
 sub addColumns($;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $inputColumnSet = shift;
 	my $isPKFriendly = shift;
@@ -450,7 +450,7 @@ sub addColumns($;$) {
 sub resolveDefaultCalculatedValues() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_columns = $self->columns;
 	foreach my $column (values(%{$p_columns})) {

@@ -15,6 +15,7 @@ use Archive::Zip;
 use Archive::Zip::MemberRead;
 use Scalar::Util;
 
+use BP::Model::Common;
 use BP::Model::AnnotationSet;
 use BP::Model::Concept;
 use BP::Model::DescriptionSet;
@@ -30,7 +31,7 @@ package BP::Model::ConceptDomain;
 sub parseConceptDomain($$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $conceptDomainDecl = shift;
 	my $model = shift;
@@ -130,7 +131,7 @@ sub annotations {
 sub registerConcept($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $concept = shift;
 	

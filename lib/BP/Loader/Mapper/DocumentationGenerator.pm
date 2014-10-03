@@ -121,7 +121,7 @@ sub nestedCorrelatedConcepts {
 sub recordGeneratedFiles(@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	$self->{generatedFiles} = []  unless(exists($self->{generatedFiles}));
 	
@@ -761,7 +761,7 @@ DEOF
 sub _genModelGraph($$\%) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my($figurePrefix,$templateAbsDocDir,$p_colors)=@_;
 	
@@ -991,7 +991,7 @@ DEOF
 sub _genConceptDomainGraph($$$\%) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my($conceptDomain,$figurePrefix,$templateAbsDocDir,$p_colors)=@_;
 	
@@ -1219,7 +1219,7 @@ DEOF
 sub _printColumn($$$$\%;\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my($O,$concept,$latexDefaultValue,$column,$p_idColumnNames, $p_columnAncestors)=@_;
 	
@@ -1340,7 +1340,7 @@ sub _printColumn($$$$\%;\@) {
 sub _printConceptDomain($$$$\%) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my($conceptDomain,$figurePrefix,$templateAbsDocDir,$O,$p_colors)=@_;
 	
@@ -1514,7 +1514,7 @@ EOF
 sub _assemblePDF($$$$$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my($templateDir,$bpmodelFile,$bodyFile,$outputFile,$outputSH) = @_;
 	
@@ -1671,7 +1671,7 @@ EOFSH
 sub generateNativeModel($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $workingDir = shift;
 	my $filePrefix = $self->{BP::Loader::Mapper::FILE_PREFIX_KEY};

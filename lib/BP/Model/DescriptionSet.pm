@@ -23,7 +23,7 @@ package BP::Model::DescriptionSet;
 sub new() {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	return bless([],$class);
 }
@@ -68,7 +68,8 @@ sub parseDescriptions($) {
 sub addDescription($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
 	my $desc = shift;
 
 	push(@{$self},$desc);
@@ -78,7 +79,7 @@ sub addDescription($) {
 sub clone() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my @cloneData = @{$self};
 	my $retval = bless(\@cloneData,ref($self));

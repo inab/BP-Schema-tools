@@ -72,7 +72,7 @@ sub ParseConceptContainer($$$;$) {
 sub parseConcept($$$;$$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $conceptDecl = shift;
 	my $conceptDomain = shift;
@@ -254,7 +254,7 @@ sub baseConceptTypes {
 sub baseConceptType {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $p_arr = $self->baseConceptTypes;
 	return (scalar(@{$p_arr})>0)?$p_arr->[0]:undef;
@@ -264,7 +264,7 @@ sub baseConceptType {
 sub goesToCollection {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $baseConceptType = $self->baseConceptType;
 	return defined($baseConceptType) ? $baseConceptType->goesToCollection : undef;
@@ -274,7 +274,7 @@ sub goesToCollection {
 sub collection {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $baseConceptType = $self->baseConceptType;
 	return (defined($baseConceptType) && $baseConceptType->goesToCollection) ? $baseConceptType->collection : undef;
@@ -284,7 +284,7 @@ sub collection {
 sub key {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $baseConceptType = $self->baseConceptType;
 	return (defined($baseConceptType) && !$baseConceptType->goesToCollection) ? $baseConceptType->key : undef;
@@ -332,7 +332,7 @@ sub parentConcept {
 sub refColumns($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $relatedConcept = shift;
 	
@@ -345,7 +345,7 @@ sub refColumns($) {
 sub idColumns(;$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $doMask = shift;
 	my $weakAnnotations = shift;
@@ -356,7 +356,7 @@ sub idColumns(;$$) {
 sub id() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $id = join('.',$self->conceptDomain->name, $self->name);
 	
@@ -367,7 +367,7 @@ sub id() {
 sub derivedIndexes() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return $self->columnSet->derivedIndexes();
 }
@@ -377,7 +377,7 @@ sub derivedIndexes() {
 sub validateAndEnactInstances($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $entorp = undef;
 	my @entries = @_;

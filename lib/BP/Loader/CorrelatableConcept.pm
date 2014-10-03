@@ -160,7 +160,7 @@ sub incrementalColumns {
 sub setSlave() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	$self->{slave}=1;
 }
@@ -168,7 +168,7 @@ sub setSlave() {
 sub isSlave() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	return exists($self->{slave});
 }
@@ -178,7 +178,7 @@ sub isSlave() {
 sub addCorrelatedConcept($) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $correlatedConcept = shift;
 	Carp::croak('Parameter must be a BP::Loader::CorrelatableConcept')  unless(blessed($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
@@ -196,7 +196,7 @@ sub addCorrelatedConcept($) {
 sub readColDesc() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Do it for the files
 	foreach my $p_conceptFile (@{$self->{conceptFiles}}) {
@@ -259,7 +259,7 @@ sub __SortCompressed(\@\@) {
 sub sortCompressed() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Assuring we have what we need
 	$self->readColDesc();
@@ -330,7 +330,7 @@ sub sortCompressed() {
 sub openFiles() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# Sorted Filehandle
 	# entry
@@ -398,7 +398,7 @@ sub openFiles() {
 sub closeFiles() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	if(exists($self->{__prepared})) {
 		# The slave correlated concepts
@@ -420,7 +420,7 @@ sub closeFiles() {
 sub nextLine() {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	unless(exists($self->{eof})) {
 		my $H = $self->{H};
@@ -444,7 +444,7 @@ sub nextLine() {
 sub readEntry(;$\@) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	# No processing when there is nothing more to say
 	return undef  if(exists($self->{eof}));

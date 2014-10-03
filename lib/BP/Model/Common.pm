@@ -7,6 +7,10 @@ use IO::File;
 use XML::LibXML;
 use Scalar::Util;
 
+package BP::Model;
+
+use constant DEBUG => 0;
+
 package BP::Model::Common;
 
 use constant dccNamespace => 'http://www.blueprint-epigenome.eu/dcc/schema';

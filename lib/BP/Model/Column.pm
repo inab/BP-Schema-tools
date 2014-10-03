@@ -44,7 +44,7 @@ use constant {
 sub parseColumn($$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $colDecl = shift;
 	my $model = shift;
@@ -75,7 +75,7 @@ sub parseColumn($$) {
 sub new($$$$) {
 	my $class = shift;
 	
-	Carp::croak((caller(0))[3].' is a class method!')  if(ref($class));
+	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $name = shift;
 	my $description = shift;
@@ -157,7 +157,7 @@ sub relatedConcept {
 sub clone(;$$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $doMask = shift;
 	my $prefix = shift;
@@ -192,7 +192,7 @@ sub clone(;$$$) {
 sub cloneRelated($;$$$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $refConcept = shift;
 	my $relatedConcept = shift;
@@ -230,7 +230,7 @@ sub cloneRelated($;$$$) {
 sub derivedIndexes(;$) {
 	my $self = shift;
 	
-	Carp::croak((caller(0))[3].' is an instance method!')  unless(ref($self));
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $prefix = shift;
 	
