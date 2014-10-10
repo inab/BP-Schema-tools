@@ -193,6 +193,9 @@ sub _FillMapping($) {
 				'dynamic'	=> boolean::true,
 				'type'		=> 'nested',
 				'include_in_parent'	=> boolean::true,
+				'_source'	=>	{
+					'enabled'	=>	boolean::false
+				},
 				'dynamic_templates'	=> [
 					{
 						'template_'.$columnName => {
@@ -207,6 +210,10 @@ sub _FillMapping($) {
 		$typeDecl{'dynamic'} = boolean::false;	# 'strict' is too strict
 		
 		$typeDecl{'type'} = $esType->[0];
+		
+		$typeDecl{'_source'} = {
+			'enabled'	=>	boolean::false
+		};
 		
 		# Is this a compound type?
 		my $restriction = $columnType->restriction;
@@ -401,7 +408,7 @@ sub _existingEntries($$$) {
 				# Each fetched document comes with its unique identifier
 				'script_fields' => {
 					'_c_' => {
-						'script' => (join('+"\t"+',map { '_fields.'.$_.'.value' } ('_id',@{$p_colNames})).'+"\n"')
+						'script' => (join('+"\t"+','_fields._id.value',map { 'doc["'.$_.'"].value' } @{$p_colNames}).'+"\n"')
 					}
 				},
 				#'fields'=> $p_colNames,
