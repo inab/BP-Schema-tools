@@ -68,6 +68,7 @@ my @DEFAULTS = (
 	['path_prefix' => '' ],
 	['user' => '' ],
 	['pass' => '' ],
+	['request_timeout' => 300],
 );
 
 my %ABSTYPE2ES = (
@@ -101,9 +102,11 @@ sub new($$) {
 			my($key,$defval) = @{$param};
 			
 			if(defined($defval)) {
-				$self->{$key} = $config->val($SECTION,$key,$defval);
+				my @values = $config->val($SECTION,$key,$defval);
+				$self->{$key} = (scalar(@values)>1)?\@values:$values[0];
 			} elsif($config->exists($SECTION,$key)) {
-				$self->{$key} = $config->val($SECTION,$key);
+				my @values = $config->val($SECTION,$key);
+				$self->{$key} = (scalar(@values)>1)?\@values:((scalar(@values)>0)?$values[0]:undef);
 			} else {
 				Carp::croak("ERROR: required parameter $key not found in section $SECTION");
 			}
@@ -152,7 +155,7 @@ sub _connect() {
 	
 	my @connParams = ();
 	
-	foreach my $key ('use_https','port','path_prefix','userinfo') {
+	foreach my $key ('use_https','port','path_prefix','userinfo','request_timeout') {
 		if(exists($self->{$key}) && defined($self->{$key}) && length($self->{$key}) > 0) {
 			push(@connParams,$key => $self->{$key});
 		}
@@ -193,9 +196,9 @@ sub _FillMapping($) {
 				'dynamic'	=> boolean::true,
 				'type'		=> 'nested',
 				'include_in_parent'	=> boolean::true,
-				'_source'	=>	{
-					'enabled'	=>	boolean::false
-				},
+#				'_source'	=>	{
+#					'enabled'	=>	boolean::false
+#				},
 				'dynamic_templates'	=> [
 					{
 						'template_'.$columnName => {
@@ -211,9 +214,9 @@ sub _FillMapping($) {
 		
 		$typeDecl{'type'} = $esType->[0];
 		
-		$typeDecl{'_source'} = {
-			'enabled'	=>	boolean::false
-		};
+#		$typeDecl{'_source'} = {
+#			'enabled'	=>	boolean::false
+#		};
 		
 		# Is this a compound type?
 		my $restriction = $columnType->restriction;
