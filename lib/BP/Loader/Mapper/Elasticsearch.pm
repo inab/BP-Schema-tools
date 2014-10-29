@@ -162,6 +162,7 @@ sub _connect() {
 	}
 	
 	# Let's test the connection
+	#my $es = Search::Elasticsearch->new(@connParams,'nodes' => $self->{nodes},serializer => 'JSON::PP');
 	my $es = Search::Elasticsearch->new(@connParams,'nodes' => $self->{nodes});
 	
 	# Setting up the parameters to the JSON serializer
@@ -461,6 +462,21 @@ sub _existingEntries($$$) {
 	return $counter;
 }
 
+# _flush parameters:
+#	destination: The destination of the bulk transfers
+# It flushes the contents to the database, and by default is a no-op
+sub _flush($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_destination = shift;
+	
+	my $destination = $p_destination->[0];
+	$destination->flush();
+}
+
+
 # _freeDestination parameters:
 #	p_destination: An array with
 #		an instance of Search::Elasticsearch::Bulk
@@ -476,9 +492,8 @@ sub _freeDestination($$) {
 	my $p_destination = shift;
 	my $errflag = shift;
 		
-	# Assure last entries are flushed
-	my $destination = $p_destination->[0];
-	$destination->flush();
+	# Double-assure last entries are flushed
+	$self->_flush($p_destination);
 }
 
 # _bulkPrepare parameters:
