@@ -374,12 +374,13 @@ sub derivedIndexes() {
 
 # validateAndEnactInstances parameters:
 # It validates the correctness of the entries in entorp, and it fills in-line the default values
-sub validateAndEnactInstances($) {
+sub validateAndEnactInstances(@) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $entorp = undef;
+	my $foundNull = undef;
 	my @entries = @_;
 	
 	if(scalar(@entries) > 0) {
@@ -391,12 +392,19 @@ sub validateAndEnactInstances($) {
 		
 		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
 		
+		my @resEntOrp = ();
 		foreach my $entry (@{$entorp}) {
+			unless(defined($entry)) {
+				$foundNull = 1;
+				next;
+			}
+			
 			# TODO
 		}
+		$entorp = \@resEntOrp  if(scalar(@resEntOrp)>0);
 	}
 
-	return $entorp;
+	return wantarray?($entorp,$foundNull):$entorp;
 }
 
 1;
