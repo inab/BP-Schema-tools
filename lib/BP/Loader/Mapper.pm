@@ -267,7 +267,7 @@ sub bulkInsert(\@) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $entorp = $self->{_concept}->validateAndEnactInstances(@_);
+	my($entorp,$doFlush) = $self->{_concept}->validateAndEnactInstances(@_);
 	if($self->{_queue}) {
 		push(@{$self->{_queue}},@{$entorp});
 		my $numEntorp = scalar(@{$entorp});
@@ -279,17 +279,42 @@ sub bulkInsert(\@) {
 			$self->{_queue} = [];
 			$self->{_queued} = 0;
 		} else {
+			$self->flush()  if($doFlush);
+			
 			return $numEntorp;
 		}
 	}
 	
 	if(defined($entorp)) {
 		$entorp = $self->_bulkPrepare($entorp);
-	
-		return $self->_bulkInsert($self->{_destination},$entorp);
+		
+		if($doFlush) {
+			my @retvalArr = undef;
+			my $retval = undef;
+			if(wantarray) {
+				@retvalArr = $self->_bulkInsert($self->{_destination},$entorp);
+			} else {
+				$retval = $self->_bulkInsert($self->{_destination},$entorp);
+			}
+			
+			$self->flush();
+			
+			return wantarray?@retvalArr:$retval;
+		} else {
+			return $self->_bulkInsert($self->{_destination},$entorp);
+		}
+	} elsif($doFlush) {
+		$self->flush();
 	}
 	
 	return undef;
+}
+
+# _flush parameters:
+#	destination: The destination of the bulk transfers
+# It flushes the contents to the database, and by default is a no-op
+sub _flush($) {
+	1;
 }
 
 # flush takes no parameter:
@@ -300,12 +325,17 @@ sub flush() {
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $retval = undef;
-	if($self->{_queue} && $self->{_queued} > 0) {
-		my $entorp = $self->_bulkPrepare($self->{_queue});
-		$retval = $self->_bulkInsert($self->{_destination},$entorp);
+	if(exists($self->{_destination})) {
+		# Support flushing even when we are not using our own batch queue
+		if($self->{_queue} && $self->{_queued} > 0) {
+			my $entorp = $self->_bulkPrepare($self->{_queue});
+			$retval = $self->_bulkInsert($self->{_destination},$entorp);
+			
+			$self->{_queue} = [];
+			$self->{_queued}  = 0;
+		}
 		
-		$self->{_queue} = [];
-		$self->{_queued}  = 0;
+		$self->_flush($self->{_destination});
 	}
 	
 	return $retval;
