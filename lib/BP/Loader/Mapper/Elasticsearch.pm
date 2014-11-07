@@ -412,6 +412,7 @@ sub _existingEntries($$$) {
 				# Each fetched document comes with its unique identifier
 				'script_fields' => {
 					'_c_' => {
+						'lang' => 'mvel',
 						'script' => (join('+"\t"+','_fields._id.value',map { 'doc["'.$_.'"].value' } @{$p_colNames}).'+"\n"')
 					}
 				},
