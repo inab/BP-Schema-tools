@@ -412,7 +412,7 @@ sub _existingEntries($$$) {
 				# Each fetched document comes with its unique identifier
 				'script_fields' => {
 					'_c_' => {
-						'lang' => 'mvel',
+						'lang' => 'groovy',
 						'script' => (join('+"\t"+','_fields._id.value',map { 'doc["'.$_.'"].value' } @{$p_colNames}).'+"\n"')
 					}
 				},
@@ -592,7 +592,7 @@ sub _incrementalUpdate($$) {
 		if($pushed) {
 			$p_destination->[0]->update({
 				id => $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID},
-				lang => 'mvel',
+				lang => 'groovy',
 				script => join('; ',map { 'ctx._source.'.$_.' += newdoc_'.$_ } @existingCols),
 				params => {
 					map { ('newdoc_'.$_) => $p_entry->{$_} } @existingCols
