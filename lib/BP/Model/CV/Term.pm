@@ -67,13 +67,29 @@ sub new($$;$$$) {
 # Alternate constructor
 # parseAlias parameters:
 #	termAlias: a XML::LibXML::Element node, 'dcc:term-alias'
-sub parseAlias($) {
+#	namespaces: a reference to a hash of namespaces
+#	defaultNamespace: The default BP::Model::CV::Namespace
+sub parseAlias($;$$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $termAlias = shift;
+	my $p_namespaces = shift;
+	my $defaultNamespace = shift;
 	my $key = $termAlias->getAttribute('name');
+	
+	my $shortNamespace = $termAlias->hasAttribute('ns')?$termAlias->getAttribute('ns'):undef;
+	my $namespace = $defaultNamespace;
+	
+	if(defined($shortNamespace)) {
+		if(defined($p_namespaces) && exists($p_namespaces->{$shortNamespace})) {
+			$namespace = $p_namespaces->{$shortNamespace};
+		} else {
+			Carp::croak('Namespace '.$shortNamespace.' is unknown!');
+		}
+	}
+	
 	my $name = '';
 	my @parents = ();
 	foreach my $el ($termAlias->childNodes()) {
@@ -81,13 +97,26 @@ sub parseAlias($) {
 		
 		if($el->localname eq 'e') {
 			# Saving the "parents" of the alias
+			my $short_ns = $el->hasAttribute('ns')?$el->getAttribute('ns'):undef;
+			my $ns = $defaultNamespace;
+			
+			if(defined($short_ns)) {
+				if(defined($p_namespaces) && exists($p_namespaces->{$short_ns})) {
+					$ns = $p_namespaces->{$short_ns};
+				} else {
+					Carp::croak('Namespace '.$short_ns.' is unknown!');
+				}
+			}
+			
+			# Just at this moment namespaces are validated, but not used
 			push(@parents,$el->getAttribute('v'));
+			#push(@parents,[$el->getAttribute('v'),$ns]);
 		} elsif($el->localname eq 'description') {
 			$name = $el->textContent();
 		}
 	}
 	
-	return $class->new($key,$name,\@parents,1);
+	return $class->new($key,$name,$namespace,\@parents,1);
 }
 
 # The main key of the term
@@ -137,7 +166,7 @@ sub parentCV {
 
 # The BP::Model::CV::Namespace instance which defines the term namespace (if any)
 sub namespace {
-	return $_[0]->[PARENTCV];
+	return $_[0]->[NAMESPACE];
 }
 
 # The BP::Model::CV instance which defines the term
@@ -236,7 +265,7 @@ sub OBOserialize($) {
 	my $namespace = $self->namespace;
 	BP::Model::CV::Common::printOboKeyVal($O,'namespace',$namespace->ns_name)  if(defined($namespace) && !$namespace->isDefaultNamespace);
 	
-	# The alterative ids
+	# The alternative ids
 	my $first = 1;
 	foreach my $alt_id (@{$self->keys}) {
 		# Skipping the first one, which is the main id
