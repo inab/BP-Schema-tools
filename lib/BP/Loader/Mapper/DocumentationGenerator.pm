@@ -307,7 +307,11 @@ sub _LaTeX__inlineCVTable($) {
 
 		my $CVhash = $CV->CV;
 		foreach my $key (@{$CV->order}) {
-			$output .= join(' & ',_LaTeX__escape($key),_LaTeX__escape($CVhash->{$key}->name))."\\\\\n";
+			my $term = $CVhash->{$key};
+			my $latexKey = _LaTeX__escape($key);
+			my $uriKey = $term->uriKey;
+			$latexKey = '\href{'.$uriKey.'}{'.$latexKey.'}'  if(defined($uriKey));
+			$output .= join(' & ',$latexKey,_LaTeX__escape($term->name))."\\\\\n";
 		}
 		$output .= '\end{tabularx}';
 	}
@@ -456,7 +460,11 @@ EOF
 	
 		my $CVhash = $CV->CV;
 		foreach my $cvKey (@{$CV->order}) {
-			print $O join(' & ',_LaTeX__escape($cvKey),_LaTeX__escape($CVhash->{$cvKey}->name)),'\\\\ \hline',"\n";
+			my $term = $CVhash->{$cvKey};
+			my $latexTermKey = _LaTeX__escape($cvKey);
+			my $termUri = $term->uriKey;
+			$latexTermKey = '\href{'.$termUri.'}{'.$latexTermKey.'}'  if(defined($termUri));
+			print $O join(' & ',$latexTermKey,_LaTeX__escape($term->name)),'\\\\ \hline',"\n";
 		}
 		
 		# Table footer
