@@ -7,6 +7,7 @@ use XML::LibXML;
 use URI;
 
 use BP::Model::Common;
+use BP::Model::CV::Common;
 
 package BP::Model::CV::Namespace;
 
@@ -50,6 +51,22 @@ sub setDefaultNamespace {
 	$_[0]->[ISDEFAULT]=1;
 }
 
+# This method serializes the BP::Model::CV::Namespace instance into a OBO structure
+# when the namespace is a default one
+# serialize parameters:
+#	O: the output file handle
+sub OBOserialize($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $O = shift;
+	
+	# We need these
+	BP::Model::CV::Common::printOboKeyVal($O,'default-namespace',$self->ns_name())  if($self->isDefaultNamespace() && defined($self->ns_name) && length($self->ns_name)>0);
+	BP::Model::CV::Common::printOboKeyVal($O,'ontology',$self->ns_uri());
+	
+}
 
 1;
 
