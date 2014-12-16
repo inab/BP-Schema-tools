@@ -15,7 +15,7 @@
             <xs:documentation>CV namespace short names can have only alphanumeric (and underscore) characters</xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
-            <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_-]*" />
+            <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_/-]*" />
         </xs:restriction>
     </xs:simpleType>
     
@@ -339,7 +339,7 @@
                     <xs:complexType>
                         <xs:simpleContent>
                             <xs:extension base="xs:anyURI">
-                                <xs:attribute name="shortName" type="bp:namespaceShortNameType" use="required">
+                                <xs:attribute name="short-name" type="bp:namespaceShortNameType" use="required">
                                     <xs:annotation>
                                         <xs:documentation>The declared short name for the namespace</xs:documentation>
                                     </xs:annotation>
