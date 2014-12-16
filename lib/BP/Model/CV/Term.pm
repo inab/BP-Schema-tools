@@ -86,7 +86,7 @@ sub parseAlias($$;$) {
 		if(exists($p_namespaces->{$shortNamespace})) {
 			$namespace = $p_namespaces->{$shortNamespace};
 		} else {
-			Carp::croak('Namespace '.$shortNamespace.' is unknown!');
+			Carp::croak('Term alias namespace '.$shortNamespace.' is unknown!');
 		}
 	}
 	
@@ -104,7 +104,7 @@ sub parseAlias($$;$) {
 				if(exists($p_namespaces->{$short_ns})) {
 					$ns = $p_namespaces->{$short_ns};
 				} else {
-					Carp::croak('Namespace '.$short_ns.' is unknown!');
+					Carp::croak('Term namespace '.$short_ns.' is unknown!');
 				}
 			}
 			
@@ -172,6 +172,50 @@ sub namespace {
 # The BP::Model::CV instance which defines the term
 sub _setParentCV {
 	$_[0]->[PARENTCV] = $_[1];
+}
+
+# All the keys of the term in URI format (if there is an available URI!)
+sub uriKeys {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_uriKeys = undef;
+	my $p_namespace = $self->namespace();
+	if(defined($p_namespace)) {
+		my $ns_uri = $p_namespace->ns_uri();
+		my @uriKeys = ();
+		foreach my $key (@{$self->keys}) {
+			my $tkey = $key;
+			# TODO: do it better!
+			$tkey =~ tr/:/_/;
+			
+			push(@uriKeys,$ns_uri.$tkey);
+		}
+		$p_uriKeys = \@uriKeys;
+	}
+	
+	return $p_uriKeys;
+}
+
+# The key of the term in URI format (if there is an available URI!)
+sub uriKey {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $uriKey = undef;
+	my $p_namespace = $self->namespace();
+	if(defined($p_namespace)) {
+		my $ns_uri = $p_namespace->ns_uri();
+		my $tkey = $self->key;
+		# TODO: do it better!
+		$tkey =~ tr/:/_/;
+			
+		$uriKey = $ns_uri.$tkey;
+	}
+	
+	return $uriKey;
 }
 
 # calculateAncestors parameters:
