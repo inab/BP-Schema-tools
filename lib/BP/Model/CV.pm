@@ -22,6 +22,7 @@ use BP::Model::AnnotationSet;
 use BP::Model::CV::Abstract;
 use BP::Model::CV::External;
 use BP::Model::CV::Term;
+use BP::Model::CV::Namespace;
 use BP::Model::DescriptionSet;
 
 package BP::Model::CV;
@@ -57,6 +58,8 @@ use constant {
 	CVXMLEL		=>	10,	# XML element of cv-file element
 	CVID		=>	11,	# The CV id (used by SQL and MongoDB uniqueness purposes)
 	CVLAX		=>	12,	# Disable checks on this CV
+	CVNAMESPACES	=>	13,	# A hash of BP::Model::CV::Namespace
+	CVDEFAULTNAMESPACE	=>	14,	# The default namespace
 };
 
 # This is the empty constructor
@@ -71,7 +74,7 @@ sub new() {
 	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
 	my $cvAnnot = BP::Model::AnnotationSet->new();
 	my $cvDesc = BP::Model::DescriptionSet->new();
-	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef,undef);
+	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef,undef,undef,undef);
 	
 	$self->[BP::Model::CV::CVKEYS] = [];
 	# Hash shared by terms and term-aliases
@@ -108,6 +111,9 @@ sub parseCV($$) {
 	
 	$self->[BP::Model::CV::CVLAX] = boolean($cv->hasAttribute('lax') && $cv->getAttribute('lax') eq 'true');
 	
+	my %namespaces = ();
+	$self->[CVNAMESPACES] = \%namespaces;
+	my $p_defaultNamespace = undef;
 	foreach my $el ($cv->childNodes()) {
 		next  unless($el->nodeType == XML::LibXML::XML_ELEMENT_NODE);
 		
@@ -115,7 +121,31 @@ sub parseCV($$) {
 			unless(defined($self->[BP::Model::CV::CVKIND])) {
 				$self->[BP::Model::CV::CVKIND] = ($cv->localname eq BP::Model::CV::NULLVALUES) ? BP::Model::CV::NULLVALUES : BP::Model::CV::INLINE;
 			}
-			$self->addTerm(BP::Model::CV::Term->new($el->getAttribute('v'),$el->textContent()));
+			my $ns = $p_defaultNamespace;
+			
+			if($el->hasAttribute('ns')) {
+				my $short_ns = $el->getAttribute('ns');
+				if(exists($namespaces{$short_ns})) {
+					$ns = $namespaces{$short_ns};
+				} else {
+					Carp::croak('Term namespace '.$short_ns.' is unknown!');
+				}
+			}
+			$self->addTerm(BP::Model::CV::Term->new($el->getAttribute('v'),$el->textContent(),$ns));
+		} elsif($el->localname eq 'cv-ns') {
+			my $short_ns = $el->getAttribute('short-name');
+			$namespaces{$short_ns} = BP::Model::CV::Namespace->new($el->textContent(),$short_ns);
+		} elsif($el->localname eq 'default-cv-ns') {
+			if($el->hasAttribute('ns')) {
+				my $short_ns = $el->getAttribute('ns');
+				if(exists($namespaces{$short_ns})) {
+					$p_defaultNamespace = $namespaces{$short_ns};
+					$p_defaultNamespace->setDefaultNamespace();
+					$self->[CVDEFAULTNAMESPACE] = $p_defaultNamespace;
+				} else {
+					Carp::croak('Default namespace '.$short_ns.' is unknown!');
+				}
+			}
 		} elsif($el->localname eq 'cv-uri') {
 			unless(defined($self->[BP::Model::CV::CVKIND])) {
 				$self->[BP::Model::CV::CVKIND] = BP::Model::CV::URIFETCHED;
@@ -149,7 +179,7 @@ sub parseCV($$) {
 			# We register the local CVs, even the local dumps of the remote CVs
 			$model->registerCV($self);
 		} elsif($el->localname eq 'term-alias') {
-			my $alias = BP::Model::CV::Term->parseAlias($el);
+			my $alias = BP::Model::CV::Term->parseAlias($el,\%namespaces,$p_defaultNamespace);
 			$self->addTerm($alias);
 		}
 	}
@@ -170,9 +200,21 @@ sub validateAndEnactAncestors(;$) {
 	
 	if(scalar(@{$self->order}) > 0) {
 		my $p_CV = $self->CV;
-		my @terms = (@{$self->order},@{$self->aliasOrder});
+		my @terms = map { $p_CV->{$_} } (@{$self->order},@{$self->aliasOrder});
 		foreach my $term (@terms) {
-			my $term_ancestors = $p_CV->{$term}->calculateAncestors($p_CV,$doRecover);
+			my $term_ancestors = $term->calculateAncestors($p_CV,$doRecover);
+		}
+		
+		# And now, let's include the URIs of the terms (if any!)
+		if(scalar(keys(%{$self->namespaces}))>0) {
+			foreach my $term (@terms) {
+				my $p_uriKeys = $term->uriKeys();
+				next  unless(defined($p_uriKeys));
+				
+				foreach my $uriKey (@{$p_uriKeys}) {
+					$p_CV->{$uriKey} = $term;
+				}
+			}
 		}
 	}
 }
@@ -192,6 +234,26 @@ sub kind {
 
 sub isLax {
 	return $_[0]->[BP::Model::CV::CVLAX];
+}
+
+sub namespaces {
+	return $_[0]->[BP::Model::CV::CVNAMESPACES];
+}
+
+sub defaultNamespace {
+	return $_[0]->[BP::Model::CV::CVDEFAULTNAMESPACE];
+}
+
+# Sets the default BP::Model::CV::Namespace instance
+sub setDefaultNamespace($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_defaultNamespace = shift;
+	
+	$self->[BP::Model::CV::CVDEFAULTNAMESPACE] = $p_defaultNamespace;
+	$p_defaultNamespace->setDefaultNamespace();
 }
 
 # Ref to an array of BP::Model::CV::External, holding these values (it could be undef)
@@ -296,12 +358,14 @@ sub getEnclosedCVs() {
 
 # addTerm parameters:
 #	term: a BP::Model::CV::Term instance, which can be a term or an alias
-sub addTerm($) {
+#	ignoreLater: if true, track the term, but don't include it in order or aliasOrder lists
+sub addTerm($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $term = shift;
+	my $ignoreLater = shift;
 
 	# Let's initialize
 	foreach my $key (@{$term->isAlias?$term->keys:[$term->key]}) {
@@ -330,15 +394,19 @@ sub addTerm($) {
 				return;
 			}
 		}
+		
+		# Setting the term
 		$self->CV->{$key}=$term;
-		$term->_setParentCV($self);
 	}
-	# We save here only the main key, not the alternate ones
-	# and not the aliases!!!!!!
-	unless($term->isAlias) {
-		push(@{$self->order},$term->key);
-	} else {
-		push(@{$self->aliasOrder},$term->key);
+	$term->_setParentCV($self);
+	unless($ignoreLater) {
+		# We save here only the main key, not the alternate ones
+		# and not the aliases!!!!!!
+		unless($term->isAlias) {
+			push(@{$self->order},$term->key);
+		} else {
+			push(@{$self->aliasOrder},$term->key);
+		}
 	}
 }
 
@@ -352,6 +420,8 @@ sub __parseCVFORMAT($$) {
 	
 	my $CVH = shift;
 	my $model = shift;
+	
+	my $p_defaultNamespace = $self->defaultNamespace();
 	
 	while(my $cvline=$CVH->getline()) {
 		chomp($cvline);
@@ -375,11 +445,14 @@ sub __parseCVFORMAT($$) {
 			}
 		} else {
 			my($key,$value) = split(/\t/,$cvline,2);
-			$self->addTerm(BP::Model::CV::Term->new($key,$value));
+			$self->addTerm(BP::Model::CV::Term->new($key,$value,$p_defaultNamespace));
 		}
 	}
 }
 
+# __parseOBO parameters:
+#	CVH: The file handle to read the OBO file
+#	model: a BP::Model instance, where the digestion of this file is going to be registered.
 sub __parseOBO($$) {
 	my $self = shift;
 	
@@ -387,13 +460,20 @@ sub __parseOBO($$) {
 	
 	my $CVH = shift;
 	my $model = shift;
-	my $namespace = shift;
+	my $p_namespaces = $self->namespaces();
+	my $filterNamespaces = scalar(keys(%{$p_namespaces})) > 0;
+	
+	my $p_defaultNamespace = $self->defaultNamespace();
+	my $ontology = undef;
 	
 	my $keys = undef;
 	my $name = undef;
+	my $namespace = undef;
 	my $parents = undef;
 	my $union = undef;
 	my $terms = undef;
+	my $ignoreLater = undef;
+	my $shortDefaultNamespace = undef;
 	while(my $cvline=$CVH->getline()) {
 		chomp($cvline);
 		
@@ -417,7 +497,7 @@ sub __parseOBO($$) {
 		if(substr($cvline,0,1) eq '[') {
 			$terms = 1;
 			if(defined($keys)) {
-				$self->addTerm(BP::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef));
+				$self->addTerm(BP::Model::CV::Term->new($keys,$name,$namespace,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef),$ignoreLater);
 				
 				# Cleaning!
 				$keys = undef;
@@ -428,8 +508,10 @@ sub __parseOBO($$) {
 				$name = undef;
 				$parents = undef;
 				$union = undef;
+				$namespace = $p_defaultNamespace;
+				$ignoreLater = undef;
 			}
-		} elsif(defined($terms)) {
+		} elsif($terms) {
 			if(defined($keys)) {
 				my($elem,$val) = split(/:\s+/,$cvline,2);
 				if($elem eq 'id') {
@@ -438,9 +520,21 @@ sub __parseOBO($$) {
 					push(@{$keys},$val);
 				} elsif($elem eq 'name') {
 					$name = $val;
-				} elsif($elem eq 'namespace' && defined($namespace) && $namespace ne $val) {
-					# Skipping the term, because it is not from the specific namespace we are interested in
-					$keys = undef;
+				} elsif($elem eq 'namespace') {
+					my $short_ns = $val;
+					
+					if(exists($p_namespaces->{$short_ns})) {
+						$namespace = $p_namespaces->{$short_ns};
+					} else {
+						$ignoreLater = 1;
+					}	
+					# } elsif($filterNamespaces) {
+					# 	# Skipping the term, because it is not from the specific namespace we are interested in
+					# 	$keys = undef;
+					# } else {
+					# 	Carp::croak('Term namespace '.$short_ns.' is unknown!');
+					# }
+					
 				} elsif($elem eq 'is_obsolete') {
 					# Skipping the term, because it is obsolete
 					$keys = undef;
@@ -470,11 +564,25 @@ sub __parseOBO($$) {
 				$self->annotations->addAnnotation($elem,fromOBO($val));
 			#} else {
 			#	$self->annotations->addAnnotation($elem,$val);
+			} elsif($elem eq 'default-namespace') {
+				$shortDefaultNamespace = fromOBO($val);
+				if(exists($p_namespaces->{$shortDefaultNamespace})) {
+					$p_defaultNamespace = $p_namespaces->{$shortDefaultNamespace};
+					$self->setDefaultNamespace($p_defaultNamespace);
+				}
+			} elsif($elem eq 'ontology') {
+				my $ontology = fromOBO($val);
+				unless(defined($p_defaultNamespace)) {
+					$shortDefaultNamespace = ''  unless(defined($shortDefaultNamespace));
+					$p_defaultNamespace = BP::Model::CV::Namespace->new($ontology,$shortDefaultNamespace);
+					$p_namespaces->{$shortDefaultNamespace} = $p_defaultNamespace;
+					$self->setDefaultNamespace($p_defaultNamespace);
+				}
 			}
 		}
 	}
 	# Last term in a file
-	$self->addTerm(BP::Model::CV::Term->new($keys,$name,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef))  if(defined($keys));
+	$self->addTerm(BP::Model::CV::Term->new($keys,$name,$namespace,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef),$ignoreLater)  if(defined($keys));
 }
 
 
@@ -559,6 +667,10 @@ sub OBOserialize($;$) {
 	foreach my $desc (@{$self->description}) {
 		BP::Model::CV::Common::printOboKeyVal($O,'remark',toOBO($desc));
 	}
+	
+	# Is there a default namespace?
+	my $p_defaultNamespace = $self->defaultNamespace();
+	$p_defaultNamespace->OBOserialize($O)  if(defined($p_defaultNamespace));
 	
 	# And now, print each one of the terms
 	my $CVhash = $self->CV;
