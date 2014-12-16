@@ -27,16 +27,18 @@ use constant {
 	PARENTS	=>	3,
 	ANCESTORS	=>	4,
 	ISALIAS	=>	5,
-	PARENTCV	=>	6
+	PARENTCV	=>	6,
+	NAMESPACE	=>	7
 };
 
 # Constructor
 # new parameters:
 #	key: a string, or an array of strings
 #	name: a string
+#	namespace: A BP::Model::CV::Namespace instance
 #	parents: undef or an array of strings
 #	isAlias: undef or true
-sub new($$;$$) {
+sub new($$;$$$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
@@ -45,6 +47,7 @@ sub new($$;$$) {
 	my $keys = undef;
 	my $name = shift;
 	# Optional parameters
+	my $namespace = shift;
 	my $parents = shift;
 	my $isAlias = shift;
 	
@@ -129,6 +132,11 @@ sub gotLineage {
 
 # The BP::Model::CV instance which defines the term
 sub parentCV {
+	return $_[0]->[PARENTCV];
+}
+
+# The BP::Model::CV::Namespace instance which defines the term namespace (if any)
+sub namespace {
 	return $_[0]->[PARENTCV];
 }
 
@@ -224,6 +232,9 @@ sub OBOserialize($) {
 	print $O "[Term]\n";
 	BP::Model::CV::Common::printOboKeyVal($O,'id',$self->key);
 	BP::Model::CV::Common::printOboKeyVal($O,'name',$self->name);
+	
+	my $namespace = $self->namespace;
+	BP::Model::CV::Common::printOboKeyVal($O,'namespace',$namespace->ns_name)  if(defined($namespace) && !$namespace->isDefaultNamespace);
 	
 	# The alterative ids
 	my $first = 1;
