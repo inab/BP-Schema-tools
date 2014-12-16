@@ -10,6 +10,15 @@
         </xs:restriction>
     </xs:simpleType>
     
+    <xs:simpleType name="namespaceShortNameType">
+        <xs:annotation>
+            <xs:documentation>CV namespace short names can have only alphanumeric (and underscore) characters</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_-]*" />
+        </xs:restriction>
+    </xs:simpleType>
+    
     <xs:simpleType name="columnNameType">
         <xs:annotation>
             <xs:documentation>column names can have only alphanumeric (and underscore) characters</xs:documentation>
@@ -21,7 +30,7 @@
     
     <xs:simpleType name="conceptTypeNameType">
         <xs:annotation>
-            <xs:documentation>column names can have only alphanumeric (and underscore) characters</xs:documentation>
+            <xs:documentation>Concept type names can have only alphanumeric (and underscore) characters</xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:pattern value="[a-zA-Z_][a-zA-Z0-9_-]*" />
@@ -258,6 +267,14 @@
     	</xs:attribute>
     </xs:attributeGroup>
     
+    <xs:attributeGroup name="nsGroup">
+        <xs:attribute name="ns" type="bp:namespaceShortNameType" use="optional">
+            <xs:annotation>
+                <xs:documentation>The namespace of this term</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    
     <xs:element name="e">
         <xs:annotation>
             <xs:documentation>An enumerated value, containing its description inside the tag</xs:documentation>
@@ -266,6 +283,7 @@
             <xs:simpleContent>
                 <xs:extension base="xs:string">
                     <xs:attributeGroup ref="bp:vGroup" />
+                    <xs:attributeGroup ref="bp:nsGroup" />
                 </xs:extension>
             </xs:simpleContent>
         </xs:complexType>
@@ -312,6 +330,35 @@
         <xs:sequence>
             <xs:element ref="bp:description" minOccurs="0" maxOccurs="unbounded" />
             <xs:element ref="bp:annotation" minOccurs="0" maxOccurs="unbounded" />
+            
+            <xs:sequence minOccurs="0" maxOccurs="1">
+                <xs:element name="cv-ns" minOccurs="1" maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>An ontology namespace (short name and URI declaration)</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:simpleContent>
+                            <xs:extension base="xs:anyURI">
+                                <xs:attribute name="shortName" type="bp:namespaceShortNameType" use="required">
+                                    <xs:annotation>
+                                        <xs:documentation>The declared short name for the namespace</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                            </xs:extension>
+                        </xs:simpleContent>
+                    </xs:complexType>
+                </xs:element>
+                
+                <xs:element name="default-cv-ns" minOccurs="0" maxOccurs="1">
+                    <xs:annotation>
+                        <xs:documentation>The default namespace used when no namespace is used in a term declaration</xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:attributeGroup ref="bp:nsGroup" />
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+            
             <xs:choice>
                 <xs:element ref="bp:cv-file"/>
                 <xs:sequence>
@@ -452,6 +499,17 @@ Any alias must have one and only one colon, which separates a "namespace" from t
                             			<xs:annotation>
                             				<xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
                             			</xs:annotation>
+                            		    
+                            		    <!-- Keys and keyrefs for CV namespace handling -->
+                            		    <xs:key name="col-nskey">
+                            		        <xs:selector xpath="bp:cv-ns" />
+                            		        <xs:field xpath="@short-name" />
+                            		    </xs:key>
+                            		    
+                            		    <xs:keyref refer="bp:col-nskey" name="col-nskey-ref">
+                            		        <xs:selector xpath="bp:default-cv-ns | bp:term | bp:alias"></xs:selector>
+                            		        <xs:field xpath="@ns"></xs:field>
+                            		    </xs:keyref>
                             		</xs:element>
 									<xs:element ref="bp:cv-ref"/>
 								</xs:choice>
@@ -989,6 +1047,16 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                     <xs:selector xpath="e"/>
                                     <xs:field xpath="@v"/>
                                 </xs:unique>
+                                <!-- Keys and keyrefs for CV namespace handling -->
+                                <xs:key name="cv-nskey">
+                                    <xs:selector xpath="bp:cv-ns" />
+                                    <xs:field xpath="@short-name" />
+                                </xs:key>
+                                
+                                <xs:keyref refer="bp:cv-nskey" name="cv-nskey-ref">
+                                    <xs:selector xpath="bp:default-cv-ns | bp:term | bp:alias"></xs:selector>
+                                    <xs:field xpath="@ns"></xs:field>
+                                </xs:keyref>
                             </xs:element>
                         	<xs:element name="meta-cv">
                         		<xs:annotation>
@@ -1004,6 +1072,16 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         						<xs:annotation>
                         							<xs:documentation>An anonymous, inline controlled vocabulary</xs:documentation>
                         						</xs:annotation>
+                        					    <!-- Keys and keyrefs for CV namespace handling -->
+                        					    <xs:key name="anon-nskey">
+                        					        <xs:selector xpath="bp:cv-ns" />
+                        					        <xs:field xpath="@short-name" />
+                        					    </xs:key>
+                        					    
+                        					    <xs:keyref refer="bp:anon-nskey" name="anon-nskey-ref">
+                        					        <xs:selector xpath="bp:default-cv-ns | bp:term | bp:alias"></xs:selector>
+                        					        <xs:field xpath="@ns"></xs:field>
+                        					    </xs:keyref>
                         					</xs:element>
                         					<xs:element ref="bp:cv-ref"/>
                         				</xs:choice>
