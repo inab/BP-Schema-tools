@@ -59,7 +59,7 @@ sub new($$;$$$) {
 	}
 	
 	# Ancestors will be resolved later
-	my @term=($key,$keys,$name,$parents,undef,$isAlias,undef);
+	my @term=($key,$keys,$name,$parents,undef,$isAlias,undef,$namespace);
 	
 	return bless(\@term,$class);
 }
