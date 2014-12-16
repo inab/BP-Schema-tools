@@ -69,7 +69,7 @@ sub new($$;$$$) {
 #	termAlias: a XML::LibXML::Element node, 'dcc:term-alias'
 #	namespaces: a reference to a hash of namespaces
 #	defaultNamespace: The default BP::Model::CV::Namespace
-sub parseAlias($;$$) {
+sub parseAlias($$;$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
@@ -79,11 +79,11 @@ sub parseAlias($;$$) {
 	my $defaultNamespace = shift;
 	my $key = $termAlias->getAttribute('name');
 	
-	my $shortNamespace = $termAlias->hasAttribute('ns')?$termAlias->getAttribute('ns'):undef;
 	my $namespace = $defaultNamespace;
 	
-	if(defined($shortNamespace)) {
-		if(defined($p_namespaces) && exists($p_namespaces->{$shortNamespace})) {
+	if($termAlias->hasAttribute('ns')) {
+		my $shortNamespace = $termAlias->getAttribute('ns');
+		if(exists($p_namespaces->{$shortNamespace})) {
 			$namespace = $p_namespaces->{$shortNamespace};
 		} else {
 			Carp::croak('Namespace '.$shortNamespace.' is unknown!');
@@ -97,11 +97,11 @@ sub parseAlias($;$$) {
 		
 		if($el->localname eq 'e') {
 			# Saving the "parents" of the alias
-			my $short_ns = $el->hasAttribute('ns')?$el->getAttribute('ns'):undef;
 			my $ns = $defaultNamespace;
 			
-			if(defined($short_ns)) {
-				if(defined($p_namespaces) && exists($p_namespaces->{$short_ns})) {
+			if($el->hasAttribute('ns')) {
+				my $short_ns = $el->getAttribute('ns');
+				if(exists($p_namespaces->{$short_ns})) {
 					$ns = $p_namespaces->{$short_ns};
 				} else {
 					Carp::croak('Namespace '.$short_ns.' is unknown!');
