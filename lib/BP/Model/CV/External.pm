@@ -3,17 +3,8 @@
 use strict;
 
 use Carp;
-use File::Basename;
-use File::Copy;
-use File::Spec;
-use IO::File;
 use XML::LibXML;
-use Encode;
-use Digest::SHA1;
 use URI;
-use Archive::Zip;
-use Archive::Zip::MemberRead;
-use Scalar::Util;
 
 use BP::Model::Common;
 
