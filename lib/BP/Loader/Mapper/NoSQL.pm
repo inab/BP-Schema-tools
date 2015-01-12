@@ -185,6 +185,8 @@ sub BP::Model::CV::Term::TO_JSON() {
 		'name'	=> $self->name,
 	);
 	
+	my $namespace = $self->namespace;
+	$hashRes{'ns'} = $namespace->ns_uri  if(defined($namespace));
 	$hashRes{'alt-id'} = $self->keys  if(scalar(@{$self->keys})>1);
 	if($self->isAlias) {
 		$hashRes{'alias'} = boolean::true;
