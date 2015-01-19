@@ -52,6 +52,11 @@ use constant STR2TYPE => {
 	'optional' => OPTIONAL
 };
 
+sub genArrayDataChecker($$);
+sub genArrayDataMangler($$);
+sub genHashDataChecker($);
+sub genHashDataMangler($);
+
 # This is the constructor.
 # parseColumnType parameters:
 #	containerDecl: a XML::LibXML::Element containing 'dcc:column-type' nodes, which
@@ -212,70 +217,72 @@ sub parseColumnType($$$) {
 				$columnType[$colType->hasAttribute('array-seps')?BP::Model::ColumnType::ARRAYSEPS : BP::Model::ColumnType::SETSEPS] = $seps;
 				
 				# Altering the data mangler in order to handle multidimensional matrices
-				my $itemDataMangler = $dataMangler;
-				$dataMangler = sub {
-					my $result = [$_[0]];
-					my @frags = ($result);
-					my $countdown = $#sepsArr;
-					foreach my $sep (@sepsArr) {
-						my @newFrags = ();
-						foreach my $frag (@frags) {
-							foreach my $value (@{$frag}) {
-								my(@newVals)=split($sep,$value);
-								if($countdown==0) {
-									# Last step, so data mangling!!!!
-									foreach my $newVal (@newVals) {
-										$newVal = $itemDataMangler->($newVal);
-									}
-								}
-								my $newFrag = \@newVals;
-								
-								$value = $newFrag;
-								push(@newFrags,$newFrag);
-							}
-						}
-						if($countdown>0) {
-							@frags = @newFrags;
-							$countdown--;
-						}
-					}
-					
-					# The real result is here
-					return $result->[0];
-				};
+				$dataMangler = genArrayDataMangler($dataMangler,scalar(@sepsArr));
+				#my $itemDataMangler = $dataMangler;
+				#$dataMangler = sub {
+				#	my $result = [$_[0]];
+				#	my @frags = ($result);
+				#	my $countdown = $#sepsArr;
+				#	foreach my $sep (@sepsArr) {
+				#		my @newFrags = ();
+				#		foreach my $frag (@frags) {
+				#			foreach my $value (@{$frag}) {
+				#				my(@newVals)=split($sep,$value);
+				#				if($countdown==0) {
+				#					# Last step, so data mangling!!!!
+				#					foreach my $newVal (@newVals) {
+				#						$newVal = $itemDataMangler->($newVal);
+				#					}
+				#				}
+				#				my $newFrag = \@newVals;
+				#				
+				#				$value = $newFrag;
+				#				push(@newFrags,$newFrag);
+				#			}
+				#		}
+				#		if($countdown>0) {
+				#			@frags = @newFrags;
+				#			$countdown--;
+				#		}
+				#	}
+				#	
+				#	# The real result is here
+				#	return $result->[0];
+				#};
 				
 				# Altering the data checker in order to handle multidimensional matrices
-				my $itemDataChecker = $dataChecker;
-				$dataChecker = sub {
-					my $result = [$_[0]];
-					my @frags = ($result);
-					my $countdown = $#sepsArr;
-					foreach my $sep (@sepsArr) {
-						my @newFrags = ();
-						foreach my $frag (@frags) {
-							foreach my $value (@{$frag}) {
-								my(@newVals)=split($sep,$value);
-								if($countdown==0) {
-									# Last step, so data mangling!!!!
-									foreach my $newVal (@newVals) {
-										return undef  unless($itemDataChecker->($newVal));
-									}
-								}
-								my $newFrag = \@newVals;
-								
-								$value = $newFrag;
-								push(@newFrags,$newFrag);
-							}
-						}
-						if($countdown>0) {
-							@frags = @newFrags;
-							$countdown--;
-						}
-					}
-					
-					# The real result is here
-					return 1;
-				};
+				$dataChecker = genArrayDataChecker($dataChecker,scalar(@sepsArr));
+				#my $itemDataChecker = $dataChecker;
+				#$dataChecker = sub {
+				#	my $result = [$_[0]];
+				#	my @frags = ($result);
+				#	my $countdown = $#sepsArr;
+				#	foreach my $sep (@sepsArr) {
+				#		my @newFrags = ();
+				#		foreach my $frag (@frags) {
+				#			foreach my $value (@{$frag}) {
+				#				my(@newVals)=split($sep,$value);
+				#				if($countdown==0) {
+				#					# Last step, so data mangling!!!!
+				#					foreach my $newVal (@newVals) {
+				#						return undef  unless($itemDataChecker->($newVal));
+				#					}
+				#				}
+				#				my $newFrag = \@newVals;
+				#				
+				#				$value = $newFrag;
+				#				push(@newFrags,$newFrag);
+				#			}
+				#		}
+				#		if($countdown>0) {
+				#			@frags = @newFrags;
+				#			$countdown--;
+				#		}
+				#	}
+				#	
+				#	# The real result is here
+				#	return 1;
+				#};
 			}
 		} elsif($colType->hasAttribute('set-seps')) {
 			Carp::croak('"container-type" must be either "set" or "hash" in order to use "set-seps" attribute!'."\nOffending XML fragment:\n".$colType->toString()."\n");
@@ -296,34 +303,36 @@ sub parseColumnType($$$) {
 			$columnType[BP::Model::ColumnType::VALHASHSEP] = $valSep;
 			
 			# Altering the data mangler in order to handle multidimensional matrices
-			my $itemDataMangler = $dataMangler;
-			$dataMangler = sub {
-				my @keyvals = split($valSep,$_[0]);
-				
-				my %resHash = ();
-				
-				foreach my $keyval  (@keyvals) {
-					my($key,$value) = split($keySep,$keyval,2);
-					
-					$resHash{$key} = $itemDataMangler->($value);
-				}
-				
-				return \%resHash;
-			};
+			$dataMangler = genHashDataMangler($dataMangler);
+			#my $itemDataMangler = $dataMangler;
+			#$dataMangler = sub {
+			#	my @keyvals = split($valSep,$_[0]);
+			#	
+			#	my %resHash = ();
+			#	
+			#	foreach my $keyval  (@keyvals) {
+			#		my($key,$value) = split($keySep,$keyval,2);
+			#		
+			#		$resHash{$key} = $itemDataMangler->($value);
+			#	}
+			#	
+			#	return \%resHash;
+			#};
 			
 			# Altering the data checker in order to handle multidimensional matrices
-			my $itemDataChecker = $dataChecker;
-			$dataChecker = sub {
-				my @keyvals = split($valSep,$_[0]);
-				
-				foreach my $keyval  (@keyvals) {
-					my($key,$value) = split($keySep,$keyval,2);
-					
-					return undef  unless($itemDataChecker->($value));
-				}
-				
-				return 1;
-			};
+			$dataChecker = genHashDataChecker($dataChecker);
+			#my $itemDataChecker = $dataChecker;
+			#$dataChecker = sub {
+			#	my @keyvals = split($valSep,$_[0]);
+			#	
+			#	foreach my $keyval  (@keyvals) {
+			#		my($key,$value) = split($keySep,$keyval,2);
+			#		
+			#		return undef  unless($itemDataChecker->($value));
+			#	}
+			#	
+			#	return 1;
+			#};
 		} elsif($colType->hasAttribute('hash-key-sep') || $colType->hasAttribute('hash-value-sep')) {
 			Carp::croak('"hash-key-sep" and "hash-value-sep" attributes must only be defined when the container type is "hash"'."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
@@ -336,6 +345,87 @@ sub parseColumnType($$$) {
 	}
 	
 	return bless(\@columnType,$class);
+}
+
+sub genHashDataChecker($) {
+	my($itemDataChecker)=@_;
+	
+	return $itemDataChecker? sub {
+		my $result = $_[0];
+		
+		return undef  unless(ref($result) eq 'HASH');
+		
+		foreach my $value (values(%{$result})) {
+			return undef  unless($itemDataChecker->($value));
+		}
+		
+		return 1;
+	} : sub {
+		# Simplified hash checking when elements must not be checked
+		return ref($_[0]) eq 'HASH';
+	};
+}
+
+sub genHashDataMangler($) {
+	my($itemDataMangler)=@_;
+	
+	return $itemDataMangler? sub {
+		my $result = $_[0];
+		my %resHash = ();
+		
+		@resHash{keys(@{$result})} = map { $itemDataMangler->($_)} values(@{$result});
+		
+		return \%resHash;
+	} : undef;
+}
+
+sub genArrayDataChecker($$) {
+	my($itemDataChecker,$dimensions)=@_;
+	return $itemDataChecker? sub {
+		my $result = $_[0];
+		
+		return undef  unless(ref($result) eq 'ARRAY');
+		
+		foreach my $dim (2..$dimensions) {
+			$result = [ map { @{$_} } @{$result} ];
+		}
+		foreach my $value (@{$result}) {
+			return undef  unless($itemDataChecker->($value));
+		}
+		
+		# The real result is here
+		return 1;
+	} : sub {
+		# Simplified array checking when elements must not be checked
+		return ref($_[0]) eq 'ARRAY';
+	};
+}
+
+sub genArrayDataMangler($$) {
+	my($itemDataMangler,$dimensions)=@_;
+	
+	return $itemDataMangler? sub {
+		my $result = [ @{$_[0]} ];
+		my @level = ( $result );
+		
+		foreach my $dim (2..$dimensions) {
+			my @newLevelResults = ();
+			foreach my $p_levelResults (@level) {
+				foreach my $p_level (@{$p_levelResults}) {
+					$p_level = [ @{$p_level} ];
+					push(@newLevelResults,$p_level);
+				}
+			}
+			
+			@level = @newLevelResults;
+		}
+		foreach my $p_level ( @level ) {
+			foreach my $value (@{$p_level}) {
+				$value = $itemDataMangler->($value);
+			}
+		}
+		return $result;
+	} : undef;
 }
 
 # Item type
