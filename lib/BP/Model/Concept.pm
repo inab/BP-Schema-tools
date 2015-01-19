@@ -24,6 +24,20 @@ use BP::Model::RelatedConcept;
 
 package BP::Model::Concept;
 
+# constants of the different elements inside the instance
+use constant {
+	C_NAME	=>	0,
+	C_FULLNAME	=>	1,
+	C_BASECONCEPTTYPES	=>	2,
+	C_CONCEPTDOMAIN	=>	3,
+	C_DESCRIPTION	=>	4,
+	C_ANNOTATIONS	=>	5,
+	C_COLUMNSET	=>	6,
+	C_IDCONCEPT	=>	7,
+	C_RELATEDCONCEPTS	=>	8,
+	C_PARENTCONCEPT	=>	9,
+};
+
 # Prototypes of static methods
 sub ParseConceptContainer($$$;$);
 
@@ -222,7 +236,7 @@ sub parseConcept($$$;$$) {
 		$columnSet,
 		$idConcept,
 		\@related,
-		$parentConcept
+		$parentConcept,
 	);
 	
 	my $me = bless(\@thisConcept,$class);
@@ -236,17 +250,17 @@ sub parseConcept($$$;$$) {
 
 # name
 sub name {
-	return $_[0]->[0];
+	return $_[0]->[C_NAME];
 }
 
 # fullname
 sub fullname {
-	return $_[0]->[1];
+	return $_[0]->[C_FULLNAME];
 }
 
 # A reference to the array of BP::Model::ConceptType instances basetypes
 sub baseConceptTypes {
-	return $_[0]->[2];
+	return $_[0]->[C_BASECONCEPTTYPES];
 }
 
 # The BP::Model::ConceptType instance basetype is the first element of the array
@@ -292,37 +306,37 @@ sub key {
 
 # The BP::Model::ConceptDomain instance where this concept is defined
 sub conceptDomain {
-	return $_[0]->[3];
+	return $_[0]->[C_CONCEPTDOMAIN];
 }
 
 # A BP::Model::DescriptionSet instance, with all the descriptions
 sub description {
-	return $_[0]->[4];
+	return $_[0]->[C_DESCRIPTION];
 }
 
 # A BP::Model::AnnotationSet instance, with all the annotations
 sub annotations {
-	return $_[0]->[5];
+	return $_[0]->[C_ANNOTATIONS];
 }
 
 # A BP::Model::ColumnSet instance with all the columns (including the inherited ones) of this concept
 sub columnSet {
-	return $_[0]->[6];
+	return $_[0]->[C_COLUMNSET];
 }
 
 # A BP::Model::Concept instance, which represents the identifying concept of this one
 sub idConcept {
-	return $_[0]->[7];
+	return $_[0]->[C_IDCONCEPT];
 }
 
 # related conceptNames, an array of BP::Model::RelatedConcept (trios concept domain name, concept name, prefix)
 sub relatedConcepts {
-	return $_[0]->[8];
+	return $_[0]->[C_RELATEDCONCEPTS];
 }
 
 # A BP::Model::Concept instance, which represents the concept which has been extended
 sub parentConcept {
-	return $_[0]->[9];
+	return $_[0]->[C_PARENTCONCEPT];
 }
 
 # refColumns parameters:
@@ -391,16 +405,8 @@ sub validateAndEnactInstances(@) {
 		}
 		
 		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
-		
-		my @resEntOrp = ();
-		foreach my $entry (@{$entorp}) {
-			unless(defined($entry)) {
-				$foundNull = 1;
-				next;
-			}
-			
-			# TODO
-		}
+		my @resEntOrp=();
+		$foundNull = $self->columnSet->checkerEnactor($entorp,\@resEntOrp);
 		$entorp = \@resEntOrp  if(scalar(@resEntOrp)>0);
 	}
 
