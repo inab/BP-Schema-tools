@@ -209,7 +209,6 @@ sub validateAndEnactAncestors(;$) {
 		if(scalar(keys(%{$self->namespaces}))>0) {
 			foreach my $term (@terms) {
 				my $p_uriKeys = $term->uriKeys();
-				next  unless(defined($p_uriKeys));
 				
 				foreach my $uriKey (@{$p_uriKeys}) {
 					$p_CV->{$uriKey} = $term;
