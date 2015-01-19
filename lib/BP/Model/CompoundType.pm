@@ -68,46 +68,48 @@ sub parseCompoundType($$) {
 	$compoundType[3] = $template;
 	
 	# the data mangler!
-	my @colMangler = map { [$_, $columnSet->columns->{$_}->columnType->dataMangler] } @{$columnSet->columnNames};
-	my @colChecker = map { $columnSet->columns->{$_}->columnType->dataChecker } @{$columnSet->columnNames};
-	$compoundType[4] = sub {
-		my %result = ();
-		
-		my $input = $_[0];
-		my $idx = 0;
-		foreach my $sep (@seps) {
-			my $limit = index($input,$sep);
-			if($limit!=-1) {
-				$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->(substr($input,0,$limit));
-				$input = substr($input,$limit+length($sep));
-			} else {
-				Carp::croak('Data mangler of '.$template.' complained parsing '.$_[0].' on facet '.$colMangler[$idx][0]);
-			}
-			$idx++;
-		}
-		# And last one
-		$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->($input);
-		
-		return  \%result;
-	};
+	$compoundType[4] = $columnSet->genDataMangler();
+	#my @colMangler = map { [$_, $columnSet->columns->{$_}->columnType->dataMangler] } @{$columnSet->columnNames};
+	#my @colChecker = map { $columnSet->columns->{$_}->columnType->dataChecker } @{$columnSet->columnNames};
+	#$compoundType[4] = sub {
+	#	my %result = ();
+	#	
+	#	my $input = $_[0];
+	#	my $idx = 0;
+	#	foreach my $sep (@seps) {
+	#		my $limit = index($input,$sep);
+	#		if($limit!=-1) {
+	#			$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->(substr($input,0,$limit));
+	#			$input = substr($input,$limit+length($sep));
+	#		} else {
+	#			Carp::croak('Data mangler of '.$template.' complained parsing '.$_[0].' on facet '.$colMangler[$idx][0]);
+	#		}
+	#		$idx++;
+	#	}
+	#	# And last one
+	#	$result{$colMangler[$idx][0]} = $colMangler[$idx][1]->($input);
+	#	
+	#	return  \%result;
+	#};
 	
 	# And the subref for the dataChecker method
-	$compoundType[5] = sub {
-		my $input = $_[0];
-		my $idx = 0;
-		foreach my $sep (@seps) {
-			my $limit = index($input,$sep);
-			if($limit!=-1) {
-				return undef  unless($colChecker[$idx]->(substr($input,0,$limit)));
-				$input = substr($input,$limit+length($sep));
-			} else {
-				return undef;
-			}
-			$idx++;
-		}
-		# And last one
-		return $colChecker[$idx]->($input);
-	};
+	$compoundType[5] = $columnSet->genDataChecker();
+	#$compoundType[5] = sub {
+	#	my $input = $_[0];
+	#	my $idx = 0;
+	#	foreach my $sep (@seps) {
+	#		my $limit = index($input,$sep);
+	#		if($limit!=-1) {
+	#			return undef  unless($colChecker[$idx]->(substr($input,0,$limit)));
+	#			$input = substr($input,$limit+length($sep));
+	#		} else {
+	#			return undef;
+	#		}
+	#		$idx++;
+	#	}
+	#	# And last one
+	#	return $colChecker[$idx]->($input);
+	#};
 	
 	# The returning values array
 	return bless(\@compoundType,$class);

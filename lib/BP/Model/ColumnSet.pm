@@ -467,17 +467,10 @@ sub resolveDefaultCalculatedValues() {
 	}
 }
 
-# checkerEnactor parameters:
-#	$entorp: A reference to an array of hashes (each hash is an entry)
-#	$p_resEntOrp: A reference to an array where the processed entries are stored
-sub checkerEnactor(\@\@) {
+sub _getCheckerEnactorMetadata() {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
-	
-	my $entorp = shift;
-	my $p_resEntOrp = shift;
-	
 	# Do we have the needed structures to do the job?
 	unless($self->[CHECKERENACTOR]) {
 		my @coldesc = ();
@@ -505,7 +498,87 @@ sub checkerEnactor(\@\@) {
 		}
 		$self->[CHECKERENACTOR] = \@coldesc;
 	}
-	my $p_checkerEnactor = $self->[CHECKERENACTOR];
+	return $self->[CHECKERENACTOR];
+}
+
+sub genDataChecker() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_checkerEnactor = $self->_getCheckerEnactorMetadata();
+	
+	return sub {
+		my $entry = shift;
+		#my @colreport=();
+		foreach my $colCheckEnact (@{$p_checkerEnactor}) {
+			my($columnName,$typePrep,$typeCheck,$defaultVal,$isVal,$isRequired)=@{$colCheckEnact};
+			
+			my $setvalue = exists($entry->{$columnName});
+			my $value = $setvalue?$entry->{$columnName}:undef;
+			unless($setvalue || defined($defaultVal)) {
+				$setvalue = 1;
+				$value = $isVal?$defaultVal:$defaultVal->($entry);
+			}
+			
+			if($isRequired && !defined($value)) {
+				return undef;
+				#push(@colreport,[$columnName,$value]);
+			} elsif($typeCheck && defined($value) && !$typeCheck->($value)) {
+				return undef;
+				#push(@colreport,[$columnName,$value]);
+			}
+		}
+		
+		return 1;
+	};
+}
+
+sub genDataMangler() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_checkerEnactor = $self->_getCheckerEnactorMetadata();
+	
+	return sub {
+		my $entry = shift;
+		
+		if(defined($entry)) {
+			my %newEntry=();
+			foreach my $colCheckEnact (@{$p_checkerEnactor}) {
+				my($columnName,$typePrep,$typeCheck,$defaultVal,$isVal,$isRequired)=@{$colCheckEnact};
+				
+				my $setvalue = exists($entry->{$columnName});
+				my $value = $setvalue?$entry->{$columnName}:undef;
+				unless($setvalue || defined($defaultVal)) {
+					$setvalue = 1;
+					$value = $isVal?$defaultVal:$defaultVal->($entry);
+				}
+				
+				if($setvalue) {
+					$value = $typePrep->($value)  if($typePrep && defined($value));
+					$newEntry{$columnName} = $value;
+				}
+			}
+			$entry = \%newEntry;
+		}
+		
+		return $entry;
+	};
+}
+
+# checkerEnactor parameters:
+#	$entorp: A reference to an array of hashes (each hash is an entry)
+#	$p_resEntOrp: A reference to an array where the processed entries are stored
+sub checkerEnactor(\@\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $entorp = shift;
+	my $p_resEntOrp = shift;
+	my $p_checkerEnactor = $self->_getCheckerEnactorMetadata();
 
 	my $foundNull = undef;
 	my @reports = ();
@@ -538,6 +611,7 @@ sub checkerEnactor(\@\@) {
 			}
 		}
 		push(@reports,[$entry,\@colreport])  if(scalar(@colreport)>0);
+		push(@{$p_resEntOrp},\%newEntry);
 	}
 	if(scalar(@reports)>0) {
 		use Data::Dumper;
