@@ -1210,7 +1210,7 @@ sub _bulkPrepare($) {
 			# The 'foreign keys'
 			if(defined($p_parentColumns)) {
 				while(my($colname,$colidx)=each(%{$p_parentColumns})) {
-					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_parentData->{$colname}) && defined($p_parentData->{$colname})));
+					Carp::croak("[".$p_mappings->[MAPPING_TABLE]."] Foreign key Values for $colname cannot be null!")  if(exists($p_required->{$colname}) && !(exists($p_parentData->{$colname}) && defined($p_parentData->{$colname})));
 					
 					push(@{$p_data_columns->[$colidx]}, $p_parentData->{$colname})  unless($skip);
 					$columnData[$colidx] = $p_parentData->{$colname};
