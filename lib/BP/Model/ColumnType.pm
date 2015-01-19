@@ -373,7 +373,7 @@ sub genHashDataMangler($) {
 		my $result = $_[0];
 		my %resHash = ();
 		
-		@resHash{keys(@{$result})} = map { $itemDataMangler->($_)} values(@{$result});
+		@resHash{keys(%{$result})} = map { $itemDataMangler->($_)} values(%{$result});
 		
 		return \%resHash;
 	} : undef;
