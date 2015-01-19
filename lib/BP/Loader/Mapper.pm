@@ -137,7 +137,11 @@ sub connect() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	$self->{conn} = $self->_connect()  unless(exists($self->{conn}));
+	unless(exists($self->{conn})) {
+		$self->{conn} = $self->_connect();
+	
+		Carp::croak("Unable to connect to the database")  unless($self->{conn});
+	}
 	
 	return $self->{conn};
 }
@@ -177,12 +181,13 @@ sub setDestination($;$) {
 	my $correlatedConcept = $_[0];
 	
 	Carp::croak("ERROR: setDestination needs a BP::Loader::CorrelatableConcept instance")  unless(blessed($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
+	my $isTemp = $_[1];
 	
 	# Any needed sort happens here
 	$correlatedConcept->openFiles();
 	
-	$self->{_destination} = $self->_genDestination(@_);
 	$self->{_correlatedConcept} = $correlatedConcept;
+	$self->{_isTemp} = $isTemp;
 	$self->{_concept} = $correlatedConcept->concept();
 }
 
@@ -194,7 +199,12 @@ sub getInternalDestination() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	return exists($self->{_destination})?$self->{_destination}:undef;
+	if(exists($self->{_correlatedConcept})) {
+		$self->{_destination} = $self->_genDestination($self->{_correlatedConcept},$self->{_isTemp})  unless(exists($self->{_destination}));
+		return $self->{_destination};
+	} else {
+		return undef;
+	}
 }
 
 # _freeDestination parameters:
@@ -216,13 +226,16 @@ sub freeDestination(;$) {
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $retval = undef;
-	if(exists($self->{_destination})) {
-		$retval = $self->flush();
-		$self->_freeDestination($self->{_destination},@_);
-		delete($self->{_destination});
+	if(exists($self->{_correlatedConcept})) {
+		if(exists($self->{_destination})) {
+			$retval = $self->flush();
+			$self->_freeDestination($self->{_destination},@_);
+			delete($self->{_destination});
+		}
 		
 		$self->{_correlatedConcept}->closeFiles();
 		delete($self->{_correlatedConcept});
+		delete($self->{_isTemp});
 		delete($self->{_concept});
 	}
 	
