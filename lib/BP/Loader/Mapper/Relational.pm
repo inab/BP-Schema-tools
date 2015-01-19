@@ -580,22 +580,22 @@ CREATE TABLE ${cvname}_CVkeys_u (
 CREATE TABLE ${cvname}_CVkeys (
 	cvkey $SQLtype NOT NULL,
 	idkey $SQLtype NOT NULL,
-	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
-	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
+	CONSTRAINT c_${cvname}_CVkeys_idkey FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	CONSTRAINT c_${cvname}_CVkeys_cvkey FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CREATE TABLE ${cvname}_CVparents (
 	idkey $SQLtype NOT NULL,
 	cvkey $SQLtype NOT NULL,
-	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
-	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
+	CONSTRAINT c_${cvname}_CVparents_idkey FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	CONSTRAINT c_${cvname}_CVparents_cvkey FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CREATE TABLE ${cvname}_CVancestors (
 	idkey $SQLtype NOT NULL,
 	cvkey $SQLtype NOT NULL,
-	FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
-	FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
+	CONSTRAINT c_${cvname}_CVancestors_idkey FOREIGN KEY (idkey) REFERENCES ${cvname}_CV(idkey),
+	CONSTRAINT c_${cvname}_CVancestors_cvkey FOREIGN KEY (cvkey) REFERENCES ${cvname}_CVkeys_u(cvkey)
 );
 
 CVEOF
@@ -626,15 +626,15 @@ CVEOF
 				print $SQL "\n;\n\n"  if($first>0);
 				
 				$first = 0;
-				%cvseen = ();
+				my %cvseen_u = ();
 				foreach my $enclosedCV (@{$CV->getEnclosedCVs}) {
 					foreach my $key  (@{$enclosedCV->order},@{$enclosedCV->aliasOrder}) {
 						my $term = $enclosedCV->getTerm($key);
 						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 						
-						foreach my $akey (@{$term->keys}) {
-							next  if(exists($cvseen{$akey}));
-							$cvseen{$akey}=undef;
+						foreach my $akey (@{$term->keys},@{$term->uriKeys}) {
+							next  if(exists($cvseen_u{$akey}));
+							$cvseen_u{$akey}=undef;
 							
 							if($first==0) {
 								print $SQL <<CVEOF;
@@ -663,7 +663,7 @@ CVEOF
 						my $term = $enclosedCV->getTerm($key);
 						my $ekey = ($doEscape)?__sql_escape($term->key):$term->key;
 						
-						foreach my $akey (@{$term->keys}) {
+						foreach my $akey (@{$term->keys},@{$term->uriKeys}) {
 							if($first==0) {
 								print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVkeys VALUES
@@ -694,17 +694,19 @@ CVEOF
 						next  unless(defined($term->parents) && scalar(@{$term->parents})>0);
 						
 						foreach my $pkey (@{$term->parents}) {
-							if($first==0) {
-								print $SQL <<CVEOF;
+							if(exists($cvseen_u{$pkey})) {
+								if($first==0) {
+									print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVparents VALUES
 CVEOF
-							}
-							print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
-							
-							$first++;
-							if($first>=$chunklines) {
-								print $SQL "\n;\n\n";
-								$first=0;
+								}
+								print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
+								
+								$first++;
+								if($first>=$chunklines) {
+									print $SQL "\n;\n\n";
+									$first=0;
+								}
 							}
 						}
 					}
@@ -724,17 +726,19 @@ CVEOF
 						next  unless(defined($term->ancestors) && scalar(@{$term->ancestors})>0);
 						
 						foreach my $pkey (@{$term->ancestors}) {
-							if($first==0) {
-								print $SQL <<CVEOF;
+							if(exists($cvseen_u{$pkey})) {
+								if($first==0) {
+									print $SQL <<CVEOF;
 INSERT INTO ${cvname}_CVancestors VALUES
 CVEOF
-							}
-							print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
-							
-							$first++;
-							if($first>=$chunklines) {
-								print $SQL "\n;\n\n";
-								$first=0;
+								}
+								print $SQL (($first>0)?",\n":''),'(',join(',',$ekey,($doEscape)?__sql_escape($pkey):$pkey),')';
+								
+								$first++;
+								if($first>=$chunklines) {
+									print $SQL "\n;\n\n";
+									$first=0;
+								}
 							}
 						}
 					}
@@ -867,8 +871,10 @@ sub _connect() {
 	my $dbh = DBI->connect($dsn,$user,$pass,$p_dbiDirectives);
 	
 	# Execute the directives
-	foreach my $directive (@{$self->{__dialect}[_SQLDIALECT_DIRECTIVES]}) {
-		$dbh->do($directive);
+	if($dbh) {
+		foreach my $directive (@{$self->{__dialect}[_SQLDIALECT_DIRECTIVES]}) {
+			$dbh->do($directive);
+		}
 	}
 	
 	return $dbh;
