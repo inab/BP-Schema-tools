@@ -180,10 +180,10 @@ sub uriKeys {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $p_uriKeys = undef;
+	my $p_uriKeys = [];
 	my $p_namespace = $self->namespace();
 	if(defined($p_namespace)) {
-		my $ns_uri = $p_namespace->ns_uri();
+		my $ns_uri = $p_namespace->ns_uri_fixed();
 		my @uriKeys = ();
 		foreach my $key (@{$self->keys}) {
 			my $tkey = $key;
@@ -207,7 +207,7 @@ sub uriKey {
 	my $uriKey = undef;
 	my $p_namespace = $self->namespace();
 	if(defined($p_namespace)) {
-		my $ns_uri = $p_namespace->ns_uri();
+		my $ns_uri = $p_namespace->ns_uri_fixed();
 		my $tkey = $self->key;
 		# TODO: do it better!
 		$tkey =~ tr/:/_/;

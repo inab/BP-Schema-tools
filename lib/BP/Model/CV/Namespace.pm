@@ -15,6 +15,7 @@ use constant {
 	URI	=>	0,
 	SHORTNAME	=>	1,
 	ISDEFAULT	=>	2,
+	URI_FIXED	=>	3,
 };
 
 # This is the constructor constructor
@@ -26,13 +27,20 @@ sub new($$;$) {
 	
 	my $namespace_URI = shift;
 	my $namespace_short = shift;
+	my $isDefault = shift;
+	my $namespace_URI_fixed = $namespace_URI;
+	$namespace_URI_fixed .= '/'  unless($namespace_URI_fixed =~ /[#\/?=]$/);
 	
-	return bless([$namespace_URI,$namespace_short,undef],$class);
+	return bless([$namespace_URI,$namespace_short,$isDefault,$namespace_URI_fixed],$class);
 }
 
 # The namespace URI
 sub ns_uri {
 	return $_[0]->[URI];
+}
+
+sub ns_uri_fixed {
+	return $_[0]->[URI_FIXED];
 }
 
 # The namespace short name
