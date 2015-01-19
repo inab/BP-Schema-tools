@@ -21,6 +21,7 @@ use constant {
 	TAG_ERR_CALLBACK	=>	'ecb',	# error callback to call
 	TAG_CONTEXT	=>	'context',	# context data passed to the callback function
 	TAG_FOLLOW	=>	'follow',	# If set, if continues despite return values and the errors
+	TAG_VERBOSE	=>	'verbose',	# If set, it is verbose on warnings
 };
 
 my %DEFCONFIG = (
@@ -92,6 +93,7 @@ sub parseTab($;\%) {
 	my $context = $hasContext?$config{TabParser::TAG_CONTEXT}:undef;
 	
 	my $doFollow = exists($config{TabParser::TAG_FOLLOW}) && $config{TabParser::TAG_FOLLOW};
+	my $beVerbose = exists($config{TabParser::TAG_VERBOSE}) && $config{TabParser::TAG_VERBOSE};
 	
 	my @fetchColumnFilters = ();
 	@fetchColumnFilters = map { [$_ => undef] } @{$config{TabParser::TAG_FETCH_COLS}}  if($doColumns);
@@ -305,11 +307,11 @@ sub parseTab($;\%) {
 			my @tok = split($sep,$cvline,-1);
 
 			if(scalar(@tok)!=$numcols) {
-				my $line = "ERROR: Line ".$T->input_line_number().". Expected $numcols columns, got ".scalar(@tok).". The guilty line:\n$cvline\n";
+				my $line = "Line ".($T->input_line_number()-1).". Expected $numcols columns, got ".scalar(@tok).". The guilty line:\n$cvline\n";
 				if($doFollow) {
-					Carp::carp($line);
+					Carp::carp('WARNING: '.$line)  if($beVerbose);
 				} else {
-					Carp::croak($line);
+					Carp::croak('ERROR: '.$line);
 				}
 			}
 			
