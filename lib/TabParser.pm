@@ -305,7 +305,12 @@ sub parseTab($;\%) {
 			my @tok = split($sep,$cvline,-1);
 
 			if(scalar(@tok)!=$numcols) {
-				Carp::croak("ERROR: Expected $numcols columns, got ".scalar(@tok));
+				my $line = "ERROR: Line ".$T->input_line_number().". Expected $numcols columns, got ".scalar(@tok).". The guilty line:\n$cvline\n";
+				if($doFollow) {
+					Carp::carp($line);
+				} else {
+					Carp::croak($line);
+				}
 			}
 			
 			# And now, let's filter!
