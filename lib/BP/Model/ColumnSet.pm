@@ -27,7 +27,8 @@ use constant {
 	ID_COLUMN_NAMES	=>	0,
 	COLUMN_NAMES	=>	1,
 	COLUMNS		=>	2,
-	INDEXES		=>	3
+	INDEXES		=>	3,
+	CHECKERENACTOR	=>	4,
 };
 
 # This is the constructor.
@@ -458,12 +459,92 @@ sub resolveDefaultCalculatedValues() {
 			my $defCalColumnName = ${$column->columnType->default};
 			
 			if(exists($p_columns->{$defCalColumnName})) {
-				$column->columnType->setCalculatedDefault($p_columns->{$defCalColumnName});
+				$column->columnType->setDefault($p_columns->{$defCalColumnName});
 			} else {
 				Carp::croak('Unknown column '.$defCalColumnName.' use for default value of column '.$column->name);
 			}
 		}
 	}
+}
+
+# checkerEnactor parameters:
+#	$entorp: A reference to an array of hashes (each hash is an entry)
+#	$p_resEntOrp: A reference to an array where the processed entries are stored
+sub checkerEnactor(\@\@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $entorp = shift;
+	my $p_resEntOrp = shift;
+	
+	# Do we have the needed structures to do the job?
+	unless($self->[CHECKERENACTOR]) {
+		my @coldesc = ();
+		my $p_columns = $self->columns;
+		foreach my $column (values(%{$p_columns})) {
+			my $typePrep = undef;
+			my $typeCheck = undef;
+			my $columnName = $column->name;
+			
+			$typePrep = $column->columnType->dataMangler;
+			$typeCheck = $column->columnType->dataChecker;
+			
+			# Optimization
+			$typePrep = undef  if($typePrep == \&BP::Model::ColumnType::__string);
+			$typeCheck = undef  if($typeCheck == \&BP::Model::ColumnType::__true);
+			
+			my $defaultVal = $column->columnType->default;
+			if(Scalar::Util::blessed($defaultVal) && $defaultVal->isa('BP::Model::Column')) {
+				my $otherColumnName = $defaultVal->name;
+				$defaultVal = sub {
+					$_[0]->{$otherColumnName};
+				};
+			}
+			push(@coldesc,[$columnName,$typePrep,$typeCheck,$defaultVal,ref($defaultVal) ne 'CODE',$column->columnType->use==BP::Model::ColumnType::REQUIRED || $column->columnType->use==BP::Model::ColumnType::IDREF]);
+		}
+		$self->[CHECKERENACTOR] = \@coldesc;
+	}
+	my $p_checkerEnactor = $self->[CHECKERENACTOR];
+
+	my $foundNull = undef;
+	my @reports = ();
+	foreach my $entry (@{$entorp}) {
+		unless(defined($entry)) {
+			$foundNull = 1;
+			next;
+		}
+		
+		# TODO
+		my %newEntry=();
+		my @colreport=();
+		foreach my $colCheckEnact (@{$p_checkerEnactor}) {
+			my($columnName,$typePrep,$typeCheck,$defaultVal,$isVal,$isRequired)=@{$colCheckEnact};
+			
+			my $setvalue = exists($entry->{$columnName});
+			my $value = $setvalue?$entry->{$columnName}:undef;
+			unless($setvalue || defined($defaultVal)) {
+				$setvalue = 1;
+				$value = $isVal?$defaultVal:$defaultVal->($entry);
+			}
+			
+			if($isRequired && !defined($value)) {
+				push(@colreport,[$columnName,$value]);
+			} elsif($typeCheck && defined($value) && !$typeCheck->($value)) {
+				push(@colreport,[$columnName,$value]);
+			} elsif($setvalue) {
+				$value = $typePrep->($value)  if($typePrep && defined($value));
+				$newEntry{$columnName} = $value;
+			}
+		}
+		push(@reports,[$entry,\@colreport])  if(scalar(@colreport)>0);
+	}
+	if(scalar(@reports)>0) {
+		use Data::Dumper;
+
+		Carp::croak(join("\n", map { "===>Entry:\n".Dumper($_->[0])."\n--->Errors:\n".join("\n",map { "\tColumn $_->[0], value ".Dumper($_->[1])} @{$_->[1]})} @reports));
+	}
+	return $foundNull;
 }
 
 1;
