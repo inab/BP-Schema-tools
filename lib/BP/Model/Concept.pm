@@ -413,4 +413,33 @@ sub validateAndEnactInstances(@) {
 	return wantarray?($entorp,$foundNull):$entorp;
 }
 
+# fakeValidateAndEnactInstances parameters:
+# It neither does validation nor fills in-line the default values
+sub fakeValidateAndEnactInstances(@) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $entorp = undef;
+	my $foundNull = undef;
+	my @entries = @_;
+	
+	if(scalar(@entries) > 0) {
+		if(scalar(@entries)>1 || ref($entries[0]) ne 'ARRAY') {
+			$entorp = \@entries;
+		} else {
+			$entorp = $entries[0];
+		}
+		
+		foreach my $entry (@{$entorp}) {
+			unless(defined($entry)) {
+				$foundNull = 1;
+				next;
+			}
+		}
+	}
+
+	return wantarray?($entorp,$foundNull):$entorp;
+}
+
 1;

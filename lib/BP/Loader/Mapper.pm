@@ -169,6 +169,7 @@ sub _genDestination($;$) {
 # setDestination parameters:
 #	corrConcept: An instance of BP::Loader::CorrelatableConcept
 #	isTemp: Sets up a temp destination
+#	noCheck: Do no checks on incoming data (speedups at your own risk!!!).
 # It sets up the destination to be used in bulkInsert calls, which depends
 # on the Mapper implementation. It can prepare a sentence and also start a transaction.
 sub setDestination($;$) {
@@ -182,6 +183,7 @@ sub setDestination($;$) {
 	
 	Carp::croak("ERROR: setDestination needs a BP::Loader::CorrelatableConcept instance")  unless(blessed($correlatedConcept) && $correlatedConcept->isa('BP::Loader::CorrelatableConcept'));
 	my $isTemp = $_[1];
+	my $noCheck = $_[2];
 	
 	# Any needed sort happens here
 	$correlatedConcept->openFiles();
@@ -189,6 +191,7 @@ sub setDestination($;$) {
 	$self->{_correlatedConcept} = $correlatedConcept;
 	$self->{_isTemp} = $isTemp;
 	$self->{_concept} = $correlatedConcept->concept();
+	$self->{_doCheck} = !$noCheck;
 }
 
 # getInternalDestination parameters:
@@ -280,7 +283,7 @@ sub bulkInsert(\@) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my($entorp,$doFlush) = $self->{_concept}->validateAndEnactInstances(@_);
+	my($entorp,$doFlush) = $self->{_doCheck}?$self->{_concept}->validateAndEnactInstances(@_):$self->{_concept}->fakeValidateAndEnactInstances(@_);
 	if($self->{_queue}) {
 		push(@{$self->{_queue}},@{$entorp});
 		my $numEntorp = scalar(@{$entorp});
@@ -466,7 +469,7 @@ sub validateAndEnactEntry($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	return $self->{_concept}->validateAndEnactInstances(@_);
+	return $self->{_doCheck}?$self->{_concept}->validateAndEnactInstances(@_):$self->{_concept}->fakeValidateAndEnactInstances(@_);
 }
 
 # mapData parameters:
