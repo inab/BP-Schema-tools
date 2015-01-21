@@ -24,10 +24,10 @@ use BP::Model;
 use BP::Loader::CorrelatableConcept;
 use BP::Loader::Mapper;
 # These are included so they self-register on BP::Loader::Mapper
-use BP::Loader::Mapper::Relational;
-use BP::Loader::Mapper::MongoDB;
-use BP::Loader::Mapper::Elasticsearch;
-use BP::Loader::Mapper::DocumentationGenerator;
+use BP::Loader::Mapper::Autoload::Relational;
+use BP::Loader::Mapper::Autoload::MongoDB;
+use BP::Loader::Mapper::Autoload::Elasticsearch;
+use BP::Loader::Mapper::Autoload::DocumentationGenerator;
 
 use Time::HiRes;
 

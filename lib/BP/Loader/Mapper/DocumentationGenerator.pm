@@ -17,17 +17,13 @@ use File::Temp;
 
 use Image::ExifTool;
 
+use BP::Loader::Mapper::Autoload::DocumentationGenerator;
+
 package BP::Loader::Mapper::DocumentationGenerator;
 
 use Scalar::Util qw(blessed);
 
 use base qw(BP::Loader::Mapper);
-
-our $SECTION;
-BEGIN {
-	$SECTION = 'gendoc';
-	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
-};
 
 my @DEFAULTS = (
 	['template-dir' => undef],
@@ -89,20 +85,20 @@ sub new($$) {
 	bless($self,$class);
 	
 	if(scalar(@DEFAULTS)>0) {
-		if($config->SectionExists($SECTION)) {
+		if($config->SectionExists($BP::Loader::Mapper::DocumentationGenerator::SECTION)) {
 			foreach my $param (@DEFAULTS) {
 				my($key,$defval) = @{$param};
 				
 				if(defined($defval)) {
-					$self->{$key} = $config->val($SECTION,$key,$defval);
-				} elsif($config->exists($SECTION,$key)) {
-					$self->{$key} = $config->val($SECTION,$key);
+					$self->{$key} = $config->val($BP::Loader::Mapper::DocumentationGenerator::SECTION,$key,$defval);
+				} elsif($config->exists($BP::Loader::Mapper::DocumentationGenerator::SECTION,$key)) {
+					$self->{$key} = $config->val($BP::Loader::Mapper::DocumentationGenerator::SECTION,$key);
 				} else {
-					Carp::croak("ERROR: required parameter $key not found in section $SECTION");
+					Carp::croak("ERROR: required parameter $key not found in section $BP::Loader::Mapper::DocumentationGenerator::SECTION");
 				}
 			}
 		} else {
-			Carp::croak("ERROR: Unable to read section $SECTION");
+			Carp::croak("ERROR: Unable to read section $BP::Loader::Mapper::DocumentationGenerator::SECTION");
 		}
 	}
 	

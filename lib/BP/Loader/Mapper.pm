@@ -54,6 +54,11 @@ sub newInstance($$;@) {
 	if(exists($storage_names{$storageModel})) {
 		my $class  = $storage_names{$storageModel};
 		my $model = shift;
+		
+		# This is required ;-)
+		eval "use $class";
+		
+		Carp::croak("ERROR: while autoloading class $class. Reason: $@")  if($@);
 		return $class->new($model,@_);
 	} else {
 		Carp::croak("ERROR: unregistered storage model $storageModel\n");

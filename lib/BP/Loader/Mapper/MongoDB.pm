@@ -8,18 +8,13 @@ use BP::Model;
 use MongoDB 0.704.0.0;
 use Tie::IxHash;
 
+use BP::Loader::Mapper::Autoload::MongoDB;
+
 package BP::Loader::Mapper::MongoDB;
 
 use Scalar::Util qw(blessed);
 
 use base qw(BP::Loader::Mapper::NoSQL);
-
-our $SECTION;
-
-BEGIN {
-	$SECTION = 'mongodb';
-	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
-};
 
 my @DEFAULTS = (
 	['db' => undef],
@@ -49,21 +44,21 @@ sub new($$) {
 	my $self  = $class->SUPER::new($model,$config);
 	bless($self,$class);
 	
-	if($config->SectionExists($SECTION)) {
+	if($config->SectionExists($BP::Loader::Mapper::MongoDB::SECTION)) {
 		foreach my $param (@DEFAULTS) {
 			my($key,$defval) = @{$param};
 			
 			if(defined($defval)) {
-				$self->{$key} = $config->val($SECTION,$key,$defval);
-			} elsif($config->exists($SECTION,$key)) {
-				$self->{$key} = $config->val($SECTION,$key);
+				$self->{$key} = $config->val($BP::Loader::Mapper::MongoDB::SECTION,$key,$defval);
+			} elsif($config->exists($BP::Loader::Mapper::MongoDB::SECTION,$key)) {
+				$self->{$key} = $config->val($BP::Loader::Mapper::MongoDB::SECTION,$key);
 			} else {
-				Carp::croak("ERROR: required parameter $key not found in section $SECTION");
+				Carp::croak("ERROR: required parameter $key not found in section $BP::Loader::Mapper::MongoDB::SECTION");
 			}
 		}
 		
 	} else {
-		Carp::croak("ERROR: Unable to read section $SECTION");
+		Carp::croak("ERROR: Unable to read section $BP::Loader::Mapper::MongoDB::SECTION");
 	}
 	
 	return $self;

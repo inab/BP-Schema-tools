@@ -13,17 +13,13 @@ use XML::LibXML;
 
 use BP::Model;
 
+use BP::Loader::Mapper::Autoload::Relational;
+
 package BP::Loader::Mapper::Relational;
 
 use Scalar::Util qw(blessed);
 
 use base qw(BP::Loader::Mapper);
-
-our $SECTION;
-BEGIN {
-	$SECTION = 'relational';
-	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
-};
 
 use constant {
 	CONF_DB	=>	'db',
@@ -166,20 +162,20 @@ sub new($$) {
 	bless($self,$class);
 	
 	if(scalar(@DEFAULTS)>0) {
-		if($config->SectionExists($SECTION)) {
+		if($config->SectionExists($BP::Loader::Mapper::Relational::SECTION)) {
 			foreach my $param (@DEFAULTS) {
 				my($key,$defval) = @{$param};
 				
 				if(defined($defval)) {
-					$self->{$key} = $config->val($SECTION,$key,$defval);
-				} elsif($config->exists($SECTION,$key)) {
-					$self->{$key} = $config->val($SECTION,$key);
+					$self->{$key} = $config->val($BP::Loader::Mapper::Relational::SECTION,$key,$defval);
+				} elsif($config->exists($BP::Loader::Mapper::Relational::SECTION,$key)) {
+					$self->{$key} = $config->val($BP::Loader::Mapper::Relational::SECTION,$key);
 				} else {
-					Carp::croak("ERROR: required parameter $key not found in section $SECTION");
+					Carp::croak("ERROR: required parameter $key not found in section $BP::Loader::Mapper::Relational::SECTION");
 				}
 			}
 		} else {
-			Carp::croak("ERROR: Unable to read section $SECTION");
+			Carp::croak("ERROR: Unable to read section $BP::Loader::Mapper::Relational::SECTION");
 		}
 	}
 	Carp::croak("ERROR: Unknown SQL dialect '$self->{BP::Loader::Mapper::Relational::CONF_DIALECT}'. Valid ones are: ".join(', ',keys(%SQLDIALECTS)))  unless(exists($SQLDIALECTS{$self->{BP::Loader::Mapper::Relational::CONF_DIALECT}}));

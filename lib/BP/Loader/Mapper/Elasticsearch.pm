@@ -13,6 +13,8 @@ use boolean 0.32;
 
 use Scalar::Util;
 
+use BP::Loader::Mapper::Autoload::Elasticsearch;
+
 package BP::Model::QuasiConcept;
 
 # A quasiconcept is not a real concept. It is only an object with id and columnSet methods
@@ -46,20 +48,12 @@ sub columnSet {
 
 1;
 
-
 package BP::Loader::Mapper::Elasticsearch;
 
 use base qw(BP::Loader::Mapper::NoSQL);
 
 use BP::Loader::CorrelatableConcept;
 
-
-our $SECTION;
-
-BEGIN {
-	$SECTION = 'elasticsearch';
-	$BP::Loader::Mapper::storage_names{$SECTION}=__PACKAGE__;
-};
 
 my @DEFAULTS = (
 	['use_https' => 'false' ],
@@ -97,23 +91,23 @@ sub new($$) {
 	my $self  = $class->SUPER::new($model,$config);
 	bless($self,$class);
 	
-	if($config->SectionExists($SECTION)) {
+	if($config->SectionExists($BP::Loader::Mapper::Elasticsearch::SECTION)) {
 		foreach my $param (@DEFAULTS) {
 			my($key,$defval) = @{$param};
 			
 			if(defined($defval)) {
-				my @values = $config->val($SECTION,$key,$defval);
+				my @values = $config->val($BP::Loader::Mapper::Elasticsearch::SECTION,$key,$defval);
 				$self->{$key} = (scalar(@values)>1)?\@values:$values[0];
-			} elsif($config->exists($SECTION,$key)) {
-				my @values = $config->val($SECTION,$key);
+			} elsif($config->exists($BP::Loader::Mapper::Elasticsearch::SECTION,$key)) {
+				my @values = $config->val($BP::Loader::Mapper::Elasticsearch::SECTION,$key);
 				$self->{$key} = (scalar(@values)>1)?\@values:((scalar(@values)>0)?$values[0]:undef);
 			} else {
-				Carp::croak("ERROR: required parameter $key not found in section $SECTION");
+				Carp::croak("ERROR: required parameter $key not found in section $BP::Loader::Mapper::Elasticsearch::SECTION");
 			}
 		}
 		
 	} else {
-		Carp::croak("ERROR: Unable to read section $SECTION");
+		Carp::croak("ERROR: Unable to read section $BP::Loader::Mapper::Elasticsearch::SECTION");
 	}
 	
 	# Normalizing use_https
