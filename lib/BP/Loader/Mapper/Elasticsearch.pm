@@ -519,7 +519,7 @@ sub _bulkInsert($\@) {
 	
 	my $p_destination = shift;
 	
-	Carp::croak("ERROR: ".(caller(0))[3]." needs an array instance")  unless(ref($p_destination) eq 'ARRAY');
+	Carp::croak("ERROR: ".(caller(0))[3]." needs por p_destination an array instance")  unless(ref($p_destination) eq 'ARRAY');
 	my $destination = $p_destination->[0];
 	Carp::croak("ERROR: ".(caller(0))[3]." needs a Search::Elasticsearch::Bulk instance")  unless(Scalar::Util::blessed($destination) && $destination->can('index'));
 	
