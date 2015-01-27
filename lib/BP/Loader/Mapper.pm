@@ -182,7 +182,7 @@ sub setDestination($;$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	Carp::croak('Destination was already setup!')  if(exists($self->{_destination}));
+	Carp::croak('Destination was already setup!')  if(exists($self->{_correlatedConcept}));
 	
 	my $correlatedConcept = $_[0];
 	
@@ -207,8 +207,10 @@ sub getInternalDestination() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	if(exists($self->{_correlatedConcept})) {
-		$self->{_destination} = $self->_genDestination($self->{_correlatedConcept},$self->{_isTemp})  unless(exists($self->{_destination}));
+	if(exists($self->{_destination})) {
+		return $self->{_destination};
+	} elsif(exists($self->{_correlatedConcept})) {
+		$self->{_destination} = $self->_genDestination($self->{_correlatedConcept},$self->{_isTemp});
 		return $self->{_destination};
 	} else {
 		return undef;
@@ -309,20 +311,21 @@ sub bulkInsert(\@) {
 	if(defined($entorp)) {
 		$entorp = $self->_bulkPrepare($entorp);
 		
+		my $p_destination = $self->getInternalDestination();
 		if($doFlush) {
 			my @retvalArr = undef;
 			my $retval = undef;
 			if(wantarray) {
-				@retvalArr = $self->_bulkInsert($self->{_destination},$entorp);
+				@retvalArr = $self->_bulkInsert($p_destination,$entorp);
 			} else {
-				$retval = $self->_bulkInsert($self->{_destination},$entorp);
+				$retval = $self->_bulkInsert($p_destination,$entorp);
 			}
 			
 			$self->flush();
 			
 			return wantarray?@retvalArr:$retval;
 		} else {
-			return $self->_bulkInsert($self->{_destination},$entorp);
+			return $self->_bulkInsert($p_destination,$entorp);
 		}
 	} elsif($doFlush) {
 		$self->flush();
@@ -346,17 +349,18 @@ sub flush() {
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $retval = undef;
-	if(exists($self->{_destination})) {
+	if(exists($self->{_correlatedConcept})) {
+		my $p_destination = $self->getInternalDestination();
 		# Support flushing even when we are not using our own batch queue
 		if($self->{_queue} && $self->{_queued} > 0) {
 			my $entorp = $self->_bulkPrepare($self->{_queue});
-			$retval = $self->_bulkInsert($self->{_destination},$entorp);
+			$retval = $self->_bulkInsert($p_destination,$entorp);
 			
 			$self->{_queue} = [];
 			$self->{_queued}  = 0;
 		}
 		
-		$self->_flush($self->{_destination});
+		$self->_flush($p_destination);
 	}
 	
 	return $retval;
@@ -380,7 +384,7 @@ sub existingEntries($) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	return $self->_existingEntries($self->{_correlatedConcept},$self->{_destination},@_);
+	return $self->_existingEntries($self->{_correlatedConcept},$self->getInternalDestination(),@_);
 }
 
 # parseOrderingHints parameters:
