@@ -630,13 +630,15 @@ sub toOBO($) {
 # serialize parameters:
 #	O: the output file handle
 #	comments: the comments to put
-sub OBOserialize($;$) {
+#	sortFunc: if set, use this function to sort the set of keys
+sub OBOserialize($;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $O = shift;
 	my $comments = shift;
+	my $sortFunc = shift;
 	if(defined($comments)) {
 		$comments = [$comments]   if(ref($comments) eq '');
 		
@@ -673,8 +675,13 @@ sub OBOserialize($;$) {
 	
 	# And now, print each one of the terms
 	my $CVhash = $self->CV;
-	foreach my $term (@{$self->order},@{$self->aliasOrder}) {
-		$CVhash->{$term}->OBOserialize($O);
+	my @termKeys = (@{$self->order},@{$self->aliasOrder});
+	
+	# Do we have to sort the terms?
+	@termKeys = sort $sortFunc @termKeys  if(ref($sortFunc) eq 'CODE');
+	
+	foreach my $termKey (@termKeys) {
+		$CVhash->{$termKey}->OBOserialize($O);
 	}
 }
 
