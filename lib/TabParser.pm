@@ -211,7 +211,7 @@ sub parseTab($;\%) {
 					@negfilter = mapFilters(\%header,@{$config{TabParser::TAG_NEG_FILTER}})  if($doNegFilter);
 					@columns = map { $_->[0] } mapFilters(\%header,@fetchColumnFilters)  if($doColumns);
 				}
-				last;
+				last HEADERGET;
 			}
 			
 			# Recording/checking the number of columns
@@ -252,27 +252,40 @@ sub parseTab($;\%) {
 							$retval = $callback->(@tok);
 						}
 					}
-					$retval = 1  if($doFollow);
 				};
 				
 				# This is a chance to recover from the error condition
-				if(defined($err_callback) && $@) {
-					eval {
-						if($hasContext) {
-							if($doColumns) {
-								$retval = $err_callback->($@,$context,@tok[@columns]);
+				if($@) {
+					if(defined($err_callback)) {
+						eval {
+							if($hasContext) {
+								if($doColumns) {
+									$retval = $err_callback->($@,$context,@tok[@columns]);
+								} else {
+									$retval = $err_callback->($@,$context,@tok);
+								}
 							} else {
-								$retval = $err_callback->($@,$context,@tok);
+								if($doColumns) {
+									$retval = $err_callback->($@,@tok[@columns]);
+								} else {
+									$retval = $err_callback->($@,@tok);
+								}
 							}
-						} else {
-							if($doColumns) {
-								$retval = $err_callback->($@,@tok[@columns]);
+						};
+						if($@) {
+							if($doFollow) {
+								Carp::carp('WARNING_ERR[header line '.($T->input_line_number()-1).']: '.$@)  if($beVerbose);
 							} else {
-								$retval = $err_callback->($@,@tok);
+								Carp::croak('ERROR_ERR[header line '.($T->input_line_number()-1).']: '.$@);
 							}
 						}
-					};
+					} elsif($doFollow) {
+						Carp::carp('WARNING[header]: '.$@)  if($beVerbose);
+					} else {
+						Carp::croak('ERROR[header]: '.$@);
+					}
 				}
+				$retval = 1  if($doFollow);
 				
 				return  unless($retval);
 			}
@@ -346,27 +359,40 @@ sub parseTab($;\%) {
 							$retval = $callback->(@tok);
 						}
 					}
-					$retval = 1  if($doFollow);
 				};
 				
 				# This is a chance to recover from the error condition
-				if(defined($err_callback) && $@) {
-					eval {
-						if($hasContext) {
-							if($doColumns) {
-								$retval = $err_callback->($@,$context,@tok[@columns]);
+				if($@) {
+					if(defined($err_callback)) {
+						eval {
+							if($hasContext) {
+								if($doColumns) {
+									$retval = $err_callback->($@,$context,@tok[@columns]);
+								} else {
+									$retval = $err_callback->($@,$context,@tok);
+								}
 							} else {
-								$retval = $err_callback->($@,$context,@tok);
+								if($doColumns) {
+									$retval = $err_callback->($@,@tok[@columns]);
+								} else {
+									$retval = $err_callback->($@,@tok);
+								}
 							}
-						} else {
-							if($doColumns) {
-								$retval = $err_callback->($@,@tok[@columns]);
+						};
+						if($@) {
+							if($doFollow) {
+								Carp::carp('WARNING_ERR[line '.($T->input_line_number()-1).']: '.$@)  if($beVerbose);
 							} else {
-								$retval = $err_callback->($@,@tok);
+								Carp::croak('ERROR_ERR[line '.($T->input_line_number()-1).']: '.$@);
 							}
 						}
-					};
+					} elsif($doFollow) {
+						Carp::carp('WARNING[line '.($T->input_line_number()-1).']: '.$@)  if($beVerbose);
+					} else {
+						Carp::croak('ERROR[line '.($T->input_line_number()-1).']: '.$@);
+					}
 				}
+				$retval = 1  if($doFollow);
 				
 				return  unless($retval);
 			}
