@@ -58,8 +58,9 @@ sub new(;$$) {
 # parseCV parameters:
 #	container: a XML::LibXML::Element, either 'dcc:column-type' or 'dcc:meta-cv' nodes
 #	model: a BP::Model instance
+#	skipCVparse: skip ontology parsing (for chicken and egg cases)
 # returns either a BP::Model::CV, a BP::Model::CV::Meta or a Regexp
-sub parseMetaCV($$) {
+sub parseMetaCV($$;$) {
 	my $self = shift;
 	
 	# Dual instance/class method
@@ -70,6 +71,7 @@ sub parseMetaCV($$) {
 	
 	my $container = shift;
 	my $model = shift;
+	my $skipCVparse = shift;
 	
 	my $restriction = undef;
 	my $metaCVname = undef;
@@ -87,7 +89,7 @@ sub parseMetaCV($$) {
 		if($restrictChild->localName eq 'cv') {
 			$restriction = BP::Model::CV::Meta->new($metaCVname,$isLax)  unless(defined($restriction));
 			
-			$restriction->add(BP::Model::CV->parseCV($restrictChild,$model));
+			$restriction->add(BP::Model::CV->parseCV($restrictChild,$model,$skipCVparse));
 		} elsif($restrictChild->localName eq 'cv-ref') {
 			my $namedCV = $model->getNamedCV($restrictChild->getAttribute('name'));
 			if(defined($namedCV)) {
@@ -238,6 +240,25 @@ sub getEnclosedCVs() {
 	my @enclosedCVs = @{$self}[BP::Model::CV::Meta::CVFIRST..$#{$self}];
 	
 	return \@enclosedCVs;
+}
+
+# It returns an array of BP::Model::CV::External instances (or undef)
+sub uri() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_enclosedCVs = $self->getEnclosedCVs();
+	
+	my @uris = ();
+	
+	foreach my $p_CV (@{$p_enclosedCVs}) {
+		my $p_uris = $p_CV->uri;
+		
+		push(@uris,@{$p_uris})  if(ref($p_uris) eq 'ARRAY');
+	}
+	
+	return \@uris;
 }
 
 1;

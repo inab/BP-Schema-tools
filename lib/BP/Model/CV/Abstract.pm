@@ -74,6 +74,34 @@ sub getTerm($) {
 	Carp::croak("Unimplemented method!");
 }
 
+# It returns an array of BP::Model::CV::External instances
+sub uri() {
+	Carp::croak("Unimplemented method!");
+}
+
+# mirror remote uris
+#	workdir: working directory where to fetch them
+# It returns an array of pairs (uri, localFile)
+sub mirrorURIs($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_uris = $self->uri;
+	
+	Carp::croak((caller(0))[3].' can be only called on CVs with URIs!')  unless(ref($p_uris) eq 'ARRAY');
+	
+	my $workdir = shift;
+	
+	my @mirrored = ();
+	
+	foreach my $p_ext (@{$p_uris}) {
+		push(@mirrored,[$p_ext,$p_ext->mirrorURI($workdir)]);
+	}
+	
+	return \@mirrored;
+}
+
 # With this method a reference to a validator is given
 sub dataChecker {
 	my $self = shift;

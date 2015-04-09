@@ -87,12 +87,13 @@ sub new() {
 # parseCV parameters:
 #	cv: a XML::LibXML::Element 'dcc:cv' node
 #	model: a BP::Model instance
+#	skipCVparse: skip ontology parsing (for chicken and egg cases)
 # returns a BP::Model::CV array reference, with all the controlled vocabulary
 # stored inside.
 # If the CV is in an external file, this method reads it, and calls the model to
 # sanitize the paths and to digest the read lines.
 # If the CV is in an external URI, this method only checks whether it is available (TBD)
-sub parseCV($$) {
+sub parseCV($$;$) {
 	my $self = shift;
 	
 	# Dual instance/class method
@@ -103,6 +104,7 @@ sub parseCV($$) {
 	
 	my $cv = shift;
 	my $model = shift;
+	my $skipCVparse = shift;
 	
 	$self->annotations->parseAnnotations($cv);
 	$self->description->parseDescriptions($cv);
@@ -168,14 +170,18 @@ sub parseCV($$) {
 			# Saving it for a possible storage in a bpmodel
 			$self->[BP::Model::CV::CVXMLEL] = $el;
 			
-			my $CVH = $model->openCVpath($cvPath);
-			if($cvFormat == BP::Model::CV::CVFORMAT_CVFORMAT) {
-				$self->__parseCVFORMAT($CVH,$model);
-			} elsif($cvFormat == BP::Model::CV::CVFORMAT_OBO) {
-				$self->__parseOBO($CVH,$model);
+			# This is needed for chicken and egg cases, where the ontology is not generated yet, or it is going to be replaced
+			unless($skipCVparse) {
+				my $CVH = $model->openCVpath($cvPath);
+				if($cvFormat == BP::Model::CV::CVFORMAT_CVFORMAT) {
+					$self->__parseCVFORMAT($CVH,$model);
+				} elsif($cvFormat == BP::Model::CV::CVFORMAT_OBO) {
+					$self->__parseOBO($CVH,$model);
+				}
+				
+				$CVH->close();
 			}
 			
-			$CVH->close();
 			# We register the local CVs, even the local dumps of the remote CVs
 			$model->registerCV($self);
 		} elsif($el->localname eq 'term-alias') {

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.0">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.1">
     <xs:annotation>
-        <xs:documentation>BLUEPRINT DCC Schema 2.0, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
+        <xs:documentation>BLUEPRINT DCC Schema 2.1, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
     <xs:simpleType name="nonEmptyStringType">
@@ -372,6 +372,11 @@
                                     <xs:attribute name="doc" use="optional" type="xs:anyURI">
                                         <xs:annotation>
                                             <xs:documentation>Optional online documentation about the controlled vocabulary</xs:documentation>
+                                        </xs:annotation>
+                                    </xs:attribute>
+                                    <xs:attribute name="name" use="optional" type="xs:string">
+                                        <xs:annotation>
+                                            <xs:documentation>Optional symbolic name for this resource</xs:documentation>
                                         </xs:annotation>
                                     </xs:attribute>
                                     <xs:attribute name="format" use="optional">

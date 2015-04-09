@@ -53,14 +53,16 @@ use constant Signatures => ['schemaSHA1','modelSHA1','cvSHA1'];
 ##############
 
 # 'new' is not included in the prototypes
-sub digestModel($);
+sub digestModel($;$);
 
 #################
 # Class methods #
 #################
 
 # The constructor takes as input the filename
-sub new($;$) {
+# optionally, it takes a parameter to force a BP model file format
+# and a parameter to skip ontology parsing (for chicken and egg cases)
+sub new($;$$) {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
 	
@@ -71,6 +73,7 @@ sub new($;$) {
 	# Let's start processing the input model
 	my $modelPath = shift;
 	my $forceBPModel = shift;
+	my $skipCVparse = shift;
 	my $modelAbsPath = File::Spec->rel2abs($modelPath);
 	my $modelDir = File::Basename::dirname($modelAbsPath);
 	
@@ -170,11 +173,11 @@ sub new($;$) {
 	}
 	
 	# No error, so, let's process it!!
-	$self->digestModel($model);
+	$self->digestModel($model,$skipCVparse);
 	
 	# Now, we should have SHA1 of full model (model+CVs) and CVs only
 	my $cvSHA1 = $self->{_CVSHA}->hexdigest;
-	Carp::croak("$modelPath is corrupted (wrong CV SHA1) $cvSHA1 => $expectedCvSHA1")  if(defined($expectedCvSHA1) && $expectedCvSHA1 ne $cvSHA1);
+	Carp::croak("$modelPath is corrupted (wrong CV SHA1) $cvSHA1 => $expectedCvSHA1")  if(!$skipCVparse && defined($expectedCvSHA1) && $expectedCvSHA1 ne $cvSHA1);
 		
 	$self->{_cvSHA1} = $cvSHA1;
 	$self->{_fullmodelSHA1} = $self->{_SHA}->hexdigest;
@@ -407,14 +410,17 @@ sub saveBPModel($) {
 
 # digestModel parameters:
 #	model: XML::LibXML::Document node following BP schema
+#	skipCVparse: skip ontology parsing (for chicken and egg cases)
 # The method parses the input XML::LibXML::Document and fills in the
 # internal memory structures used to represent a BP model
-sub digestModel($) {
+sub digestModel($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $modelDoc = shift;
+	my $skipCVparse = shift;
+	
 	my $modelRoot = $modelDoc->documentElement();
 	
 	my $model = $self;
@@ -486,9 +492,9 @@ sub digestModel($) {
 			
 			my $p_structCV = undef;
 			if($cv->localname eq 'cv') {
-				$p_structCV = BP::Model::CV->parseCV($cv,$model);
+				$p_structCV = BP::Model::CV->parseCV($cv,$model,$skipCVparse);
 			} else {
-				$p_structCV = BP::Model::CV::Meta->parseMetaCV($cv,$model);
+				$p_structCV = BP::Model::CV::Meta->parseMetaCV($cv,$model,$skipCVparse);
 			}
 			
 			# Let's store named CVs here, not anonymous ones
