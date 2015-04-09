@@ -9,6 +9,7 @@ use MongoDB 0.704.0.0;
 use Tie::IxHash;
 
 use BP::Loader::Mapper::Autoload::MongoDB;
+use BP::Loader::Tools;
 
 package BP::Loader::Mapper::MongoDB;
 
@@ -336,7 +337,7 @@ sub _existingEntries($$$) {
 			$kidx++;
 		}
 		
-		if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
+		if(open(my $EXISTING,"| ".BP::Loader::Tools::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | '".BP::Loader::Tools::GZIP."' -9c > '$existingFile'")) {
 			while(my $doc = $cursor->next) {
 				$counter ++;
 			#	#print STDERR "DEBUG: ",ref($doc)," ",join(',',keys(%{$doc})),"\n";

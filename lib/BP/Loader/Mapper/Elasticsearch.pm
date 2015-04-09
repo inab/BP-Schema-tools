@@ -14,6 +14,7 @@ use boolean 0.32;
 use Scalar::Util;
 
 use BP::Loader::Mapper::Autoload::Elasticsearch;
+use BP::Loader::Tools;
 
 package BP::Model::QuasiConcept;
 
@@ -429,7 +430,7 @@ sub _existingEntries($$$) {
 			$kidx++;
 		}
 		
-		if(open(my $EXISTING,"| ".BP::Loader::CorrelatableConcept::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$existingFile'")) {
+		if(open(my $EXISTING,"| ".BP::Loader::Tools::SORT." -S 50% --parallel=${BP::Loader::CorrelatableConcept::NUMCPUS} $sortColDef | '".BP::Loader::Tools::GZIP."' -9c > '$existingFile'")) {
 			until($scroll->is_finished) {
 				$scroll->refill_buffer();
 				my @docs = $scroll->drain_buffer();

@@ -13,17 +13,12 @@ use Sys::CPU;
 use boolean;
 use DateTime::Format::ISO8601;
 
+use BP::Loader::Tools;
 use BP::Loader::CorrelatableConcept::File;
 
 package BP::Loader::CorrelatableConcept;
 
 use Scalar::Util qw(blessed);
-
-use constant {
-	GZIP	=>	'pigz',
-	GUNZIP	=>	'unpigz',
-	SORT	=>	'sort'
-};
 
 use constant {
 	ANNOTATION_GROUPING_HINT	=>	'grouping-hint'
@@ -118,7 +113,7 @@ sub new($@) {
 		}
 	}
 	
-	# TODO: command line tool detection (pigz vs gzip)
+	# Command line tool detection (pigz vs gzip) is done in BP::Loader::Tools
 
 	return $self;
 }
@@ -242,11 +237,11 @@ sub __SortCompressed(\@\@) {
 	# This command line reorders the lines
 	# keeping the comments and the header at the beginning of the file
 	# and sorting by the input keys
-	# my $cmd = "('$GREP' '^#' '$infile' ; '$GREP' -v '^#' '$infile' | head -n 1 ; '$GREP' -v '^#' '$infile' | tail -n +2 | '$SORT' --parallel=$NUMCPUS -S 50% $sortkeys ) | gzip -9c > '$tmpoutfilename'";
+	# my $cmd = "('$GREP' '^#' '$infile' ; '$GREP' -v '^#' '$infile' | head -n 1 ; '$GREP' -v '^#' '$infile' | tail -n +2 | '".BP::Loader::Tools::SORT."' --parallel=$NUMCPUS -S 50% $sortkeys ) | '".BP::Loader::Tools::GZIP."' -9c > '$tmpoutfilename'";
 	
 	my $inpipeStr = __inpipe2Str(@{$inpipe});
 	
-	my $cmd = "$inpipeStr | '".BP::Loader::CorrelatableConcept::SORT."' --parallel=$NUMCPUS -S 50% $sortkeys | ".BP::Loader::CorrelatableConcept::GZIP." -9c > '$tmpoutfilename'";
+	my $cmd = "$inpipeStr | '".BP::Loader::Tools::SORT."' --parallel=$NUMCPUS -S 50% $sortkeys | '".BP::Loader::Tools::GZIP."' -9c > '$tmpoutfilename'";
 	
 	system($cmd);
 	
@@ -349,7 +344,7 @@ sub openFiles() {
 			if(defined($self->{__compressed})) {
 				# All the content is already preprocessed
 				my $sortedFilename = $self->{PKsortedConceptFile} ? $self->{PKsortedConceptFile}->filename() : $self->{FKsortedConceptFile}->filename();
-				if(open(my $H,'-|',BP::Loader::CorrelatableConcept::GUNZIP,'-c',$sortedFilename)) {
+				if(open(my $H,'-|',BP::Loader::Tools::GUNZIP,'-c',$sortedFilename)) {
 					$self->{H} = $H;
 				} else {
 					Carp::croak('ERROR: Unable to open sorted temp file associated to concept '.$self->{concept}->id);
