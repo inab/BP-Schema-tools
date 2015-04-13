@@ -8,6 +8,7 @@ package TabParser;
 
 use constant {
 	TAG_COMMENT	=>	'comment',	# Symbol use for comments in the tabular file
+	TAG_MULTILINE_SEP	=>	'mult-sep',	# String used to signal multi-line rows
 	TAG_SEP		=>	'sep',		# Regular expression separator used for the columns in the tabular file
 	TAG_DELIMITER	=>	'delim',	# Symbol used for the columns in the tabular file
 	TAG_SKIPLINES	=>	'skip-lines',	# Number of lines to skip at the beginning
@@ -136,6 +137,14 @@ sub parseTab($;\%) {
 		$commentSep = $config{TabParser::TAG_COMMENT};
 	}
 		
+	# This is the multi-line separator
+	my $multiSep = undef;
+	my $multiSepLength = undef;
+	if(exists($config{TabParser::TAG_MULTILINE_SEP})) {
+		$multiSep = $config{TabParser::TAG_MULTILINE_SEP};
+		$multiSepLength = length($multiSep);
+	}
+	
 	my $eof = undef;
 	# Skipping lines
 	if(exists($config{TabParser::TAG_SKIPLINES}) && $config{TabParser::TAG_SKIPLINES} > 0) {
@@ -173,6 +182,7 @@ sub parseTab($;\%) {
 		
 		# Step 1: getting what we need
 		my $cvline = undef;
+		my $precvline = defined($multiSep)?'':undef;
 		HEADERGET:
 		while(!defined($numcols) && ($cvline=$T->getline())) {
 			chomp($cvline);
@@ -181,6 +191,18 @@ sub parseTab($;\%) {
 			if(defined($commentSep)) {
 				my $commentIdx = index($cvline,$commentSep);
 				$cvline = substr($cvline,0,$commentIdx)  if($commentIdx!=-1);
+			}
+			
+			# Is it a multi-line?
+			if(defined($multiSep)) {
+				my $cvlineMinLength = length($cvline)-$multiSepLength;
+				if(index($cvline,$multiSep)==$cvlineMinLength) {
+					$precvline .= substr($cvline,0,$cvlineMinLength);
+					next;
+				} else {
+					$cvline = $precvline . $cvline;
+					$precvline = '';
+				}
 			}
 			
 			# And trimming external delimiters
@@ -303,6 +325,18 @@ sub parseTab($;\%) {
 				$cvline = substr($cvline,0,$commentIdx)  if($commentIdx!=-1);
 			}
 			
+			# Is it a multi-line?
+			if(defined($multiSep)) {
+				my $cvlineMinLength = length($cvline)-$multiSepLength;
+				if(index($cvline,$multiSep)==$cvlineMinLength) {
+					$precvline .= substr($cvline,0,$cvlineMinLength);
+					next;
+				} else {
+					$cvline = $precvline . $cvline;
+					$precvline = '';
+				}
+			}
+			
 			# And trimming external delimiters
 			if(defined($delim)) {
 				if(index($cvline,$delim)==0) {
@@ -318,9 +352,9 @@ sub parseTab($;\%) {
 			
 			# Now, let's split the line
 			my @tok = split($sep,$cvline,-1);
-
-			if(scalar(@tok)!=$numcols) {
-				my $line = "Line ".($T->input_line_number()-1).". Expected $numcols columns, got ".scalar(@tok).". The guilty line:\n$cvline\n";
+			my $tokLength = scalar(@tok);
+			if($tokLength!=$numcols) {
+				my $line = "Line ".($T->input_line_number()-1).". Expected $numcols columns, got $tokLength. The guilty line:\n$cvline\n";
 				if($doFollow) {
 					Carp::carp('WARNING: '.$line)  if($beVerbose);
 				} else {
@@ -331,13 +365,13 @@ sub parseTab($;\%) {
 			# And now, let's filter!
 			if($doPosFilter) {
 				foreach my $filter (@posfilter) {
-					next GETLINE  if($tok[$filter->[0]] ne $filter->[1]);
+					next GETLINE  if($tokLength > $filter->[0] && $tok[$filter->[0]] ne $filter->[1]);
 				}
 			}
 			
 			if($doNegFilter) {
 				foreach my $filter (@negfilter) {
-					next GETLINE  if($tok[$filter->[0]] eq $filter->[1]);
+					next GETLINE  if($tokLength > $filter->[0] && $tok[$filter->[0]] eq $filter->[1]);
 				}
 			}
 			
