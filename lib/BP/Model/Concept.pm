@@ -36,6 +36,7 @@ use constant {
 	C_IDCONCEPT	=>	7,
 	C_RELATEDCONCEPTS	=>	8,
 	C_PARENTCONCEPT	=>	9,
+	C_ID	=>	10
 };
 
 # Prototypes of static methods
@@ -70,6 +71,32 @@ sub ParseConceptContainer($$$;$) {
 			last;
 		}
 	}
+}
+
+# The concepts created using this constructor can be quasiconcepts:
+#	they are not real concepts. It is only an object with id and columnSet methods
+# It is only needed by Elasticsearch (and others) metadata generation
+
+# Constructor parameters in the array
+#	name
+#	fullname
+#	basetype
+#	concept domain
+#	Description Set
+#	Annotation Set
+#	ColumnSet
+#	identifying concept
+#	related conceptNames
+#	parent concept
+#	id: The id of this QuasiConcept
+sub new(\@) {
+	my $proto = shift;
+	my $class = ref($proto) || $proto;
+	
+	my $p_thisConcept = shift;
+	Carp::croak("ERROR: Input parameter must be an array")  unless(ref($p_thisConcept) eq 'ARRAY');
+	
+	return bless($p_thisConcept, $class);
 }
 
 # This is the constructor
@@ -225,7 +252,10 @@ sub parseConcept($$$;$$) {
 	# Description Set
 	# Annotation Set
 	# ColumnSet
+	# identifying concept
 	# related conceptNames
+	# parent concept
+	# id
 	my @thisConcept = (
 		$conceptName,
 		$conceptFullname,
@@ -237,9 +267,10 @@ sub parseConcept($$$;$$) {
 		$idConcept,
 		\@related,
 		$parentConcept,
+		undef
 	);
 	
-	my $me = bless(\@thisConcept,$class);
+	my $me = $class->new(\@thisConcept);
 	
 	# Registering on our concept domain
 	$conceptDomain->registerConcept($me);
@@ -372,7 +403,7 @@ sub id() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $id = join('.',$self->conceptDomain->name, $self->name);
+	my $id = defined($self->[C_ID])?$self->[C_ID]:join('.',$self->conceptDomain->name, $self->name);
 	
 	return $id;
 }
