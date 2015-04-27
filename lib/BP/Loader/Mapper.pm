@@ -177,7 +177,7 @@ sub _genDestination($;$) {
 #	noCheck: Do no checks on incoming data (speedups at your own risk!!!).
 # It sets up the destination to be used in bulkInsert calls, which depends
 # on the Mapper implementation. It can prepare a sentence and also start a transaction.
-sub setDestination($;$) {
+sub setDestination($;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
