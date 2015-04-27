@@ -237,10 +237,10 @@ sub BP::Model::CV::Term::TO_JSON() {
 	
 	my $namespace = $self->namespace;
 	$hashRes{'ns'} = $namespace->ns_uri  if(defined($namespace));
-	$hashRes{'alt-id'} = [@{$self->keys},@{$self->uriKeys}];
+	$hashRes{'alt_id'} = [@{$self->keys},@{$self->uriKeys}];
 	if($self->isAlias) {
 		$hashRes{'alias'} = boolean::true;
-		$hashRes{'union-of'} = $self->parents;
+		$hashRes{'union_of'} = $self->parents;
 	} elsif(defined($self->parents)) {
 		$hashRes{'parents'} = $self->parents;
 		$hashRes{'ancestors'} = $self->ancestors;
