@@ -98,10 +98,10 @@ sub _connect() {
 	return $db;
 }
 
-# existsDestination parameters:
+# existsCollection parameters:
 #	collection: a BP::Model::Collection instance
 # It returns true if the collection was already created
-sub existsDestination($) {
+sub existsCollection($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
@@ -207,7 +207,7 @@ sub storeNativeModel() {
 	if(defined($self->{model}->metadataCollection())) {
 		$metadataCollection = $self->{model}->metadataCollection();
 		# This must be checked before the creation of the collections
-		$metadataExists = $self->existsDestination($metadataCollection);
+		$metadataExists = $self->existsCollection($metadataCollection);
 		$metadataCollection->clearIndexes();
 		# Let's add the needed meta-indexes for CV terms
 		$metadataCollection->addIndexes(BP::Model::Index->new('terms',undef,['term',1]),BP::Model::Index->new('terms',undef,['parents',1]),BP::Model::Index->new('terms',undef,['ancestors',1]));

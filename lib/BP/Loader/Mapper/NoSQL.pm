@@ -589,6 +589,13 @@ sub createCollection($) {
 	Carp::croak('Unimplemented method!');
 }
 
+# existsCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it tells whether the collection was created
+sub existsCollection($) {
+	Carp::croak('Unimplemented method!');
+}
+
 # _incrementalUpdate parameters:
 #	destination: The destination of the bulk insertion.
 #	p_entry: an entry to be updated
