@@ -40,6 +40,12 @@ sub tiempo($$) {
 	return $next;
 }
 
+my $doDumpModel = undef;
+if(scalar(@ARGV)>0 && $ARGV[0] eq '-dm') {
+	$doDumpModel=1;
+	shift(@ARGV);
+}
+
 if(scalar(@ARGV)>=2) {
 	my $iniFile = shift(@ARGV);
 	my $workingDir = shift(@ARGV);
@@ -79,7 +85,7 @@ if(scalar(@ARGV)>=2) {
 	my %storageModels = ();
 	
 	# Is there any file whose data has to be mapped?
-	if(scalar(@ARGV)>0) {
+	unless($doDumpModel) {
 		# Setting up the loader storage model(s)
 		Carp::croak('ERROR: undefined destination storage model')  unless($ini->exists($BP::Loader::Mapper::SECTION,'loaders'));
 		my $loadModelNames = $ini->val($BP::Loader::Mapper::SECTION,'loaders');
@@ -99,95 +105,97 @@ if(scalar(@ARGV)>=2) {
 			}
 		}
 		
-		# Let's get the associated concepts
-		my %conceptMatch = ();
-		my @conceptMatchArray = ();
-		foreach my $filename (@ARGV) {
-			my $p_matches = $model->matchConceptsFromFilename($filename);
-			if(defined($p_matches)) {
-				if(scalar(@{$p_matches}) > 1) {
-					Carp::croak('ERROR: Filename '.$filename.' matched more than one filename pattern. Please reconsider change the filename patterns\n')
-				} else {
-					# Saving the correspondences for later
-					my $match = $p_matches->[0];
-					my $conceptKey = $match->[0] + 0;
-					unless(exists($conceptMatch{$conceptKey})) {
-						# The concept and the filenames which matched
-						my $conceptMatchValue = [$match->[0],[]];
-						$conceptMatch{$conceptKey} = $conceptMatchValue;
-						push(@conceptMatchArray,$conceptMatchValue);
-					}
-					push(@{$conceptMatch{$conceptKey}->[1]}, [$filename,$match]);
-				}
-			} else {
-				print STDERR "WARNING: Unable to identify corresponding concept for $filename. Discarding...\n";
-			}
-		}
-		
-		if(scalar(keys(%conceptMatch)) == 0) {
-			print STDERR "ERROR: No input filename matched against declared concepts. Exiting...\n";
-			exit 1;
-		}
-		
-		foreach my $mapper (@storageModels{@loadModels}) {
-			# Now, let's create the possibly correlatable concepts
-			# and check which of them can be correlated
-			my @mainCorrelatableConcepts = ();
-			my @otherCorrelatedConcepts = ();
-			my %correlatableConcepts = ();
-			my %chainedConcepts = ();
-			foreach my $set (@conceptMatchArray) {
-				my($concept,$matchedFileset) = @{$set};
-				
-				my $conceptKey = $concept+0;
-				$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
-				
-				# Save for later processing
-				if($mapper->nestedCorrelatedConcepts() && ! $concept->goesToCollection()) {
-					my $idConcept = $concept->idConcept;
-					
-					if(defined($idConcept)) {
-						my $idkey = $idConcept+0;
-						$chainedConcepts{$idkey} = []  unless(exists($chainedConcepts{$idkey}));
-						push(@{$chainedConcepts{$idkey}},$correlatableConcepts{$conceptKey});
+		if(scalar(@ARGV)>0) {
+			# Let's get the associated concepts
+			my %conceptMatch = ();
+			my @conceptMatchArray = ();
+			foreach my $filename (@ARGV) {
+				my $p_matches = $model->matchConceptsFromFilename($filename);
+				if(defined($p_matches)) {
+					if(scalar(@{$p_matches}) > 1) {
+						Carp::croak('ERROR: Filename '.$filename.' matched more than one filename pattern. Please reconsider change the filename patterns\n')
 					} else {
-						Carp::croak('FATAL ERROR: Concept '.$concept->id.' does not go to a collection and it does not have an identifying concept\n');
+						# Saving the correspondences for later
+						my $match = $p_matches->[0];
+						my $conceptKey = $match->[0] + 0;
+						unless(exists($conceptMatch{$conceptKey})) {
+							# The concept and the filenames which matched
+							my $conceptMatchValue = [$match->[0],[]];
+							$conceptMatch{$conceptKey} = $conceptMatchValue;
+							push(@conceptMatchArray,$conceptMatchValue);
+						}
+						push(@{$conceptMatch{$conceptKey}->[1]}, [$filename,$match]);
 					}
-					push(@otherCorrelatedConcepts,$correlatableConcepts{$conceptKey});
 				} else {
-					push(@mainCorrelatableConcepts,$correlatableConcepts{$conceptKey});
+					print STDERR "WARNING: Unable to identify corresponding concept for $filename. Discarding...\n";
 				}
 			}
 			
-			my @freeSlavesCorrelatableConcepts = ();
+			if(scalar(keys(%conceptMatch)) == 0) {
+				print STDERR "ERROR: No input filename matched against declared concepts. Exiting...\n";
+				exit 1;
+			}
 			
-			if($mapper->nestedCorrelatedConcepts()) {
-				# Let's visit the possible correlations
-				my %disabledCorrelatedConcepts = ();
-				foreach my $idkey (keys(%chainedConcepts)) {
-					if(exists($correlatableConcepts{$idkey})) {
-						# First, register them as correlatable
-						my $correlatableConcept = $correlatableConcepts{$idkey};
-						foreach my $correlatedConcept (@{$chainedConcepts{$idkey}}) {
-							$correlatableConcept->addCorrelatedConcept($correlatedConcept);
-							
-							# Then, save their keys, to be disabled when they are processed
-							$disabledCorrelatedConcepts{$correlatedConcept+0} = undef;
+			foreach my $mapper (@storageModels{@loadModels}) {
+				# Now, let's create the possibly correlatable concepts
+				# and check which of them can be correlated
+				my @mainCorrelatableConcepts = ();
+				my @otherCorrelatedConcepts = ();
+				my %correlatableConcepts = ();
+				my %chainedConcepts = ();
+				foreach my $set (@conceptMatchArray) {
+					my($concept,$matchedFileset) = @{$set};
+					
+					my $conceptKey = $concept+0;
+					$correlatableConcepts{$conceptKey} = BP::Loader::CorrelatableConcept->($concept,map { $_->[0] } @{$matchedFileset});
+					
+					# Save for later processing
+					if($mapper->nestedCorrelatedConcepts() && ! $concept->goesToCollection()) {
+						my $idConcept = $concept->idConcept;
+						
+						if(defined($idConcept)) {
+							my $idkey = $idConcept+0;
+							$chainedConcepts{$idkey} = []  unless(exists($chainedConcepts{$idkey}));
+							push(@{$chainedConcepts{$idkey}},$correlatableConcepts{$conceptKey});
+						} else {
+							Carp::croak('FATAL ERROR: Concept '.$concept->id.' does not go to a collection and it does not have an identifying concept\n');
+						}
+						push(@otherCorrelatedConcepts,$correlatableConcepts{$conceptKey});
+					} else {
+						push(@mainCorrelatableConcepts,$correlatableConcepts{$conceptKey});
+					}
+				}
+				
+				my @freeSlavesCorrelatableConcepts = ();
+				
+				if($mapper->nestedCorrelatedConcepts()) {
+					# Let's visit the possible correlations
+					my %disabledCorrelatedConcepts = ();
+					foreach my $idkey (keys(%chainedConcepts)) {
+						if(exists($correlatableConcepts{$idkey})) {
+							# First, register them as correlatable
+							my $correlatableConcept = $correlatableConcepts{$idkey};
+							foreach my $correlatedConcept (@{$chainedConcepts{$idkey}}) {
+								$correlatableConcept->addCorrelatedConcept($correlatedConcept);
+								
+								# Then, save their keys, to be disabled when they are processed
+								$disabledCorrelatedConcepts{$correlatedConcept+0} = undef;
+							}
 						}
 					}
+					
+					foreach my $correlatedConcept (@otherCorrelatedConcepts) {
+						# Skip the ones which are already chained
+						next  if(exists($disabledCorrelatedConcepts{$correlatedConcept+0}));
+						push(@freeSlavesCorrelatableConcepts,$correlatedConcept);
+					}
+				} else {
+					@freeSlavesCorrelatableConcepts = @otherCorrelatedConcepts;
 				}
 				
-				foreach my $correlatedConcept (@otherCorrelatedConcepts) {
-					# Skip the ones which are already chained
-					next  if(exists($disabledCorrelatedConcepts{$correlatedConcept+0}));
-					push(@freeSlavesCorrelatableConcepts,$correlatedConcept);
-				}
-			} else {
-				@freeSlavesCorrelatableConcepts = @otherCorrelatedConcepts;
+				# Now, let's load!
+				$mapper->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 			}
-			
-			# Now, let's load!
-			$mapper->mapData(\@mainCorrelatableConcepts,\@freeSlavesCorrelatableConcepts);
 		}
 	} elsif($ini->exists($BP::Loader::Mapper::SECTION,'metadata-models')) {
 		# Setting up other storage models, and generate the native models
@@ -206,9 +214,11 @@ if(scalar(@ARGV)>=2) {
 	}
 } else{
 	print STDERR <<EOF ;
+Usage: $0 [-dm] iniFile workingDir [file]*
 ERROR: This program ($0) takes as input a INI file with the configuration pointing to the model and a working directory
-	* With no additional parameters, it generates the data model files.
-	* With one or more files, it stores them in the destination database.\n";
+	* With -dm flag, it generates the data model files onto the working directory and it stores nothing in the database.
+	* without -dm flag, it connects to the database and it stores the database model.
+		- With one or more files, it stores them in the destination database.\n";
 EOF
 }
 

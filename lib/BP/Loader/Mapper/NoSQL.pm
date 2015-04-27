@@ -70,7 +70,7 @@ sub new($$) {
 	return $self;
 }
 
-# These methods are called by JSON library, which gives the structure to
+# TO_JSON methods are called by JSON library, which gives the structure to
 # be translated into JSON. They are the patches to the different
 # BP::Model subclasses, so JSON-ification works without having this
 # specific code in the subclasses
@@ -93,6 +93,53 @@ sub BP::Model::TO_JSON() {
 	);
 	
 	return \%jsonModel;
+}
+
+# ToColumnSet methods are called in order to get a column-set representation
+# for the meta-something
+sub BP::Model::ToColumnSet() {
+	# TO BE FILLED
+	my @modelColumns = (
+		#BP::Model::Column->new('project',undef,undef,),
+		#BP::Model::Column->new('schemaVer',undef,undef,),
+		#BP::Model::Column->new('annotations',undef,undef,),
+		#BP::Model::Column->new('collections',undef,undef,),
+		#BP::Model::Column->new('domains',undef,undef,),
+	);
+	my $modelColumnSet = BP::Model::ColumnSet->new(undef,undef,@modelColumns);
+	
+	return $modelColumnSet;
+}
+
+# ToConcept methods are called in order to get a concept representation
+# either the meta-model or the meta-controlled vocabularies
+
+# This is to compute it only once
+{
+my $modelConcept = undef;	
+
+sub BP::Model::ToConcept() {
+	unless(defined($modelConcept)) {
+		my $modelColumnSet = BP::Model::ToColumnSet();
+		
+		$modelConcept = BP::Model::Concept->new([
+			undef, # name
+			undef, # fullname
+			undef, # basetype
+			undef, # concept domain
+			undef, # Description Set
+			BP::Model::AnnotationSet->new(), # Annotation Set
+			$modelColumnSet, # ColumnSet
+			undef, # identifying concept
+			undef, # related conceptNames
+			undef, # parent concept
+			'model' # id: The id of this QuasiConcept
+		]);
+	}
+	
+	return $modelConcept;
+}
+
 }
 
 sub BP::Model::Collection::TO_JSON() {
@@ -185,9 +232,12 @@ sub BP::Model::CV::Term::TO_JSON() {
 		'name'	=> $self->name,
 	);
 	
+	my $uriKey = $self->uriKey;
+	$hashRes{'term_uri'} = $uriKey  if(defined($uriKey));
+	
 	my $namespace = $self->namespace;
 	$hashRes{'ns'} = $namespace->ns_uri  if(defined($namespace));
-	$hashRes{'alt-id'} = $self->keys  if(scalar(@{$self->keys})>1);
+	$hashRes{'alt-id'} = [@{$self->keys},@{$self->uriKeys}];
 	if($self->isAlias) {
 		$hashRes{'alias'} = boolean::true;
 		$hashRes{'union-of'} = $self->parents;
@@ -234,6 +284,43 @@ sub BP::Model::CV::Meta::TO_JSON() {
 	);
 	
 	return \%hashRes;
+}
+
+sub BP::Model::CV::Meta::ToColumnSet() {
+	# TO BE FILLED
+	my @cvColumns = ();
+	my $cvColumnSet = BP::Model::ColumnSet->new(undef,undef,@cvColumns);
+	
+	return $cvColumnSet;
+}
+
+# This is to compute it only once
+{
+
+my $cvConcept = undef;
+
+sub BP::Model::CV::Meta::ToConcept() {
+	unless(defined($cvConcept)) {
+		my $cvColumnSet = BP::Model::CV::Meta::ToColumnSet();
+		
+		$cvConcept = BP::Model::Concept->new([
+			undef, # name
+			undef, # fullname
+			undef, # basetype
+			undef, # concept domain
+			undef, # Description Set
+			BP::Model::AnnotationSet->new(), # Annotation Set
+			$cvColumnSet, # ColumnSet
+			undef, # identifying concept
+			undef, # related conceptNames
+			undef, # parent concept
+			'cv' # id: The id of this QuasiConcept
+		]);
+	}
+	
+	return $cvConcept;
+}
+
 }
 
 sub BP::Model::ColumnType::TO_JSON() {

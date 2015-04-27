@@ -16,39 +16,6 @@ use Scalar::Util;
 use BP::Loader::Mapper::Autoload::Elasticsearch;
 use BP::Loader::Tools;
 
-package BP::Model::QuasiConcept;
-
-# A quasiconcept is not a real concept. It is only an object with id and columnSet methods
-# It is only needed by Elasticsearch metadata generation
-
-# Constructor parameters
-#	id: The id of this QuasiConcept
-#	columnSet: A BP::Model::ColumnSet instance
-sub new() {
-	my $proto = shift;
-	my $class = ref($proto) || $proto;
-	
-	my $id = shift;
-	my $columnSet = shift;
-	Carp::croak("ERROR: Input parameter must be an index declaration")  unless(Scalar::Util::blessed($columnSet) && $columnSet->isa('BP::Model::ColumnSet'));
-	
-	my $self = [$id,$columnSet];
-	
-	return bless($self);
-}
-
-# It returns the id
-sub id {
-	$_[0]->[0];
-}
-
-# It returns the columnSet
-sub columnSet {
-	$_[0]->[1];
-}
-
-1;
-
 package BP::Loader::Mapper::Elasticsearch;
 
 use base qw(BP::Loader::Mapper::NoSQL);
@@ -232,12 +199,16 @@ sub _FillMapping($) {
 		$mappingDesc{$columnName} = $p_typeDecl;
 	}
 	
-	return {
+	my $retval = {
 		'_all' => {
 			'enabled' => boolean::true
-		},
-		'properties' => \%mappingDesc
+		}
 	};
+	
+	$retval->{'properties'} = \%mappingDesc  if(scalar(keys(%mappingDesc))>0);
+
+	
+	return $retval;
 }
 
 # createCollection parameters:
@@ -260,8 +231,15 @@ sub createCollection($) {
 	$es->indices->create('index' => $indexName)  unless($es->indices->exists('index' => $indexName));
 	my $colid = $collection+0;
 	
-	if(exists($self->{_colConcept}{$colid})) {
-		foreach my $concept (@{$self->{_colConcept}{$colid}}) {
+	my @colConcepts = ();
+	if(defined($self->{model}->metadataCollection()) && $collection==$self->{model}->metadataCollection()) {
+		push(@colConcepts,BP::Model::ToConcept(),BP::Model::CV::Meta::ToConcept());
+	} elsif(exists($self->{_colConcept}{$colid})) {
+		@colConcepts = @{$self->{_colConcept}{$colid}};
+	}
+	
+	if(scalar(@colConcepts) > 0) {
+		foreach my $concept (@colConcepts) {
 			my $conceptId = $concept->id();
 			
 			#$es->indices->delete_mapping('index' => $indexName,'type' => $conceptId)  if($es->indices->exists_type('index' => $indexName,'type' => $conceptId));
@@ -283,6 +261,26 @@ sub createCollection($) {
 	return $indexName;
 }
 
+# existsCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it is created, along with its indexes
+sub existsCollection($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $es = $self->connect();
+	
+	my $indexName = $collection->path;
+	
+	# At least, let's create the index
+	return $es->indices->exists('index' => $indexName);
+}
+
 # Trimmed down version of storeNativeModel from MongoDB
 # storeNativeModel parameters:
 sub storeNativeModel() {
@@ -290,45 +288,56 @@ sub storeNativeModel() {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
+	my $metadataCollection = undef;
+	my $metadataExists = undef;
+	
+	if(defined($self->{model}->metadataCollection())) {
+		$metadataCollection = $self->{model}->metadataCollection();
+		# This must be checked before the creation of the collections
+		$metadataExists = $self->existsCollection($metadataCollection);
+	}
+	
 	# First, let's create the collections and their indexes
 	foreach my $collection (values(%{$self->{model}->collections})) {
 		$self->createCollection($collection);
 	}
 	
 	# Do we have to store the JSON description of the model?
-	#if(defined($self->{model}->metadataCollection())) {
-	#	# Second, generate the native model
-	#	my $p_generatedObjects = $self->generateNativeModel(undef);
-	#	
-	#	# Third, patch the metadata collection, so the
-	#	# two specialized mappings for the metadata model and the controlled vocabularies
-	#	# are generated
-	#	my $modelColumnSet = BP::Model::ColumnSet->new(undef,);
-	#	my $modelConcept = BP::Model::QuasiConcept->new('model',$modelColumnSet);
-	#	my $cvColumnSet = BP::Model::ColumnSet->new(undef,);
-	#	my $cvConcept = BP::Model::QuasiConcept->new('cv',$cvColumnSet);
-	#	
-	#	# TODO
-	#	
-	#	$self->createCollection($metadataCollection);
-        #
-	#	# Fourth, insert
-	#	$self->setDestination($modelConcept);
-	#	foreach my $p_generatedObject (@{$p_generatedObjects}) {
-	#		next  if(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
-	#		
-	#		$self->bulkInsert($p_generatedObject);
-	#	}
-	#	$self->freeDestination();
-	#
-	#	$self->setDestination($cvConcept);
-	#	foreach my $p_generatedObject (@{$p_generatedObjects}) {
-	#		next  unless(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
-	#		
-	#		$self->bulkInsert($p_generatedObject);
-	#	}
-	#	$self->freeDestination();
-	#}
+	if(defined($metadataCollection) && !$metadataExists) {
+		# Second, generate the native model
+		my $p_generatedObjects = $self->generateNativeModel(undef);
+		
+		# Third, patch the metadata collection, so the
+		# two specialized mappings for the metadata model and the controlled vocabularies
+		# are generated
+		my $modelConcept = BP::Model::ToConcept();
+		my $modelCorrelatableConcept = BP::Loader::CorrelatableConcept->new($modelConcept);
+		$self->{_conceptCol}{$modelConcept+0} = $metadataCollection;
+		
+		my $cvConcept = BP::Model::CV::Meta::ToConcept();
+		my $cvCorrelatableConcept = BP::Loader::CorrelatableConcept->new($cvConcept);
+		$self->{_conceptCol}{$cvConcept+0} = $metadataCollection;
+		
+		# Do create the collection in case it was not created before
+		$self->createCollection($metadataCollection)  unless($self->existsCollection($metadataCollection));
+        
+		# Fourth, insert
+		$self->setDestination($modelCorrelatableConcept,undef,1);
+		foreach my $p_generatedObject (@{$p_generatedObjects}) {
+			next  if(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
+			
+			$self->bulkInsert($p_generatedObject);
+		}
+		$self->freeDestination();
+	
+		$self->setDestination($cvCorrelatableConcept,undef,1);
+		foreach my $p_generatedObject (@{$p_generatedObjects}) {
+			next  unless(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
+			
+			$self->bulkInsert($p_generatedObject);
+		}
+		$self->freeDestination();
+	}
 }
 
 # It sets up the destination to be used in bulkInsert calls
@@ -529,15 +538,34 @@ sub _bulkInsert($\@) {
 	Carp::croak("ERROR: ".(caller(0))[3]." needs an array instance")  unless(ref($p_batch) eq 'ARRAY');
 	
 	my @insertBatch = ();
+	my @updateBatch = ();
 	
 	if(defined($p_destination->[2])) {
 		foreach my $p_entry (@{$p_batch}) {
-			push(@insertBatch,{ source => $p_entry })  unless($self->_incrementalUpdate($p_destination,$p_entry));
+			my $uOrder = $self->_incrementalUpdate($p_destination,$p_entry);
+			if(defined($uOrder)) {
+				push(@updateBatch,$uOrder);
+			} else {
+				my $order = {
+					source => $p_entry
+				};
+				
+				$order->{id} = $p_entry->{_id}  if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id}));
+				push(@insertBatch, $order);
+			}
 		}
 	} else {
-		@insertBatch = map { { source => $_ } } @{$p_batch};
+		foreach my $p_entry (@{$p_batch}) {
+			my $order = {
+				source => $p_entry
+			};
+			
+			$order->{id} = $p_entry->{_id}  if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id}));
+			push(@insertBatch, $order);
+		}
 	}
 	
+	$destination->update(@updateBatch)  if(scalar(@updateBatch)>0);
 	$destination->index(@insertBatch)  if(scalar(@insertBatch)>0);
 	
 	return 1;
@@ -585,17 +613,17 @@ sub _incrementalUpdate($$) {
 		}
 		
 		if($pushed) {
-			$p_destination->[0]->update({
+			$retval = {
 				id => $p_entry->{BP::Loader::Mapper::COL_INCREMENTAL_UPDATE_ID},
 				lang => 'groovy',
 				script => join('; ',map { 'ctx._source.'.$_.' += newdoc_'.$_ } @existingCols),
 				params => {
 					map { ('newdoc_'.$_) => $p_entry->{$_} } @existingCols
 				}
-			});
+			};
+			#$p_destination->[0]->update($retval);
 		}
 		# No-op, but it must not be inserted later!
-		$retval = 1;
 	}
 	
 	return $retval;
