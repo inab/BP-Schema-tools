@@ -322,6 +322,8 @@ sub storeNativeModel() {
 		$self->createCollection($metadataCollection)  unless($self->existsCollection($metadataCollection));
         
 		# Fourth, insert
+		
+		# This is the model
 		$self->setDestination($modelCorrelatableConcept,undef,1);
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
 			next  if(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
@@ -329,12 +331,40 @@ sub storeNativeModel() {
 			$self->bulkInsert($p_generatedObject);
 		}
 		$self->freeDestination();
-	
+		
+		# These are the ontologies and their terms
 		$self->setDestination($cvCorrelatableConcept,undef,1);
+		# Reverse lookup meta ontologies are registered here
+		my %metaRevCV = ();
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
-			next  unless(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
+			if(exists($p_generatedObject->{'includes'})) {
+				my $id = $p_generatedObject->{_id};
+				foreach my $cvId (@{$p_generatedObject->{'includes'}}) {
+					$metaRevCV{$cvId} = [$cvId]  unless(exists($metaRevCV{$cvId}));
+					
+					push(@{$metaRevCV{$cvId}},$id);
+				}
+				$self->bulkInsert($p_generatedObject);
+			}
+		}
+		foreach my $p_generatedObject (@{$p_generatedObjects}) {
+			# We are shredding them here, so they are separate entries
+			if(exists($p_generatedObject->{'terms'})) {
+				my $p_terms = $p_generatedObject->{'terms'};
+				delete($p_generatedObject->{'terms'});
+				
+				my $ont = $p_generatedObject->{_id};
+				$ont = $metaRevCV{$ont}  if(exists($metaRevCV{$ont}));
+				
+				foreach my $term (@{$p_terms}) {
+					$term->{ont} = $ont;
+				}
+				
+				# Last, but not the least important
+				push(@{$p_terms},$p_generatedObject);
 			
-			$self->bulkInsert($p_generatedObject);
+				$self->bulkInsert($p_terms);
+			}
 		}
 		$self->freeDestination();
 	}
