@@ -211,6 +211,26 @@ sub _FillMapping($) {
 	return $retval;
 }
 
+{
+	
+my $metaModelConcept;
+my $metaCVConcept;
+my $metaCVTermConcept;
+
+sub __getMetaConcepts($) {
+	my $model = shift;
+	
+	unless(defined($metaModelConcept)) {
+		$metaModelConcept = BP::Model::ToConcept($model);
+		$metaCVConcept = BP::Model::CV::Meta::ToConcept($model);
+		$metaCVTermConcept = BP::Model::CV::Term::ToConcept($model);
+	}
+	
+	return ($metaModelConcept,$metaCVConcept,$metaCVTermConcept);
+}
+
+}
+
 # createCollection parameters:
 #	collection: A BP::Model::Collection instance
 # Given a BP::Model::Collection instance, it is created, along with its indexes
@@ -233,7 +253,11 @@ sub createCollection($) {
 	
 	my @colConcepts = ();
 	if(defined($self->{model}->metadataCollection()) && $collection==$self->{model}->metadataCollection()) {
-		push(@colConcepts,BP::Model::ToConcept(),BP::Model::CV::Meta::ToConcept());
+		foreach my $concept (__getMetaConcepts($self->{model})) {
+			my $conceptKey = $concept+0;
+			$self->{_conceptCol}{$conceptKey} = $collection  unless(exists($self->{_conceptCol}{$conceptKey}));
+			push(@colConcepts,$concept);
+		}
 	} elsif(exists($self->{_colConcept}{$colid})) {
 		@colConcepts = @{$self->{_colConcept}{$colid}};
 	}
@@ -310,20 +334,18 @@ sub storeNativeModel() {
 		# Third, patch the metadata collection, so the
 		# two specialized mappings for the metadata model and the controlled vocabularies
 		# are generated
-		my $modelConcept = BP::Model::ToConcept();
+		my($modelConcept,$cvConcept,$cvTermConcept)  = __getMetaConcepts($self->{model});
+
 		my $modelCorrelatableConcept = BP::Loader::CorrelatableConcept->new($modelConcept);
-		$self->{_conceptCol}{$modelConcept+0} = $metadataCollection;
-		
-		my $cvConcept = BP::Model::CV::Meta::ToConcept();
 		my $cvCorrelatableConcept = BP::Loader::CorrelatableConcept->new($cvConcept);
-		$self->{_conceptCol}{$cvConcept+0} = $metadataCollection;
+		my $cvTermCorrelatableConcept = BP::Loader::CorrelatableConcept->new($cvTermConcept);
 		
-		# Do create the collection in case it was not created before
+		
+		# Create the collection in case it was not created before
 		$self->createCollection($metadataCollection)  unless($self->existsCollection($metadataCollection));
         
-		# Fourth, insert
-		
-		# This is the model
+		# Fourth, insert under the different "fake" concepts
+		# The model
 		$self->setDestination($modelCorrelatableConcept,undef,1);
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
 			next  if(exists($p_generatedObject->{'terms'}) || exists($p_generatedObject->{'includes'}));
@@ -332,8 +354,11 @@ sub storeNativeModel() {
 		}
 		$self->freeDestination();
 		
-		# These are the ontologies and their terms
-		$self->setDestination($cvCorrelatableConcept,undef,1);
+		# The ontology terms
+		$self->setDestination($cvTermCorrelatableConcept,undef,1);
+
+		my @allCVs = ();
+		
 		# Reverse lookup meta ontologies are registered here
 		my %metaRevCV = ();
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
@@ -344,9 +369,10 @@ sub storeNativeModel() {
 					
 					push(@{$metaRevCV{$cvId}},$id);
 				}
-				$self->bulkInsert($p_generatedObject);
+				push(@allCVs,$p_generatedObject);
 			}
 		}
+		
 		foreach my $p_generatedObject (@{$p_generatedObjects}) {
 			# We are shredding them here, so they are separate entries
 			if(exists($p_generatedObject->{'terms'})) {
@@ -361,11 +387,16 @@ sub storeNativeModel() {
 				}
 				
 				# Last, but not the least important
-				push(@{$p_terms},$p_generatedObject);
+				push(@allCVs,$p_generatedObject);
 			
 				$self->bulkInsert($p_terms);
 			}
 		}
+		$self->freeDestination();
+		
+		# And the ontologies
+		$self->setDestination($cvCorrelatableConcept,undef,1);
+		$self->bulkInsert(\@allCVs);
 		$self->freeDestination();
 	}
 }

@@ -4,6 +4,7 @@ use strict;
 use Carp;
 
 use BP::Model;
+use XML::LibXML;
 
 package BP::Loader::Mapper::NoSQL;
 
@@ -97,16 +98,63 @@ sub BP::Model::TO_JSON() {
 
 # ToColumnSet methods are called in order to get a column-set representation
 # for the meta-something
-sub BP::Model::ToColumnSet() {
-	# TO BE FILLED
-	my @modelColumns = (
-		#BP::Model::Column->new('project',undef,undef,),
-		#BP::Model::Column->new('schemaVer',undef,undef,),
-		#BP::Model::Column->new('annotations',undef,undef,),
-		#BP::Model::Column->new('collections',undef,undef,),
-		#BP::Model::Column->new('domains',undef,undef,),
-	);
-	my $modelColumnSet = BP::Model::ColumnSet->new(undef,undef,@modelColumns);
+sub BP::Model::ToColumnSet($) {
+	my $model = shift;
+	
+	# Schema preparation
+	my $dccschema = $model->schemaModel();
+	
+	# Model validated against the XML Schema
+	my $modelDOM;
+	eval {
+		$modelDOM = XML::LibXML->load_xml(string => <<'EOT');
+<concept-type name="fake" collection="fake" xmlns="http://www.blueprint-epigenome.eu/dcc/schema">
+	<column name="project">
+		<column-type item-type="string" column-kind="required"/>
+	</column>
+	<column name="schemaVer">
+		<column-type item-type="string" column-kind="required"/>
+	</column>
+	<column name="annotations">
+		<column-type item-type="string" column-kind="required" container-type="hash"/>
+	</column>
+	<column name="collections">
+		<column-type item-type="compound" column-kind="required" container-type="hash">
+			<compound-type>
+				<column name="name">
+					<column-type item-type="string" column-kind="required"/>
+				</column>
+				<sep>*</sep>
+				<column name="path">
+					<column-type item-type="string" column-kind="required"/>
+				</column>
+				<sep>/</sep>
+				<column name="indexes">
+					<column-type item-type="string" column-kind="required" container-type="set" set-seps=";"/>
+				</column>
+			</compound-type>
+		</column-type>
+	</column>
+	<column name="domains">
+		<column-type item-type="compound" column-kind="required" container-type="hash">
+			<compound-type>
+				<column name="name">
+					<column-type item-type="string" column-kind="required"/>
+				</column>
+			</compound-type>
+		</column-type>
+	</column>
+</concept-type>
+EOT
+		$dccschema->validate($modelDOM);
+	};
+	
+	# Was there some schema validation error?
+	if($@) {
+		Carp::croak("Error while validating metadata model against the schema: ".$@);
+	}
+	
+	my $modelColumnSet = BP::Model::ColumnSet->parseColumnSet($modelDOM->documentElement(),undef,$model);
 	
 	return $modelColumnSet;
 }
@@ -118,12 +166,17 @@ sub BP::Model::ToColumnSet() {
 {
 my $modelConcept = undef;	
 
-sub BP::Model::ToConcept() {
+use constant CONCEPT_META_MODEL	=>	'model';
+
+sub BP::Model::ToConcept($) {
+	my $model = shift;
+	
 	unless(defined($modelConcept)) {
-		my $modelColumnSet = BP::Model::ToColumnSet();
+		
+		my $modelColumnSet = BP::Model::ToColumnSet($model);
 		
 		$modelConcept = BP::Model::Concept->new([
-			undef, # name
+			CONCEPT_META_MODEL, # name
 			undef, # fullname
 			undef, # basetype
 			undef, # concept domain
@@ -133,7 +186,7 @@ sub BP::Model::ToConcept() {
 			undef, # identifying concept
 			undef, # related conceptNames
 			undef, # parent concept
-			'model' # id: The id of this QuasiConcept
+			CONCEPT_META_MODEL # id: The id of this QuasiConcept
 		]);
 	}
 	
@@ -249,6 +302,104 @@ sub BP::Model::CV::Term::TO_JSON() {
 	return \%hashRes;
 }
 
+sub BP::Model::CV::Term::ToColumnSet($) {
+	my $model = shift;
+	
+	# Schema preparation
+	my $dccschema = $model->schemaModel();
+	
+	# Model validated against the XML Schema
+	my $cvTermDOM;
+	eval {
+		$cvTermDOM = XML::LibXML->load_xml(string => <<'EOT');
+<concept-type name="fake" collection="fake" xmlns="http://www.blueprint-epigenome.eu/dcc/schema">
+	<column name="term">
+		<column-type item-type="string" column-kind="required"/>
+	</column>
+	<column name="name">
+		<column-type item-type="string" column-kind="required"/>
+	</column>
+	<column name="ont">
+		<column-type item-type="string" column-kind="required" container-type="set" set-seps=";"/>
+	</column>
+	<column name="ns">
+		<column-type item-type="string" column-kind="optional"/>
+	</column>
+	<column name="alt_id">
+		<column-type item-type="string" column-kind="required" container-type="set" set-seps=";"/>
+	</column>
+	<column name="alias">
+		<column-type item-type="boolean" column-kind="optional"/>
+	</column>
+	<column name="union_of">
+		<column-type item-type="string" column-kind="optional" container-type="set" set-seps=";"/>
+	</column>
+	<column name="parents">
+		<column-type item-type="string" column-kind="optional" container-type="set" set-seps=";"/>
+	</column>
+	<column name="ancestors">
+		<column-type item-type="string" column-kind="optional" container-type="set" set-seps=";"/>
+	</column>
+	
+	<index unique="false">
+		<attr name="ont" />
+	</index>
+	
+	<index unique="false">
+		<attr name="alt_id" />
+	</index>
+	
+	<index unique="false">
+		<attr name="term" />
+	</index>
+</concept-type>
+EOT
+		$dccschema->validate($cvTermDOM);
+	};
+	
+	# Was there some schema validation error?
+	if($@) {
+		Carp::croak("Error while validating metadata CV term against the schema: ".$@);
+	}
+	
+	my $cvTermColumnSet = BP::Model::ColumnSet->parseColumnSet($cvTermDOM->documentElement(),undef,$model);
+	
+	return $cvTermColumnSet;
+}
+
+# This is to compute it only once
+{
+
+my $cvTermConcept = undef;
+
+use constant CONCEPT_META_CV_TERM	=>	'cvterm';
+
+sub BP::Model::CV::Term::ToConcept($) {
+	my $model = shift;
+	
+	unless(defined($cvTermConcept)) {
+		my $cvTermColumnSet = BP::Model::CV::Term::ToColumnSet($model);
+		
+		$cvTermConcept = BP::Model::Concept->new([
+			CONCEPT_META_CV_TERM, # name
+			undef, # fullname
+			undef, # basetype
+			undef, # concept domain
+			undef, # Description Set
+			BP::Model::AnnotationSet->new(), # Annotation Set
+			$cvTermColumnSet, # ColumnSet
+			undef, # identifying concept
+			undef, # related conceptNames
+			undef, # parent concept
+			CONCEPT_META_CV_TERM # id: The id of this QuasiConcept
+		]);
+	}
+	
+	return $cvTermConcept;
+}
+
+}
+
 sub BP::Model::CV::Abstract::_jsonId() {
 	my $self = shift;
 	
@@ -286,10 +437,40 @@ sub BP::Model::CV::Meta::TO_JSON() {
 	return \%hashRes;
 }
 
-sub BP::Model::CV::Meta::ToColumnSet() {
-	# TO BE FILLED
-	my @cvColumns = ();
-	my $cvColumnSet = BP::Model::ColumnSet->new(undef,undef,@cvColumns);
+sub BP::Model::CV::Meta::ToColumnSet($) {
+	my $model = shift;
+	
+	# Schema preparation
+	my $dccschema = $model->schemaModel();
+	
+	# Model validated against the XML Schema
+	my $cvDOM;
+	eval {
+		$cvDOM = XML::LibXML->load_xml(string => <<'EOT');
+<concept-type name="fake" collection="fake" xmlns="http://www.blueprint-epigenome.eu/dcc/schema">
+	<column name="name">
+		<column-type item-type="string" column-kind="optional"/>
+	</column>
+	<column name="descriptions">
+		<column-type item-type="string" column-kind="optional" container-type="set" set-seps=";"/>
+	</column>
+	<column name="annotations">
+		<column-type item-type="string" column-kind="required" container-type="hash"/>
+	</column>
+	<column name="includes">
+		<column-type item-type="string" column-kind="optional" container-type="set" set-seps=";"/>
+	</column>
+</concept-type>
+EOT
+		$dccschema->validate($cvDOM);
+	};
+	
+	# Was there some schema validation error?
+	if($@) {
+		Carp::croak("Error while validating metadata CV against the schema: ".$@);
+	}
+	
+	my $cvColumnSet = BP::Model::ColumnSet->parseColumnSet($cvDOM->documentElement(),undef,$model);
 	
 	return $cvColumnSet;
 }
@@ -299,9 +480,13 @@ sub BP::Model::CV::Meta::ToColumnSet() {
 
 my $cvConcept = undef;
 
-sub BP::Model::CV::Meta::ToConcept() {
+use constant CONCEPT_META_CV	=>	'cv';
+
+sub BP::Model::CV::Meta::ToConcept($) {
+	my $model = shift;
+	
 	unless(defined($cvConcept)) {
-		my $cvColumnSet = BP::Model::CV::Meta::ToColumnSet();
+		my $cvColumnSet = BP::Model::CV::Meta::ToColumnSet($model);
 		
 		$cvConcept = BP::Model::Concept->new([
 			undef, # name
