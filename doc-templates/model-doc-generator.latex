@@ -109,6 +109,7 @@
 \begin{document}
 
 \hypersetup{
+	pdfencoding=auto,
 	pdfauthor=\ANNOTauthor,
 	pdftitle={\projectName{} DCC Data Model (Draft v\schemaVer{})}
 }
