@@ -19,6 +19,10 @@ use constant {
 };
 
 # This is the constructor constructor
+# Constructor parameters:
+#	namespace_URI:
+#	namespace_short:
+#	isDefault: Is it a default namespace?
 sub new($$;$) {
 	# Very special case for multiple inheritance handling
 	# This is the seed
