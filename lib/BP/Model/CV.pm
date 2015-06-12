@@ -25,6 +25,8 @@ use BP::Model::CV::Term;
 use BP::Model::CV::Namespace;
 use BP::Model::DescriptionSet;
 
+use BP::Model::CV::OWLParser;
+
 package BP::Model::CV;
 
 use base qw(BP::Model::CV::Abstract);
@@ -41,7 +43,13 @@ use constant {
 use constant {
 	CVFORMAT_CVFORMAT	=>	0,
 	CVFORMAT_OBO	=>	1,
+	CVFORMAT_OWL	=>	2,
 };
+
+my %CVTYPE2INTERNAL = (
+	'obo'	=>	'__parseOBO',
+	'OWL'	=>	'__parseOWL',
+);
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
 use constant {
@@ -74,7 +82,7 @@ sub new() {
 	# The CV symbolic name, the CV type, the array of CV uri, the CV local filename, the CV local format, the annotations, the documentation paragraphs, the CV (hash and array), aliases (array), XML element of cv-file element
 	my $cvAnnot = BP::Model::AnnotationSet->new();
 	my $cvDesc = BP::Model::DescriptionSet->new();
-	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef,undef,undef,undef);
+	@{$self}=(undef,undef,undef,undef,undef,$cvAnnot,$cvDesc,undef,undef,[],undef,undef,undef,{},undef);
 	
 	$self->[BP::Model::CV::CVKEYS] = [];
 	# Hash shared by terms and term-aliases
@@ -161,7 +169,7 @@ sub parseCV($$;$) {
 			my $cvPath = $el->textContent();
 			$cvPath = $model->sanitizeCVpath($cvPath);
 			
-			my $cvFormat = ($el->hasAttribute('format') && $el->getAttribute('format') eq 'obo')?BP::Model::CV::CVFORMAT_OBO : BP::Model::CV::CVFORMAT_CVFORMAT;
+			my $cvFormat = ($el->hasAttribute('format') && exists($CVTYPE2INTERNAL{$el->getAttribute('format')})) ? $CVTYPE2INTERNAL{$el->getAttribute('format')} : '__parseCVFORMAT';
 			
 			# Local fetch
 			$self->[BP::Model::CV::CVKIND] = BP::Model::CV::CVLOCAL  unless(defined($self->[BP::Model::CV::CVKIND]));
@@ -173,11 +181,8 @@ sub parseCV($$;$) {
 			# This is needed for chicken and egg cases, where the ontology is not generated yet, or it is going to be replaced
 			unless($skipCVparse) {
 				my $CVH = $model->openCVpath($cvPath);
-				if($cvFormat == BP::Model::CV::CVFORMAT_CVFORMAT) {
-					$self->__parseCVFORMAT($CVH,$model);
-				} elsif($cvFormat == BP::Model::CV::CVFORMAT_OBO) {
-					$self->__parseOBO($CVH,$model);
-				}
+				# Calling the corresponding method
+				$self->$cvFormat($CVH,$model);
 				
 				$CVH->close();
 			}
@@ -588,6 +593,19 @@ sub __parseOBO($$) {
 	}
 	# Last term in a file
 	$self->addTerm(BP::Model::CV::Term->new($keys,$name,$namespace,defined($parents)?$parents:$union,(defined($union) && !defined($parents))?1:undef),$ignoreLater)  if(defined($keys));
+}
+
+sub __parseOWL($$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $CVH = shift;
+	my $model = shift;
+	
+	my $parser = BP::Model::CV::OWLParser->new({CV => $self});
+	
+	$parser->parse($CVH);
 }
 
 
