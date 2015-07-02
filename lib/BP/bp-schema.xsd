@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.1">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.1.1">
     <xs:annotation>
-        <xs:documentation>BLUEPRINT DCC Schema 2.1, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
+        <xs:documentation>BLUEPRINT DCC Schema 2.2, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
     
     <xs:simpleType name="nonEmptyStringType">
@@ -240,6 +240,11 @@
                     <xs:documentation>The key used to tell the kind of annotation</xs:documentation>
                 </xs:annotation>
             </xs:attribute>
+        	<xs:attribute name="global-key-ref" type="bp:conceptTypeNameType" use="optional">
+        		<xs:annotation>
+        			<xs:documentation>If this attribute is set, the value of this annotation must be the same as the one set on the global annotation whose key is this one</xs:documentation>
+        		</xs:annotation>
+        	</xs:attribute>
         </xs:complexType>
     </xs:element>
     
@@ -420,6 +425,11 @@
                                                         <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
                                                     </xs:annotation>
                                                 </xs:enumeration>
+                                            	<xs:enumeration value="NCICUIDump">
+                                            		<xs:annotation>
+                                            			<xs:documentation>NCI code to CUI NCIm map</xs:documentation>
+                                            		</xs:annotation>
+                                            	</xs:enumeration>
                                             </xs:restriction>
                                         </xs:simpleType>
                                     </xs:attribute>
@@ -1106,7 +1116,7 @@ If if starts as $$, it tells the required or idref column with the value for thi
                         <xs:selector xpath="bp:cv | bp:meta-cv"/>
                         <xs:field xpath="@name"/>
                     </xs:key>
-                </xs:element>
+            	</xs:element>
                 <xs:element name="null-values">
                     <xs:annotation>
                         <xs:documentation>The null values recognized in this model. Annotations can be used to give hints about the null values</xs:documentation>
@@ -1271,7 +1281,12 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:selector xpath="bp:filename-format"/>
             <xs:field xpath="@name"/>
         </xs:key>
-        <!--  XPath subset understood by XML Schema is not powerful enough
+    	<xs:key name="global-annotations-key">
+    		<xs:selector xpath="bp:metadata/bp:annotation" />
+    		<xs:field xpath="@key" />
+    	</xs:key>
+    	
+    	<!--  XPath subset understood by XML Schema is not powerful enough
         <xs:key name="concept-key">
             <xs:annotation>
                 <xs:documentation>The concept key, used to validate the related-to elements</xs:documentation>
@@ -1311,7 +1326,11 @@ Also, this key is used to look for LaTeX documentation about the concept domain<
             <xs:field xpath="@pattern"></xs:field>
         </xs:keyref>
         
-        
+    	<xs:keyref refer="bp:global-annotations-key" name="global-key-ref">
+    		<xs:selector xpath=".//bp:cv/bp:annotation | .//bp:column/bp:annotation | .//bp:concept/bp:annotation | .//bp:weak-concepts/bp:annotation | .//bp:related-to/bp:annotation | .//bp:meta-cv/bp:annotation | .//bp:null-values/bp:annotation | .//bp:concept-domain/bp:annotation" />
+    		<xs:field xpath="@global-key-ref" />
+    	</xs:keyref>
+    	
         <!-- The key referred by this FK needed an XPath expression more complex than what XML Schema can understand
         <xs:keyref refer="bp:concept-key" name="related-to-fk">
             <xs:selector xpath=".//bp:concept/bp:related-to"></xs:selector>
