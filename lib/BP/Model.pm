@@ -443,7 +443,7 @@ sub digestModel($;$) {
 		# The optional collection where mapped metadata is going to be stored
 		$destMetaCol = $metaDecl->getAttribute('collection')  if($metaDecl->hasAttribute('collection'));
 		
-		# Now, let's store the annotations
+		# Now, let's store the global annotations
 		$self->{ANNOTATIONS} = BP::Model::AnnotationSet->parseAnnotations($metaDecl);
 
 		last;
