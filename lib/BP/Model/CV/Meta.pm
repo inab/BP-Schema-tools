@@ -107,7 +107,7 @@ sub parseMetaCV($$;$) {
 	# Only when we have a meta cv is when we look for documentation and/or annotations
 	if(Scalar::Util::blessed($restriction) && $restriction->isa(__PACKAGE__)) {
 		$restriction->description->parseDescriptions($container);
-		$restriction->annotations->parseAnnotations($container);
+		$restriction->annotations->parseAnnotations($container,$model->annotations);
 	}
 	
 	return $restriction;

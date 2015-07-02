@@ -24,13 +24,15 @@ package BP::Model::RelatedConcept;
 # This is the constructor.
 # parseRelatedConcept parameters:
 #	relatedDecl: A XML::LibXML::Element 'dcc:related-to' instance
+#	globalAnnotationSet: A BP::Model::AnnotationSet instance, which comes from a BP::Model instance
 # It returns a BP::Model::RelatedConcept instance
-sub parseRelatedConcept($) {
+sub parseRelatedConcept($$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $relatedDecl = shift;
+	my $globalAnnotationSet = shift;
 	
 	return bless([
 		($relatedDecl->hasAttribute('domain'))?$relatedDecl->getAttribute('domain'):undef ,
@@ -42,7 +44,7 @@ sub parseRelatedConcept($) {
 		($relatedDecl->hasAttribute('m-ary-sep'))?$relatedDecl->getAttribute('m-ary-sep'):',',
 		($relatedDecl->hasAttribute('partial-participation') && $relatedDecl->getAttribute('partial-participation') eq 'true')?1:undef,
 		($relatedDecl->hasAttribute('inheritable') && $relatedDecl->getAttribute('inheritable') eq 'true')?1:undef,
-		BP::Model::AnnotationSet->parseAnnotations($relatedDecl),
+		BP::Model::AnnotationSet->parseAnnotations($relatedDecl,$globalAnnotationSet),
 		$relatedDecl->hasAttribute('id')?$relatedDecl->getAttribute('id'):undef,
 	],$class);
 }

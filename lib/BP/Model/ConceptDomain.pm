@@ -54,7 +54,7 @@ sub parseConceptDomain($$) {
 		\%conceptHash,
 		($conceptDomainDecl->hasAttribute('is-abstract') && ($conceptDomainDecl->getAttribute('is-abstract') eq 'true'))?1:undef,
 		BP::Model::DescriptionSet->parseDescriptions($conceptDomainDecl),
-		BP::Model::AnnotationSet->parseAnnotations($conceptDomainDecl),
+		BP::Model::AnnotationSet->parseAnnotations($conceptDomainDecl,$model->annotations),
 	);
 	
 	# Does the filename-pattern exist?

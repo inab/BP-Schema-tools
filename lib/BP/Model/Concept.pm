@@ -48,7 +48,7 @@ sub ParseConceptContainer($$$;$);
 #		or 'dcc:weak-concepts' instance
 #	conceptDomain: A BP::Model::ConceptDomain instance, where this concept
 #		has been defined.
-#	model: a BP::Model instance used to validate the concepts, columsn, etc...
+#	model: a BP::Model instance used to validate the concepts, columns, etc...
 #	idConcept: An optional, identifying BP::Model::Concept instance of
 #		all the (weak) concepts to be parsed from the container
 # it returns an array of BP::Model::Concept instances, which are all the
@@ -60,7 +60,7 @@ sub ParseConceptContainer($$$;$) {
 	my $idConcept = shift;	# This is optional (remember!)
 	
 	# Let's get the annotations inside the concept container
-	my $weakAnnotations = BP::Model::AnnotationSet->parseAnnotations($conceptContainerDecl);
+	my $weakAnnotations = BP::Model::AnnotationSet->parseAnnotations($conceptContainerDecl,$model->annotations);
 	foreach my $conceptDecl ($conceptContainerDecl->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'concept')) {
 		# Concepts self register on the concept domain!
 		my $concept = BP::Model::Concept->parseConcept($conceptDecl,$conceptDomain,$model,$idConcept,$weakAnnotations);
@@ -233,7 +233,7 @@ sub parseConcept($$$;$$) {
 	
 	# Saving the related concepts (the ones explicitly declared within this concept)
 	foreach my $relatedDecl ($conceptDecl->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'related-to')) {
-		my $parsedRelatedConcept = BP::Model::RelatedConcept->parseRelatedConcept($relatedDecl);
+		my $parsedRelatedConcept = BP::Model::RelatedConcept->parseRelatedConcept($relatedDecl,$model->annotations);
 		if(defined($parsedRelatedConcept->id) && exists($relPos{$parsedRelatedConcept->id})) {
 			# TODO Validation of a legal substitution
 			$related[$relPos{$parsedRelatedConcept->id}] = $parsedRelatedConcept;
@@ -262,7 +262,7 @@ sub parseConcept($$$;$$) {
 		\@conceptBaseTypes,
 		$conceptDomain,
 		BP::Model::DescriptionSet->parseDescriptions($conceptDecl),
-		BP::Model::AnnotationSet->parseAnnotations($conceptDecl,defined($parentConcept)?$parentConcept->annotations:undef),
+		BP::Model::AnnotationSet->parseAnnotations($conceptDecl,$model->annotations,defined($parentConcept)?$parentConcept->annotations:undef),
 		$columnSet,
 		$idConcept,
 		\@related,

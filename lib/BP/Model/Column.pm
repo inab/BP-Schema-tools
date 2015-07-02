@@ -53,7 +53,7 @@ sub parseColumn($$) {
 	my @column = (
 		$colDecl->getAttribute('name'),
 		BP::Model::DescriptionSet->parseDescriptions($colDecl),
-		BP::Model::AnnotationSet->parseAnnotations($colDecl),
+		BP::Model::AnnotationSet->parseAnnotations($colDecl,$model->annotations),
 		BP::Model::ColumnType->parseColumnType($colDecl,$model,$colDecl->getAttribute('name')),
 		undef,
 		undef,

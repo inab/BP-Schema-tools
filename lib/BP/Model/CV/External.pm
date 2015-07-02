@@ -16,19 +16,33 @@ package BP::Model::CV::External;
 # This is the constructor
 # parseCVExternal parameters:
 #	el: a XML::LibXML::Element 'dcc:cv-uri' node
-#	defName: a default filename
-sub parseCVExternal($;$) {
+#	annotations: a BP::Model::AnnotationSet instance
+#	defName: a default symbolic name
+sub parseCVExternal($$;$) {
 	my $class = shift;
 	
 	Carp::croak((caller(0))[3].' is a class method!')  if(BP::Model::DEBUG && ref($class));
 	
 	my $el = shift;
+	my $annotations = shift;
 	my $defName = shift;
+	
+	# Preparing the contents to be fixed
+	my $cvURI = $el->textContent();
+	
+	my @varToFix = (\$cvURI);
+	
+	my $docURI = undef;
+	if($el->hasAttribute('doc')) {
+		$docURI = $el->getAttribute('doc');
+		push(@varToFix,\$docURI);
+	}
+	
+	# Now, we are going to apply the annotation substitutions in the URLs
+	$annotations->applyAnnotations(@varToFix);
 	
 	# Although it is not going to be materialized here (at least, not yet)
 	# let's check whether it is a valid cv-uri
-	my $cvURI = $el->textContent();
-	
 	# TODO: validate URI
 	my $uri = URI->new($cvURI);
 	my @segments = $uri->path_segments();
@@ -36,7 +50,7 @@ sub parseCVExternal($;$) {
 	my $mirrorname = $segments[-1];
 	$mirrorname = $name  unless(defined($mirrorname) && $mirrorname ne '');
 	
-	my @externalCV = ($uri,$el->getAttribute('format'),$el->hasAttribute('doc')?URI->new($el->getAttribute('doc')):undef,$name,$mirrorname);
+	my @externalCV = ($uri,$el->getAttribute('format'),defined($docURI)?URI->new($docURI):undef,$name,$mirrorname);
 	bless(\@externalCV,$class);
 }
 

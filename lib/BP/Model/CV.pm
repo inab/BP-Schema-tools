@@ -114,10 +114,13 @@ sub parseCV($$;$) {
 	my $model = shift;
 	my $skipCVparse = shift;
 	
-	$self->annotations->parseAnnotations($cv);
+	$self->annotations->parseAnnotations($cv,$model->annotations);
 	$self->description->parseDescriptions($cv);
 	
-	$self->[BP::Model::CV::CVNAME] = $cv->getAttribute('name')  if($cv->hasAttribute('name'));
+	my $defName = '(none)';
+	if($cv->hasAttribute('name')) {
+		$defName = $self->[BP::Model::CV::CVNAME] = $cv->getAttribute('name');
+	}
 	
 	$self->[BP::Model::CV::CVLAX] = boolean($cv->hasAttribute('lax') && $cv->getAttribute('lax') eq 'true');
 	
@@ -163,7 +166,7 @@ sub parseCV($$;$) {
 			}
 			
 			# As we are not fetching the content, we are not initializing neither cvHash nor cvKeys references
-			push(@{$self->[BP::Model::CV::CVURI]},BP::Model::CV::External->parseCVExternal($el,$self));
+			push(@{$self->[BP::Model::CV::CVURI]},BP::Model::CV::External->parseCVExternal($el,$self->annotations,$defName));
 			
 		} elsif($el->localname eq 'cv-file') {
 			my $cvPath = $el->textContent();
