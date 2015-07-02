@@ -47,8 +47,8 @@ use constant {
 };
 
 my %CVTYPE2INTERNAL = (
-	'obo'	=>	'__parseOBO',
-	'OWL'	=>	'__parseOWL',
+	'obo'	=>	['__parseOBO',undef],
+	'OWL'	=>	['__parseOWL',1],
 );
 
 # The CV symbolic name, the CV filename, the annotations, the documentation paragraphs, the CV (hash and keys), and the aliases (hash and keys)
@@ -172,7 +172,7 @@ sub parseCV($$;$) {
 			my $cvPath = $el->textContent();
 			$cvPath = $model->sanitizeCVpath($cvPath);
 			
-			my $cvFormat = ($el->hasAttribute('format') && exists($CVTYPE2INTERNAL{$el->getAttribute('format')})) ? $CVTYPE2INTERNAL{$el->getAttribute('format')} : '__parseCVFORMAT';
+			my($cvFormat,$cvAsBinary) = ($el->hasAttribute('format') && exists($CVTYPE2INTERNAL{$el->getAttribute('format')})) ? @{$CVTYPE2INTERNAL{$el->getAttribute('format')}} : ('__parseCVFORMAT',undef);
 			
 			# Local fetch
 			$self->[BP::Model::CV::CVKIND] = BP::Model::CV::CVLOCAL  unless(defined($self->[BP::Model::CV::CVKIND]));
@@ -183,7 +183,7 @@ sub parseCV($$;$) {
 			
 			# This is needed for chicken and egg cases, where the ontology is not generated yet, or it is going to be replaced
 			unless($skipCVparse) {
-				my $CVH = $model->openCVpath($cvPath);
+				my $CVH = $model->openCVpath($cvPath,$cvAsBinary);
 				# Calling the corresponding method
 				$self->$cvFormat($CVH,$model);
 				
@@ -199,7 +199,7 @@ sub parseCV($$;$) {
 	}
 	
 	# As we should have the full ontology (if it has been materialized), let's get the lineage of each term
-	$self->validateAndEnactAncestors();
+	$self->validateAndEnactAncestors($self->[BP::Model::CV::CVLAX]);
 	
 	return $self;
 }

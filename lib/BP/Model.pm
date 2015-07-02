@@ -634,6 +634,7 @@ sub sanitizeCVpath($) {
 
 # openCVpath parameters:
 #	cvPath: a sanizited CV path from the model
+#	openAsBinary: Don't translate to UTF-8
 # returns a IO::Handle like instance, corresponding to the CV
 sub openCVpath($) {
 	my $self = shift;
@@ -641,8 +642,10 @@ sub openCVpath($) {
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
 	my $cvPath = shift;
+	my $openAsBinary = shift;
 	
 	my $CV;
+	my $encoding = $openAsBinary?'raw':'utf8';
 	if(exists($self->{_BPZIP})) {
 		my $cvMember = $self->{_BPZIP}->memberNamed($cvPath);
 		if(defined($cvMember)) {
@@ -650,8 +653,8 @@ sub openCVpath($) {
 		} else {
 			Carp::croak("Unable to open CV member $cvPath");
 		}
-	} elsif(!open($CV,'<:utf8',$cvPath)) {
-		Carp::croak("Unable to open CV file $cvPath");
+	} elsif(!open($CV,'<:'.$encoding,$cvPath)) {
+		Carp::croak("Unable to open CV file $cvPath (encoding $encoding)");
 	}
 	
 	return $CV;
