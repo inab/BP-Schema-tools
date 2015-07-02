@@ -102,11 +102,11 @@ use BP::Model::CV::Term;
 
 use XML::SAX::ParserFactory;
 use XML::LibXML::SAX;
-use Log::Log4perl qw(:easy);
+use Log::Log4perl;
 
 sub BEGIN {
 	$XML::SAX::ParserPackage = "XML::LibXML::SAX";
-	Log::Log4perl->easy_init( { level => $INFO, layout => '%-5p - %m%n' } );
+	Log::Log4perl->easy_init( { level => $Log::Log4perl::INFO, layout => '%-5p - %m%n' } );
 }
 
 use constant RDF_NS => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -154,6 +154,7 @@ sub new(\%) {
 	$self->{synonyms_count} = 0;
 	$self->{version} = '';
 	$self->{_classHash_} = {};
+	$self->{LOG} = Log::Log4perl->get_logger(__PACKAGE__);
 	$self->_newClassInstance();
 	
 	return $self;
@@ -190,12 +191,12 @@ sub parse($) {
 	
 	$parser->parse_file($owlH);
 	
-	DEBUG "LOADED "
+	$self->{LOG}->debug("LOADED "
 	  . $self->class_count
 	  . ' CLASSES AND '
 	  . $self->synonyms_count
 	  . ' SYNONYMS from '
-	  . $self->owlfile;
+	  . $self->owlfile);
 	
 	return $self;
 }
@@ -266,8 +267,8 @@ sub start_element() {
 	my $path = $self->path;
 	if( $path eq '/rdf:RDF/owl:Class' ) {
 		$self->incr_classes();
-		INFO("Loaded " . $self->class_count . " classes from " . $self->owlfile )
-		  if $self->class_count % 1000 == 0;
+		$self->{LOG}->info("Loaded " . $self->class_count . " classes from " . $self->owlfile )
+		  if($self->class_count % 1000 == 0);
 		
 		
 		if(exists($p_attrs->{+RDF_ABOUT}) || exists($p_attrs->{+RDF_ID})) {
@@ -366,7 +367,7 @@ sub characters {
 		|| $path eq '/rdf:RDF/owl:Class/' . $self->synonym_tag )
 	{
 		$self->{_class}{annotation} = ( exists($self->{_class}{annotation}) ? $self->{_class}{annotation} : '' ) . $data;
-		WARN( "Unparsable synonym detected for " . $self->{_class}{id} )
+		$self->{LOG}->warn( "Unparsable synonym detected for " . $self->{_class}{id} )
 		  unless(defined($data));
 		
 		# detecting closing tag inside, NCIt fix
@@ -466,7 +467,7 @@ sub end_element() {
 	if ( $path eq '/rdf:RDF/owl:Class' ) {
 		if(defined($self->{_class}{id}) && $self->{_class}{id} ne OWL_NS."Thing") {
 			if(exists($self->class->{ $self->{_class}{id} })) {
-				WARN 'Class ' . $self->{_class}{id} . ' possibly duplicated'
+				$self->{LOG}->warn('Class ' . $self->{_class}{id} . ' possibly duplicated');
 			} else {
 				# Let's generate the namespace uri and the short term
 				my($shortKey,$bpCVNS) = $self->_shortKeyHelper($self->{_class}{id});
@@ -487,8 +488,8 @@ sub end_element() {
 	# Currently supports only part_of, and even that poorly.
 	# FIXME circular references
 	elsif ( $element eq 'owl:Restriction' ) {
-		WARN "UNDEFINED RESTRICTION " . $self->{_class}{id}
-		  if not defined $self->{restriction}{type};
+		$self->{LOG}->warn("UNDEFINED RESTRICTION " . $self->{_class}{id})
+		  unless(defined($self->{restriction}{type}));
 		if ( $self->{restriction}{type} =~ m!/part_of$! ) {
 			for my $cls ( @{ $self->{restriction}{class} } ) {
 				push @{ $self->{_class}{part_of} }, $cls;
