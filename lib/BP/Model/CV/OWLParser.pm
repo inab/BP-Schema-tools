@@ -106,7 +106,7 @@ use Log::Log4perl;
 
 sub BEGIN {
 	$XML::SAX::ParserPackage = "XML::LibXML::SAX";
-	Log::Log4perl->easy_init( { level => $Log::Log4perl::INFO, layout => '%-5p - %m%n' } );
+	Log::Log4perl->easy_init( { level => $Log::Log4perl::WARN, layout => '%-5p - %m%n' } );
 }
 
 use constant RDF_NS => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
