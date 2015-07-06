@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.1.1">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.2">
     <xs:annotation>
         <xs:documentation>BLUEPRINT DCC Schema 2.2, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
@@ -425,6 +425,16 @@
                                                         <xs:documentation>ISO-3166-1 XML format for country codes</xs:documentation>
                                                     </xs:annotation>
                                                 </xs:enumeration>
+                                            	<xs:enumeration value="ISO_3166-2">
+                                            		<xs:annotation>
+                                            			<xs:documentation>ISO-3166-2 XML format for organizational units (villages, towns, etc...)</xs:documentation>
+                                            		</xs:annotation>
+                                            	</xs:enumeration>
+                                            	<xs:enumeration value="LDML">
+                                            		<xs:annotation>
+                                            			<xs:documentation>Unicode Locale Data Markup Language, which models UN M.49 codes (among many other localization data)</xs:documentation>
+                                            		</xs:annotation>
+                                            	</xs:enumeration>
                                             	<xs:enumeration value="NCICUIDump">
                                             		<xs:annotation>
                                             			<xs:documentation>NCI code to CUI NCIm map</xs:documentation>
