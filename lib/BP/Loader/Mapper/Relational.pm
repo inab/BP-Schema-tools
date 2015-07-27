@@ -28,11 +28,12 @@ use constant {
 	CONF_DBUSER	=>	'user',
 	CONF_DBPASS	=>	'pass',
 	CONF_DIALECT	=>	'sql-dialect',
+	SQL_SCHEMA_BATCH_SIZE_KEY	=>	'sql-schema-batch-size'
 };
 
 my @DEFAULTS = (
 	[BP::Loader::Mapper::Relational::CONF_DIALECT => 'mysql'],
-	['batch-size' => 4096],
+	[SQL_SCHEMA_BATCH_SIZE_KEY() => 4096],
 	[BP::Loader::Mapper::Relational::CONF_DB	=> undef ],
 	[BP::Loader::Mapper::Relational::CONF_HOST	=> '' ],
 	[BP::Loader::Mapper::Relational::CONF_PORT	=> '' ],
@@ -361,7 +362,7 @@ sub generateNativeModel($) {
 	# Needed later for CV dumping et al
 	my @cvorder = ();
 	my %cvdump = ();
-	my $chunklines = $self->{'batch-size'};
+	my $chunklines = $self->{SQL_SCHEMA_BATCH_SIZE_KEY()};
 	my $descType = $p_TYPE2SQL->{BP::Model::ColumnType::STRING_TYPE}[0];
 	my $aliasType = $p_TYPE2SQL->{BP::Model::ColumnType::BOOLEAN_TYPE}[0];
 	
