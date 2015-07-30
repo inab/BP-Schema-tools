@@ -381,7 +381,7 @@ sub addTerm($;$) {
 	my $ignoreLater = shift;
 
 	# Let's initialize
-	foreach my $key (@{$term->isAlias?$term->keys:[$term->key]}) {
+	foreach my $key (@{$term->isAlias?[$term->key]:$term->keys}) {
 		# There are collissions!!!!
 		if($self->isValid($key)) {
 			# The original term
