@@ -440,6 +440,11 @@
                                             			<xs:documentation>NCI code to CUI NCIm map</xs:documentation>
                                             		</xs:annotation>
                                             	</xs:enumeration>
+                                                <xs:enumeration value="tabular">
+                                                    <xs:annotation>
+                                                        <xs:documentation>Custom tabular format</xs:documentation>
+                                                    </xs:annotation>
+                                                </xs:enumeration>
                                             </xs:restriction>
                                         </xs:simpleType>
                                     </xs:attribute>
