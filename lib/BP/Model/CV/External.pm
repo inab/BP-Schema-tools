@@ -100,7 +100,7 @@ sub mirrorURI($) {
 	
 	my $res = $ua->mirror($self->uri,$destfile);
 	if($res->code >= 400) {
-		Carp::croak("ERROR: Unable to mirror ".$self->uri." in $destfile. Reason: ".$res->error_as_html);
+		Carp::croak("ERROR: Unable to mirror ".$self->uri." in $destfile. Reason: ".$res->error_as_HTML);
 	}
 	
 	return $destfile;
