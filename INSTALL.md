@@ -57,7 +57,7 @@ For Relational, depending on the target database instance, their installation pr
 
 * DBI
 * DBD::Pg (for PostgreSQL)
-* DBD::MySQL (for MySQL)
+* DBD::mysql (for MySQL)
 * DBD::SQLite (for SQLite 3.x)
 
 For MongoDB:
