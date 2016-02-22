@@ -146,19 +146,36 @@ sub getNativeDestination($) {
 #	indexes: An array of BP::Model::Index instances
 sub _EnsureIndexes($@) {
 	my($coll,@indexes) = @_;
-	INDEXCREAT:
+	
+	# MongoDB cannot create more than one text index on a given collection (sigh)
+	# So, we will create a separate, compound index with all the indexable text fields
+	my $textIdxDecl = Tie::IxHash->new();
+	my $numTextIdx = 0;
+	
 	foreach my $index  (@indexes) {
 		my $idxDecl = Tie::IxHash->new();
+		my $numIdx = 0;
 		my $prefix = $index->prefix;
 		$prefix = defined($prefix) ? ($prefix.'.') : '';
+		
 		foreach my $p_colIdx (@{$index->indexAttributes}) {
-			# MongoDB 2.4.x and 2.6.x cannot create more than one text index on a given collection (sigh)
-			next INDEXCREAT  if($p_colIdx->[1] eq 'text');
+			my $key = $prefix.$p_colIdx->[0];
 			
-			$idxDecl->Push($prefix.$p_colIdx->[0],$p_colIdx->[1]);
+			# We avoid stale repetitions
+			if($p_colIdx->[1] eq 'text') {
+				unless($textIdxDecl->EXISTS($key)) {
+					$textIdxDecl->Push($key,$p_colIdx->[1]);
+					$numTextIdx++;
+				}
+			} elsif(!$idxDecl->EXISTS($key)) {
+				$idxDecl->Push($key,$p_colIdx->[1]);
+				$numIdx++;
+			}
 		}
-		$coll->ensure_index($idxDecl,{'unique'=>($index->isUnique?1:0)});
+		$coll->ensure_index($idxDecl,{'unique'=>($index->isUnique?1:0)})  if($numIdx > 0);
 	}
+	
+	$coll->ensure_index($textIdxDecl,{'unique' => 0})  if($numTextIdx > 0);
 }
 
 # createCollection parameters:
