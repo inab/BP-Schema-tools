@@ -436,9 +436,9 @@ sub validateAndEnactInstances(@) {
 		}
 		
 		#Carp::croak((caller(0))[3].' expects an array!')  unless(ref($entorp) eq 'ARRAY');
-		my @resEntOrp=();
-		$foundNull = $self->columnSet->checkerEnactor($entorp,\@resEntOrp);
-		$entorp = \@resEntOrp  if(scalar(@resEntOrp)>0);
+		my $p_resEntOrp=[];
+		$foundNull = $self->columnSet->checkerEnactor($entorp,$p_resEntOrp);
+		$entorp = $p_resEntOrp  if(scalar(@{$p_resEntOrp})>0);
 	}
 
 	return wantarray?($entorp,$foundNull):$entorp;
