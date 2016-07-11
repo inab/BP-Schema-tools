@@ -47,15 +47,33 @@ sub mapFilters($\@){
 	
 	my @retval = ();
 	foreach my $filter (@{$p_filters}) {
-		if($filter->[0] =~ /^(?:0|[1-9][0-9]*)$/) {
-			Carp::croak("Condition out of range: ".$filter->[0].' '.$filter->[1])  if($filter->[0] >= $numcols);
-			push(@retval,$filter);
-		} elsif(defined($p_header)) {
-			Carp::croak("Condition on unknown column: ".$filter->[0].' '.$filter->[1])  unless(exists($p_header->{$filter->[0]}));
-			push(@retval,[$p_header->{$filter->[0]},$filter->[1]]);
-		} else {
-			Carp::croak("Filter with a named column on an unnamed context: ".$filter->[0].' '.$filter->[1]);
+		my @columnFilters = ref($filter->[0]) eq 'ARRAY' ? @{$filter->[0]} : $filter->[0];
+		
+		my $doCroak = '';
+		foreach my $columnFilter (@columnFilters) {
+			if($columnFilter =~ /^(?:0|[1-9][0-9]*)$/) {
+				if($columnFilter < $numcols) {
+					push(@retval,[$columnFilter => $filter->[1]]);
+					$doCroak = undef;
+					last;
+				} else {
+					$doCroak .= "Condition out of range: ".$columnFilter.' '.$filter->[1]."\n";
+				}
+			} elsif(defined($p_header)) {
+				if(exists($p_header->{$columnFilter})) {
+					push(@retval,[$p_header->{$columnFilter},$filter->[1]]);
+					$doCroak = undef;
+					last;
+				} else {
+					$doCroak .= "Condition on unknown column: ".$columnFilter.' '.$filter->[1]."\n";
+				}
+			} else {
+				$doCroak .= "Filter with a named column on an unnamed context: ".join(',',@columnFilters).' '.$filter->[1];
+				last;
+			}
 		}
+		
+		Carp::croak($doCroak)  if(defined($doCroak));
 	}
 	
 	return @retval;
