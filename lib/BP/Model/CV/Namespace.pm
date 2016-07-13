@@ -20,7 +20,7 @@ use constant {
 
 # This is the constructor constructor
 # Constructor parameters:
-#	namespace_URI:
+#	p_namespace_URI:
 #	namespace_short:
 #	isDefault: Is it a default namespace?
 sub new($$;$) {
@@ -29,22 +29,28 @@ sub new($$;$) {
 	my($facet)=shift;
 	my($class)=ref($facet) || $facet;
 	
-	my $namespace_URI = shift;
+	my $p_namespace_URI = shift;
+	$p_namespace_URI = [ $p_namespace_URI ]  unless(ref($p_namespace_URI) eq 'ARRAY');
 	my $namespace_short = shift;
 	my $isDefault = shift;
-	my $namespace_URI_fixed = $namespace_URI;
-	$namespace_URI_fixed .= '/'  unless($namespace_URI_fixed =~ /[#\/?=]$/);
+	my $p_namespace_URI_fixed = [ @{$p_namespace_URI} ];
 	
-	return bless([$namespace_URI,$namespace_short,$isDefault,$namespace_URI_fixed],$class);
+	# Fixing the namespaces
+	foreach my $namespace_URI_fixed (@{$p_namespace_URI_fixed}) {
+		$namespace_URI_fixed .= '/'  unless($namespace_URI_fixed =~ /[#\/?=]$/);
+	}
+	
+	return bless([$p_namespace_URI,$namespace_short,$isDefault,$p_namespace_URI_fixed],$class);
 }
 
 # The namespace URI
 sub ns_uri {
-	return $_[0]->[URI];
+	return wantarray ? @{$_[0]->[URI]} : $_[0]->[URI][0];
 }
 
+# It returns an array of fixed uris
 sub ns_uri_fixed {
-	return $_[0]->[URI_FIXED];
+	return wantarray ? @{$_[0]->[URI_FIXED]} : $_[0]->[URI_FIXED][0];
 }
 
 # The namespace short name

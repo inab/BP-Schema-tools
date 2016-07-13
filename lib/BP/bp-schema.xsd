@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.2">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.2.1">
     <xs:annotation>
         <xs:documentation>BLUEPRINT DCC Schema 2.2, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
@@ -339,18 +339,17 @@
             <xs:sequence minOccurs="0" maxOccurs="1">
                 <xs:element name="cv-ns" minOccurs="1" maxOccurs="unbounded">
                     <xs:annotation>
-                        <xs:documentation>An ontology namespace (short name and URI declaration)</xs:documentation>
+                        <xs:documentation>An ontology namespace (short name and URI declaration(s))</xs:documentation>
                     </xs:annotation>
-                    <xs:complexType>
-                        <xs:simpleContent>
-                            <xs:extension base="xs:anyURI">
-                                <xs:attribute name="short-name" type="bp:namespaceShortNameType" use="required">
-                                    <xs:annotation>
-                                        <xs:documentation>The declared short name for the namespace</xs:documentation>
-                                    </xs:annotation>
-                                </xs:attribute>
-                            </xs:extension>
-                        </xs:simpleContent>
+                    <xs:complexType mixed="true">
+                         <xs:sequence>
+                             <xs:element name="cv-uri" minOccurs="0" maxOccurs="unbounded" type="xs:anyURI" />
+                         </xs:sequence>
+                         <xs:attribute name="short-name" type="bp:namespaceShortNameType" use="required">
+                             <xs:annotation>
+                                 <xs:documentation>The declared short name for the namespace</xs:documentation>
+                             </xs:annotation>
+                         </xs:attribute>
                     </xs:complexType>
                 </xs:element>
                 
@@ -365,7 +364,10 @@
             </xs:sequence>
             
             <xs:choice>
-                <xs:element ref="bp:cv-file"/>
+                <xs:sequence>
+			<xs:element ref="bp:cv-file"/>
+			<xs:element ref="bp:e" minOccurs="0" maxOccurs="unbounded" />
+		</xs:sequence>
                 <xs:sequence>
                     <xs:element name="cv-uri" minOccurs="1" maxOccurs="unbounded">
                         <xs:annotation>
@@ -452,7 +454,10 @@
                             </xs:simpleContent>
                         </xs:complexType>
                     </xs:element>
-                    <xs:element ref="bp:cv-file" minOccurs="0" maxOccurs="1"/>
+                    <xs:sequence minOccurs="0" maxOccurs="1">
+                        <xs:element ref="bp:cv-file" minOccurs="1" maxOccurs="1"/>
+                        <xs:element ref="bp:e" minOccurs="0" maxOccurs="unbounded" />
+                    </xs:sequence>
                 </xs:sequence>
                 <xs:element ref="bp:e" minOccurs="1" maxOccurs="unbounded" />
             </xs:choice>

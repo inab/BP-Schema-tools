@@ -147,7 +147,17 @@ sub parseCV($$;$) {
 			$self->addTerm(BP::Model::CV::Term->new($el->getAttribute('v'),$el->textContent(),$ns));
 		} elsif($el->localname eq 'cv-ns') {
 			my $short_ns = $el->getAttribute('short-name');
-			$namespaces{$short_ns} = BP::Model::CV::Namespace->new($el->textContent(),$short_ns);
+			
+			my $namespace_URI;
+			my @childURIs = $el->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'cv-uri');
+			
+			if(scalar(@childURIs) > 0) {
+				$namespace_URI = [ map { $_->textContent(); } @childURIs ];
+			} else {
+				$namespace_URI = $el->textContent();
+			}
+			
+			$namespaces{$short_ns} = BP::Model::CV::Namespace->new($namespace_URI,$short_ns);
 		} elsif($el->localname eq 'default-cv-ns') {
 			if($el->hasAttribute('ns')) {
 				my $short_ns = $el->getAttribute('ns');

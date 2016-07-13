@@ -183,14 +183,16 @@ sub uriKeys {
 	my $p_uriKeys = [];
 	my $p_namespace = $self->namespace();
 	if(defined($p_namespace)) {
-		my $ns_uri = $p_namespace->ns_uri_fixed();
+		my @ns_uris = $p_namespace->ns_uri_fixed();
 		my @uriKeys = ();
 		foreach my $key (@{$self->keys}) {
 			my $tkey = $key;
 			# TODO: do it better!
 			$tkey =~ tr/:/_/;
 			
-			push(@uriKeys,$ns_uri.$tkey);
+			foreach my $ns_uri (@ns_uris) {
+				push(@uriKeys,$ns_uri.$tkey);
+			}
 		}
 		$p_uriKeys = \@uriKeys;
 	}
