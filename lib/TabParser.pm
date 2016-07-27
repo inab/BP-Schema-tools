@@ -65,7 +65,7 @@ sub mapFilters($\@){
 					$doCroak = undef;
 					last;
 				} else {
-					$doCroak .= "Condition on unknown column: ".$columnFilter.' '.$filter->[1]."\n";
+					$doCroak .= "Condition on unknown column: ".$columnFilter.' '.(defined($filter->[1]) ? $filter->[1] : '(no condition)')."\n";
 				}
 			} else {
 				$doCroak .= "Filter with a named column on an unnamed context: ".join(',',@columnFilters).' '.$filter->[1];
