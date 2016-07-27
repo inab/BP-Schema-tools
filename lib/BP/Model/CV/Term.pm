@@ -171,6 +171,7 @@ sub namespace {
 
 # The BP::Model::CV instance which defines the term
 sub _setParentCV {
+	# This should be weakened
 	$_[0]->[PARENTCV] = $_[1];
 }
 

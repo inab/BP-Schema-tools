@@ -137,7 +137,7 @@ sub readColDesc($$$) {
 					# We are not going to translate and store foreign keys from correlated entries
 					unless($isSlave && exists($fk_hash{$columnName})) {
 						$column = $colHash->{$columnName};
-						$typePrep = $column->columnType->dataMangler;
+						$typePrep = $column->columnType->dataMangler();
 						$typeCheck = $column->columnType->dataChecker;
 						
 						# Optimization

@@ -484,8 +484,8 @@ sub _getCheckerEnactorMetadata() {
 			$typeCheck = $column->columnType->dataChecker;
 			
 			# Optimization
-			$typePrep = undef  if($typePrep == \&BP::Model::ColumnType::__string);
-			$typeCheck = undef  if($typeCheck == \&BP::Model::ColumnType::__true);
+			$typePrep = undef  if(defined($typePrep) && $typePrep == \&BP::Model::ColumnType::__string);
+			$typeCheck = undef  if(defined($typeCheck) && $typeCheck == \&BP::Model::ColumnType::__true);
 			
 			my $defaultVal = $column->columnType->default;
 			if(Scalar::Util::blessed($defaultVal) && $defaultVal->isa('BP::Model::Column')) {
