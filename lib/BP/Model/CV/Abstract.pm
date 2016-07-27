@@ -113,6 +113,22 @@ sub dataChecker {
 	};
 }
 
+# With this method, it is possible to normalize the CVs
+sub dataMangler($) {
+	my $self = shift;
+	
+	my $doNormalize = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	return (!$doNormalize || $self->isLax()) ? undef :
+		sub($) {
+			my $term = $self->getTerm($_[0]);
+			my $retval = $term->uriKey();
+			return defined($retval) ? $retval : $term->key();
+		};
+}
+
 # It returns an array of instances of descendants of BP::Model::CV
 sub getEnclosedCVs() {
 	Carp::croak("Unimplemented method!");

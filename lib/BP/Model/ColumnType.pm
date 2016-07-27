@@ -188,8 +188,10 @@ sub parseColumnType($$$) {
 			$dataChecker = $refItemType->[BP::Model::ColumnType::DATATYPECHECKER]  if(defined($refItemType->[BP::Model::ColumnType::DATATYPECHECKER]));
 		}
 		
+		# Enforce normalization?
+		my $doNormalize = $colType->hasAttribute('normalize')?$colType->getAttribute('normalize') eq 'true':undef;
 		# Setting up the data mangler
-		my $dataMangler = (Scalar::Util::blessed($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler : $refItemType->[BP::Model::ColumnType::DATATYPEMANGLER];
+		my $dataMangler = (Scalar::Util::blessed($restriction) && $restriction->can('dataMangler')) ? $restriction->dataMangler($doNormalize) : $refItemType->[BP::Model::ColumnType::DATATYPEMANGLER];
 		
 		# Default value
 		my $defval = $colType->hasAttribute('default')?$colType->getAttribute('default'):undef;

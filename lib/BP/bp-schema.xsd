@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.2.1">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bp="http://www.blueprint-epigenome.eu/dcc/schema" elementFormDefault="qualified" targetNamespace="http://www.blueprint-epigenome.eu/dcc/schema" version="2.2.2">
     <xs:annotation>
         <xs:documentation>BLUEPRINT DCC Schema 2.2, which integrates the description of the tabular submission files, their filenames and their relationships</xs:documentation>
     </xs:annotation>
@@ -719,6 +719,11 @@ If if starts as $$, it tells the required or idref column with the value for thi
                                     <xs:pattern value="$$[a-zA-Z_][a-zA-Z0-9_]*|[^$].*"></xs:pattern>
                                 </xs:restriction>
                             </xs:simpleType>
+                        </xs:attribute>
+                        <xs:attribute name="normalize" type="xs:boolean" use="optional" default="false">
+				<xs:annotation>
+					<xs:documentation>If normalization is not enforced for this column type with these restrictions, and this attribute is true, its contents are normalized (currently, only CV terms)</xs:documentation>
+				</xs:annotation>
                         </xs:attribute>
                     </xs:complexType>
                 </xs:element>
