@@ -23,6 +23,8 @@ use base qw(BP::Loader::Mapper::NoSQL);
 use BP::Loader::CorrelatableConcept;
 
 
+use constant INDEX_PREFIX_KEY	=>	'index_prefix';
+
 my @DEFAULTS = (
 	['use_https' => 'false' ],
 	['nodes' => [ 'localhost' ] ],
@@ -31,6 +33,7 @@ my @DEFAULTS = (
 	['user' => '' ],
 	['pass' => '' ],
 	['request_timeout' => 300],
+	[INDEX_PREFIX_KEY() => ''],
 );
 
 my %ABSTYPE2ES = (
@@ -245,7 +248,8 @@ sub createCollection($) {
 	
 	my $es = $self->connect();
 	
-	my $indexName = $collection->path;
+	# The index name can have a prefix
+	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path;
 	
 	# At least, let's create the index
 	$es->indices->create('index' => $indexName)  unless($es->indices->exists('index' => $indexName));
@@ -299,7 +303,8 @@ sub existsCollection($) {
 	
 	my $es = $self->connect();
 	
-	my $indexName = $collection->path;
+	# The index name can have a prefix
+	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path;
 	
 	# At least, let's create the index
 	return $es->indices->exists('index' => $indexName);
@@ -420,7 +425,8 @@ sub _genDestination($;$) {
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 	my $conid = $concept+0;
 	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-	my $indexName = $collection->path();
+	# The index name can have a prefix
+	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path();
 	my $mappingName = $concept->id();
 	
 	my $es = $self->connect();
@@ -461,7 +467,8 @@ sub _existingEntries($$$) {
 		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
 		my $conid = $concept+0;
 		my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-		my $indexName = $collection->path();
+		# The index name can have a prefix
+		my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path();
 		my $mappingName = $concept->id();
 		
 		my $es = $self->connect();
