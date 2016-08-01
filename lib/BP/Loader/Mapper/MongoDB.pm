@@ -213,6 +213,53 @@ sub createCollection($) {
 	return $coll;
 }
 
+# queryCollection parameters:
+#	collection: Either a BP::Model::Collection or a BP::Model::Concept instance
+#	query_body: a native query body
+# Given a BP::Model::Collection instance, it returns a MongoDB::Cursor object
+# instance, with the prepared query, ready to scroll along its results
+sub queryCollection($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $collection = shift;
+	
+	# Is it a concept?
+	if(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Concept')) {
+		$collection = $self->getCollectionFromConcept($collection);
+	}
+	
+	Carp::croak("ERROR: Input parameter must be a collection (or a concept)")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $coll = $self->getNativeDestination($collection);
+	
+	# my $query_body = shift;
+	
+	my $cursor = $coll->find(@_);
+	return $cursor;
+}
+
+# queryConcept parameters:
+#	concept: A BP::Model::Concept instance
+#	query_body: a native query body
+# Given a BP::Model::Concept instance, it returns a native scrolling object
+# instance, with the prepared query, ready to scroll along its results
+sub queryConcept($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $query = shift;
+	
+	my %augQuery = %{$query};
+	
+	# This is needed to filter out entries from other concepts which are in the same collection
+	$augQuery{CUSTOM_TYPE_KEY()} = $concept->id();
+		
+	return $self->queryCollection(\%augQuery,@_);
+}
+
 # storeNativeModel parameters:
 sub storeNativeModel() {
 	my $self = shift;

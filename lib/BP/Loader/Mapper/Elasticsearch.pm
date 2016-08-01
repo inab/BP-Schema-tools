@@ -234,6 +234,51 @@ sub __getMetaConcepts($) {
 
 }
 
+# getNativeIndexNameFromCollection parameters:
+#	collection: A BP::Model::Collection instance
+# Given a BP::Model::Collection instance, it returns the native index name
+sub getNativeIndexNameFromCollection($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $collection = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	# The index name can have a prefix
+	return $self->{INDEX_PREFIX_KEY()} . $collection->path;
+}
+
+# getNativeIndexNameFromConcept parameters:
+#	concept: A BP::Model::Concept instance
+# Given a BP::Model::Concept instance, it returns the native index name
+sub getNativeIndexNameFromConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	my $collection = $self->getCollectionFromConcept($concept);
+	
+	return defined($collection) ? $self->getNativeIndexNameFromCollection($collection) : undef;
+}
+
+# getNativeIndexNameFromConcept parameters:
+#	concept: A BP::Model::Concept instance
+# Given a BP::Model::Concept instance, it returns the native mapping name
+sub getNativeMappingNameFromConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a concept")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+	
+	return $concept->id();
+}
+
 # createCollection parameters:
 #	collection: A BP::Model::Collection instance
 # Given a BP::Model::Collection instance, it is created, along with its indexes
@@ -248,8 +293,7 @@ sub createCollection($) {
 	
 	my $es = $self->connect();
 	
-	# The index name can have a prefix
-	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path;
+	my $indexName = $self->getNativeIndexNameFromCollection($collection);
 	
 	# At least, let's create the index
 	$es->indices->create('index' => $indexName)  unless($es->indices->exists('index' => $indexName));
@@ -268,7 +312,7 @@ sub createCollection($) {
 	
 	if(scalar(@colConcepts) > 0) {
 		foreach my $concept (@colConcepts) {
-			my $conceptId = $concept->id();
+			my $conceptId = $self->getNativeMappingNameFromConcept($concept);
 			
 			#$es->indices->delete_mapping('index' => $indexName,'type' => $conceptId)  if($es->indices->exists_type('index' => $indexName,'type' => $conceptId));
 			#unless($es->indices->exists_type('index' => $indexName,'type' => $conceptId)) {
@@ -303,11 +347,75 @@ sub existsCollection($) {
 	
 	my $es = $self->connect();
 	
-	# The index name can have a prefix
-	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path;
+	my $indexName = $self->getNativeIndexNameFromCollection($collection);
 	
 	# At least, let's create the index
 	return $es->indices->exists('index' => $indexName);
+}
+
+# queryCollection parameters:
+#	collection: Either a BP::Model::Collection or a BP::Model::Concept instance
+#	query_body: a Elasticsearch query body
+# Given a BP::Model::Collection instance, it returns a Search::Elasticsearch::Scroll
+# instance, with the prepared query, ready to scroll along its results
+sub queryCollection($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $collection = shift;
+	
+	# Is it a concept?
+	if(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Concept')) {
+		$collection = $self->getCollectionFromConcept($collection);
+	}
+	
+	Carp::croak("ERROR: Input parameter must be a collection (or a concept)")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	
+	my $indexName = $self->getNativeIndexNameFromCollection($collection);
+	
+	my $query_body = shift;
+	
+	my $es = $self->connect();
+	my $scroll = $es->scroll_helper(
+		'index'	=> $indexName,
+		'size'	=> 5000,
+		'search_type'	=> 'scan', # With this, no sort is applied
+		#'search_type'	=> 'query_and_fetch',
+		'body'	=> $query_body
+	);
+	return $scroll;
+}
+
+# queryConcept parameters:
+#	concept: A BP::Model::Concept instance
+#	query_body: a Elasticsearch query body
+# Given a BP::Model::Concept instance, it returns a Search::Elasticsearch::Scroll
+# instance, with the prepared query, ready to scroll along its results
+sub queryConcept($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a concept")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+	
+	my $indexName = $self->getNativeIndexNameFromConcept($concept);
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
+	
+	my $query_body = shift;
+	
+	my $es = $self->connect();
+	my $scroll = $es->scroll_helper(
+		'index'	=> $indexName,
+		'type'	=> $mappingName,
+		'size'	=> 5000,
+		'search_type'	=> 'scan', # With this, no sort is applied
+		#'search_type'	=> 'query_and_fetch',
+		'body'	=> $query_body
+	);
+	return $scroll;
 }
 
 # Trimmed down version of storeNativeModel from MongoDB
@@ -423,11 +531,8 @@ sub _genDestination($;$) {
 	my $isTemp = shift;
 	
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
-	my $conid = $concept+0;
-	my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-	# The index name can have a prefix
-	my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path();
-	my $mappingName = $concept->id();
+	my $indexName = $self->getNativeIndexNameFromConcept($concept);
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
 	
 	my $es = $self->connect();
 	my @bes_params = (
@@ -465,36 +570,24 @@ sub _existingEntries($$$) {
 		my $p_colNames = $p_destination->[1];
 		
 		my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
-		my $conid = $concept+0;
-		my $collection = exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
-		# The index name can have a prefix
-		my $indexName = $self->{INDEX_PREFIX_KEY()} . $collection->path();
-		my $mappingName = $concept->id();
 		
-		my $es = $self->connect();
-
-		my $scroll = $es->scroll_helper(
-			'index'	=> $indexName,
-			'type'	=> $mappingName,
-			'size'	=> 5000,
-			'search_type'	=> 'scan', # With this, no sort is applied
-			#'search_type'	=> 'query_and_fetch',
-			'body'	=> {
-				#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
-				# Each fetched document comes with its unique identifier
-				'script_fields' => {
-					'_c_' => {
-						'lang' => 'groovy',
-						'script' => (join('+"\t"+','_fields._id.value',map { 'doc["'.$_.'"].value' } @{$p_colNames}).'+"\n"')
-					}
-				},
-				#'fields'=> $p_colNames,
-				'fields' => [],
-				'query'	=> {
-					'match_all' => {}
+		my $query_body = {
+			#'sort'=> [ {'chromosome' => 'asc'},{'chromosome_start' => 'asc'},{'mutated_from_allele' => 'asc'},{'mutated_to_allele' => 'asc'} ],
+			# Each fetched document comes with its unique identifier
+			'script_fields' => {
+				'_c_' => {
+					'lang' => 'groovy',
+					'script' => (join('+"\t"+','_fields._id.value',map { 'doc["'.$_.'"].value' } @{$p_colNames}).'+"\n"')
 				}
+			},
+			#'fields'=> $p_colNames,
+			'fields' => [],
+			'query'	=> {
+				'match_all' => {}
 			}
-		);
+		};
+		
+		my $scroll = $self->queryConcept($concept,$query_body);
 		
 		my $sortColDef = '';
 		my $kidx = 2;

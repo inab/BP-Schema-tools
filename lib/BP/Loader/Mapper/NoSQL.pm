@@ -846,6 +846,22 @@ sub generateNativeModel(\$;$$) {
 	return \@generatedFiles;
 }
 
+# getNativeIndexNameFromConcept parameters:
+#	concept: A BP::Model::Concept instance
+# Given a BP::Model::Concept instance, it returns a BP::Model::Collection
+sub getCollectionFromConcept($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	
+	Carp::croak("ERROR: Input parameter must be a concept")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+	
+	my $conid = $concept+0;
+	return exists($self->{_conceptCol}{$conid})?$self->{_conceptCol}{$conid}:undef;
+}
+
 # getNativeDestination parameters:
 #	collection: a BP::Model::Collection instance
 # It returns a native collection object, to be used by bulkInsert, for instance
@@ -865,6 +881,24 @@ sub createCollection($) {
 #	collection: A BP::Model::Collection instance
 # Given a BP::Model::Collection instance, it tells whether the collection was created
 sub existsCollection($) {
+	Carp::croak('Unimplemented method!');
+}
+
+# queryCollection parameters:
+#	collection: Either a BP::Model::Collection or a BP::Model::Concept instance
+#	query_body: a native query body
+# Given a BP::Model::Collection instance, it returns a native scrolling object
+# instance, with the prepared query, ready to scroll along its results
+sub queryCollection($$;$) {
+	Carp::croak('Unimplemented method!');
+}
+
+# queryConcept parameters:
+#	concept: A BP::Model::Concept instance
+#	query_body: a native query body
+# Given a BP::Model::Concept instance, it returns a native scrolling object
+# instance, with the prepared query, ready to scroll along its results
+sub queryConcept($$;$) {
 	Carp::croak('Unimplemented method!');
 }
 
