@@ -27,15 +27,16 @@ use constant {
 	TYPE	=>	0,
 	CONTAINER_TYPE	=>	1,
 	USE	=>	2,
-	RESTRICTION	=>	3,
-	DEFAULT	=>	4,
-	SETSEPS	=>	5,
-	ARRAYSEPS	=>	6,
-	KEYHASHSEP	=>	7,
-	VALHASHSEP	=>	8,
-	ALLOWEDNULLS	=>	9,
-	DATAMANGLER	=>	10,
-	DATACHECKER	=>	11,
+	ITEM_USE	=>	3,
+	RESTRICTION	=>	4,
+	DEFAULT	=>	5,
+	SETSEPS	=>	6,
+	ARRAYSEPS	=>	7,
+	KEYHASHSEP	=>	8,
+	VALHASHSEP	=>	9,
+	ALLOWEDNULLS	=>	10,
+	DATAMANGLER	=>	11,
+	DATACHECKER	=>	12,
 };
 
 use constant STR2CONTAINER => {
@@ -52,9 +53,9 @@ use constant STR2TYPE => {
 	'optional' => OPTIONAL
 };
 
-sub genArrayDataChecker($$);
+sub genArrayDataChecker($$$);
 sub genArrayDataMangler($$);
-sub genHashDataChecker($);
+sub genHashDataChecker($$);
 sub genHashDataMangler($);
 
 # This is the constructor.
@@ -87,7 +88,7 @@ sub parseColumnType($$$) {
 	# data mangler
 	# data checker
 	my @nullValues = ();
-	my @columnType = (undef,undef,undef,undef,undef,undef,undef,undef,undef,\@nullValues);
+	my @columnType = (undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,\@nullValues);
 	
 	# Let's parse the column type!
 	foreach my $colType ($containerDecl->getChildrenByTagNameNS(BP::Model::Common::dccNamespace,'column-type')) {
@@ -114,6 +115,13 @@ sub parseColumnType($$$) {
 			$columnType[BP::Model::ColumnType::USE] = (BP::Model::ColumnType::STR2TYPE)->{$columnKind};
 		} else {
 			Carp::croak("Column $columnName has a unknown kind: $columnKind"."\nOffending XML fragment:\n".$colType->toString()."\n");
+		}
+		
+		my $itemKind = $colType->hasAttribute('item-kind') ? $colType->getAttribute('item-kind') : 'required';
+		if(exists((BP::Model::ColumnType::STR2TYPE)->{$itemKind})) {
+			$columnType[BP::Model::ColumnType::ITEM_USE] = (BP::Model::ColumnType::STR2TYPE)->{$itemKind};
+		} else {
+			Carp::croak("Items from column $columnName have a unknown kind: $itemKind"."\nOffending XML fragment:\n".$colType->toString()."\n");
 		}
 		
 		# Content restrictions (children have precedence over attributes)
@@ -253,7 +261,7 @@ sub parseColumnType($$$) {
 				#};
 				
 				# Altering the data checker in order to handle multidimensional matrices
-				$dataChecker = genArrayDataChecker($dataChecker,scalar(@sepsArr));
+				$dataChecker = genArrayDataChecker($dataChecker,scalar(@sepsArr),$columnType[BP::Model::ColumnType::ITEM_USE]);
 				#my $itemDataChecker = $dataChecker;
 				#$dataChecker = sub {
 				#	my $result = [$_[0]];
@@ -322,7 +330,7 @@ sub parseColumnType($$$) {
 			#};
 			
 			# Altering the data checker in order to handle multidimensional matrices
-			$dataChecker = genHashDataChecker($dataChecker);
+			$dataChecker = genHashDataChecker($dataChecker,$columnType[BP::Model::ColumnType::ITEM_USE]);
 			#my $itemDataChecker = $dataChecker;
 			#$dataChecker = sub {
 			#	my @keyvals = split($valSep,$_[0]);
@@ -349,8 +357,8 @@ sub parseColumnType($$$) {
 	return bless(\@columnType,$class);
 }
 
-sub genHashDataChecker($) {
-	my($itemDataChecker)=@_;
+sub genHashDataChecker($$) {
+	my($itemDataChecker,$itemUse)=@_;
 	
 	return $itemDataChecker? sub {
 		my $result = $_[0];
@@ -358,7 +366,7 @@ sub genHashDataChecker($) {
 		return undef  unless(ref($result) eq 'HASH');
 		
 		foreach my $value (values(%{$result})) {
-			return undef  unless($itemDataChecker->($value));
+			return undef  unless(($itemUse < IDREF && !defined($value)) || $itemDataChecker->($value));
 		}
 		
 		return 1;
@@ -375,14 +383,14 @@ sub genHashDataMangler($) {
 		my $result = $_[0];
 		my %resHash = ();
 		
-		@resHash{keys(%{$result})} = map { $itemDataMangler->($_)} values(%{$result});
+		@resHash{keys(%{$result})} = map { defined($_) ? $itemDataMangler->($_) : undef } values(%{$result});
 		
 		return \%resHash;
 	} : undef;
 }
 
-sub genArrayDataChecker($$) {
-	my($itemDataChecker,$dimensions)=@_;
+sub genArrayDataChecker($$$) {
+	my($itemDataChecker,$dimensions,$itemUse)=@_;
 	return $itemDataChecker? sub {
 		my $result = $_[0];
 		
@@ -392,7 +400,7 @@ sub genArrayDataChecker($$) {
 			$result = [ map { @{$_} } @{$result} ];
 		}
 		foreach my $value (@{$result}) {
-			return undef  unless($itemDataChecker->($value));
+			return undef  unless(($itemUse < IDREF && !defined($value)) || $itemDataChecker->($value));
 		}
 		
 		# The real result is here
@@ -423,7 +431,7 @@ sub genArrayDataMangler($$) {
 		}
 		foreach my $p_level ( @level ) {
 			foreach my $value (@{$p_level}) {
-				$value = $itemDataMangler->($value);
+				$value = defined($value) ? $itemDataMangler->($value) : undef;
 			}
 		}
 		return $result;
@@ -444,6 +452,12 @@ sub containerType {
 # Idref equals 0; required, 1; optional, -1
 sub use {
 	return $_[0]->[BP::Model::ColumnType::USE];
+}
+
+# item use (idref, required, optional)
+# Idref equals 0; required, 1; optional, -1
+sub itemUse {
+	return $_[0]->[BP::Model::ColumnType::ITEM_USE];
 }
 
 # content restrictions. Either
