@@ -168,7 +168,7 @@ sub new($;$$) {
 	foreach my $p_itemType (values(%{$self->{TYPES}})) {
 		my $pattern = $p_itemType->[BP::Model::ColumnType::TYPEPATTERN];
 		if(defined($pattern)) {
-			$p_itemType->[BP::Model::ColumnType::DATATYPECHECKER] =  (ref($pattern) eq 'Regexp')?sub { $_[0] =~ $pattern }:\&BP::Model::ColumnType::__true;
+			$p_itemType->[BP::Model::ColumnType::DATATYPECHECKER] =  (ref($pattern) eq 'Regexp')? sub { defined($_[0]) && $_[0] =~ $pattern }:\&BP::Model::ColumnType::__true;
 		}
 	}
 	
