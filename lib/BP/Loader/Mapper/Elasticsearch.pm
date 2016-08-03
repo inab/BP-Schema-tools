@@ -279,10 +279,71 @@ sub getNativeMappingNameFromConcept($) {
 	return $concept->id();
 }
 
+# existsMappingFromConcept parameters:
+#	concept: A BP::Model::Concept instance
+#	indexName: The name of the index in Elasticsearch. If undefined,
+#		it is obtained from the concept
+#	es: A Search::Elasticsearch instance. If undefined, it is obtained
+#		from the class instance
+# It returns whether the mapping associated to the concept does exist or not
+sub existsMappingFromConcept($;$$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	my $indexName = shift;
+	my $es = shift;
+	
+	$indexName = $self->getNativeIndexNameFromConcept($concept)  unless(defined($indexName));
+	$es = $self->connect()  unless(defined($es));
+	
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
+	
+	return $es->indices->exists_type('index' => $indexName,'type' => $mappingName);
+}
+
+# createMappingFromConcept parameters:
+#	concept: A BP::Model::Concept instance
+#	indexName: The name of the index in Elasticsearch. If undefined,
+#		it is obtained from the concept
+#	es: A Search::Elasticsearch instance. If undefined, it is obtained
+#		from the class instance
+# It creates the mapping associated to the concept
+sub createMappingFromConcept($;$$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	my $indexName = shift;
+	my $es = shift;
+	
+	$indexName = $self->getNativeIndexNameFromConcept($concept)  unless(defined($indexName));
+	$es = $self->connect()  unless(defined($es));
+	
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
+	
+	#$es->indices->delete_mapping('index' => $indexName,'type' => $conceptId)  if($es->indices->exists_type('index' => $indexName,'type' => $conceptId));
+	#unless($es->indices->exists_type('index' => $indexName,'type' => $conceptId)) {
+	# Build the mapping
+	my $p_mappingDesc = _FillMapping($concept->columnSet());
+	
+	$es->indices->put_mapping(
+		'index' => $indexName,
+		'type' => $mappingName,
+		'body' => {
+			$mappingName => $p_mappingDesc
+		}
+	);
+}
+
 # createCollection parameters:
 #	collection: A BP::Model::Collection instance
+#	es: A Search::Elasticsearch instance. If undefined, it is obtained
+#		from the class instance
 # Given a BP::Model::Collection instance, it is created, along with its indexes
-sub createCollection($) {
+sub createCollection($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
@@ -291,7 +352,9 @@ sub createCollection($) {
 	
 	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
-	my $es = $self->connect();
+	my $es = shift;
+	
+	$es = $self->connect()  unless(defined($es));
 	
 	my $indexName = $self->getNativeIndexNameFromCollection($collection);
 	
@@ -312,21 +375,7 @@ sub createCollection($) {
 	
 	if(scalar(@colConcepts) > 0) {
 		foreach my $concept (@colConcepts) {
-			my $conceptId = $self->getNativeMappingNameFromConcept($concept);
-			
-			#$es->indices->delete_mapping('index' => $indexName,'type' => $conceptId)  if($es->indices->exists_type('index' => $indexName,'type' => $conceptId));
-			#unless($es->indices->exists_type('index' => $indexName,'type' => $conceptId)) {
-				# Build the mapping
-				my $p_mappingDesc = _FillMapping($concept->columnSet());
-				
-				$es->indices->put_mapping(
-					'index' => $indexName,
-					'type' => $conceptId,
-					'body' => {
-						$conceptId => $p_mappingDesc
-					}
-				);
-			#}
+			$self->createMappingFromConcept($concept,$indexName,$es);
 		}
 	}
 	
@@ -336,7 +385,7 @@ sub createCollection($) {
 # existsCollection parameters:
 #	collection: A BP::Model::Collection instance
 # Given a BP::Model::Collection instance, it is created, along with its indexes
-sub existsCollection($) {
+sub existsCollection($;$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
@@ -345,7 +394,9 @@ sub existsCollection($) {
 	
 	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
 	
-	my $es = $self->connect();
+	my $es = shift;
+	
+	$es = $self->connect()  unless(defined($es));
 	
 	my $indexName = $self->getNativeIndexNameFromCollection($collection);
 	
@@ -531,10 +582,20 @@ sub _genDestination($;$) {
 	my $isTemp = shift;
 	
 	my $concept = $correlatedConcept->isa('BP::Loader::CorrelatableConcept')?$correlatedConcept->concept():$correlatedConcept;
-	my $indexName = $self->getNativeIndexNameFromConcept($concept);
-	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
 	
 	my $es = $self->connect();
+	
+	# Assuring the index associated to the collection does exist
+	my $collection = $self->getCollectionFromConcept($concept);
+	$self->createCollection($collection,$es)  unless($self->existsCollection($collection,$es));
+	
+	# Assuring the mapping does exist
+	my $indexName = $self->getNativeIndexNameFromCollection($collection);
+	$self->createMappingFromConcept($concept,$indexName,$es)  unless($self->existsMappingFromConcept($concept,$indexName,$es));
+	
+	# Now all the preconditions are fulfilled, create the bulk object
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
+	
 	my @bes_params = (
 		index   => $indexName,
 		type    => $mappingName,
