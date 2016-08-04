@@ -136,17 +136,26 @@ sub _connect() {
 	return $es;
 }
 
-sub _FillMapping($);
+sub _FillMapping($;$$);
 
 # _FillMapping parameters:
 #	p_columnSet: an instance of BP::Model::ColumnSet
+#	nestedPath: the path to this mapping (in case of nested mappings)
+#	p_rootMapping:
 # It returns a reference to a hash defining a Elasticsearch mapping
-sub _FillMapping($) {
-	my($p_columnSet) = @_;
+sub _FillMapping($;$$) {
+	my($p_columnSet,$nestedPath,$p_rootMapping) = @_;
 	
 	my %mappingDesc = ();
 	
 	my %idColumnMap = map { $_ => undef } @{$p_columnSet->idColumnNames};
+	
+	my $retval = defined($nestedPath) ? {} : {
+		'_all' => {
+			'enabled' => boolean::true
+		}
+	};
+	$p_rootMapping = $retval  unless(defined($p_rootMapping));
 	
 	foreach my $column (values(%{$p_columnSet->columns()})) {
 		my $columnType = $column->columnType();
@@ -155,8 +164,11 @@ sub _FillMapping($) {
 		
 		my %typeDecl = defined($esType->[1]) ? @{$esType->[1]}: ();
 		
+		$typeDecl{'type'} = $esType->[0];
+		
 		my $p_typeDecl = \%typeDecl;
 		
+		my $columnPath = defined($nestedPath) ? ($nestedPath.'.'.$columnName) : $columnName;
 		if($columnType->containerType==BP::Model::ColumnType::HASH_CONTAINER) {
 			$p_typeDecl = {
 				'dynamic'	=> boolean::true,
@@ -165,20 +177,20 @@ sub _FillMapping($) {
 #				'_source'	=>	{
 #					'enabled'	=>	boolean::false
 #				},
-				'dynamic_templates'	=> [
+			};
+			
+			$p_rootMapping->{'dynamic_templates'} = []  unless(exists($p_rootMapping->{'dynamic_templates'}));
+			
+			push(@{$p_rootMapping->{'dynamic_templates'}},
 					{
-						'template_'.$columnName => {
-							'match'		=> '*',
+						'template_'.$columnPath => {
+							'match_mapping_type'	=>	($esType->[0] eq 'nested') ? 'object': $esType->[0],
+							'match'		=> $columnPath.'.*',
 							'mapping'	=> $p_typeDecl,
 						}
 					}
-				]
-			};
+			);
 		}
-		
-		$typeDecl{'dynamic'} = boolean::false;	# 'strict' is too strict
-		
-		$typeDecl{'type'} = $esType->[0];
 		
 #		$typeDecl{'_source'} = {
 #			'enabled'	=>	boolean::false
@@ -187,7 +199,7 @@ sub _FillMapping($) {
 		# Is this a compound type?
 		my $restriction = $columnType->restriction;
 		if(Scalar::Util::blessed($restriction) && $restriction->isa('BP::Model::CompoundType')) {
-			my $p_subMapping = _FillMapping($restriction->columnSet);
+			my $p_subMapping = _FillMapping($restriction->columnSet,$columnPath,$p_rootMapping);
 			@typeDecl{keys(%{$p_subMapping})} = values(%{$p_subMapping});
 		} else {
 			if(exists($idColumnMap{$columnName})) {
@@ -202,12 +214,7 @@ sub _FillMapping($) {
 		$mappingDesc{$columnName} = $p_typeDecl;
 	}
 	
-	my $retval = {
-		'_all' => {
-			'enabled' => boolean::true
-		}
-	};
-	
+	$retval->{'dynamic'} = boolean::false;	# 'strict' is too strict
 	$retval->{'properties'} = \%mappingDesc  if(scalar(keys(%mappingDesc))>0);
 
 	
@@ -772,7 +779,11 @@ sub _bulkInsert($\@) {
 					source => $p_entry
 				};
 				
-				$order->{id} = $p_entry->{_id}  if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id}));
+				# Needed by recent Elasticsearch versions
+				if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id})) {
+					$order->{id} = $p_entry->{_id};
+					delete($p_entry->{_id});
+				}
 				push(@insertBatch, $order);
 			}
 		}
@@ -782,7 +793,11 @@ sub _bulkInsert($\@) {
 				source => $p_entry
 			};
 			
-			$order->{id} = $p_entry->{_id}  if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id}));
+			# Needed by recent Elasticsearch versions
+			if(ref($p_entry) eq 'HASH' && exists($p_entry->{_id})) {
+				$order->{id} = $p_entry->{_id};
+				delete($p_entry->{_id});
+			}
 			push(@insertBatch, $order);
 		}
 	}
