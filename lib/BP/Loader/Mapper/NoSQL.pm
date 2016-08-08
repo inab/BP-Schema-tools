@@ -316,6 +316,9 @@ sub BP::Model::CV::Term::ToColumnSet($) {
 	<column name="term">
 		<column-type item-type="string" column-kind="required"/>
 	</column>
+	<column name="term_uri">
+		<column-type item-type="string" column-kind="required"/>
+	</column>
 	<column name="name">
 		<column-type item-type="string" column-kind="required"/>
 	</column>
@@ -351,6 +354,10 @@ sub BP::Model::CV::Term::ToColumnSet($) {
 	
 	<index unique="false">
 		<attr name="term" />
+	</index>
+	
+	<index unique="false">
+		<attr name="term_uri" />
 	</index>
 </concept-type>
 EOT

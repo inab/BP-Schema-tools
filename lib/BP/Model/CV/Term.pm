@@ -210,12 +210,18 @@ sub uriKey {
 	my $uriKey = undef;
 	my $p_namespace = $self->namespace();
 	if(defined($p_namespace)) {
-		my $ns_uri = $p_namespace->ns_uri_fixed();
-		my $tkey = $self->key;
-		# TODO: do it better!
-		$tkey =~ tr/:/_/;
+		my @ns_uris = $p_namespace->ns_uri_fixed();
+		URIKEY:
+		foreach my $key (@{$self->keys}) {
+			my $tkey = $key;
+			# TODO: do it better!
+			$tkey =~ tr/:/_/;
 			
-		$uriKey = $ns_uri.$tkey;
+			foreach my $ns_uri (@ns_uris) {
+				$uriKey = $ns_uri.$tkey;
+				last URIKEY;
+			}
+		}
 	}
 	
 	return $uriKey;
