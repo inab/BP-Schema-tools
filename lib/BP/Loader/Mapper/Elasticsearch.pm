@@ -49,6 +49,26 @@ my %ABSTYPE2ES = (
 	BP::Model::ColumnType::COMPOUND_TYPE	=> ['nested',['include_in_parent' => boolean::true]],
 );
 
+{
+	
+my $metaModelConcept;
+my $metaCVConcept;
+my $metaCVTermConcept;
+
+sub __getMetaConcepts($) {
+	my $model = shift;
+	
+	unless(defined($metaModelConcept)) {
+		$metaModelConcept = BP::Model::ToConcept($model);
+		$metaCVConcept = BP::Model::CV::Meta::ToConcept($model);
+		$metaCVTermConcept = BP::Model::CV::Term::ToConcept($model);
+	}
+	
+	return ($metaModelConcept,$metaCVConcept,$metaCVTermConcept);
+}
+
+}
+
 # Constructor parameters:
 #	model: a BP::Model instance
 #	config: a Config::IniFiles instance
@@ -102,6 +122,15 @@ sub new($$) {
 	
 	# We don't need the internal queue
 	$self->{_queue} = undef;
+	
+	# And this is a complementary task: early meta-model registration
+	my $metadataCollection = $self->{model}->metadataCollection();
+	if(defined($metadataCollection)) {
+		foreach my $concept (__getMetaConcepts($self->{model})) {
+			my $conceptKey = $concept+0;
+			$self->{_conceptCol}{$conceptKey} = $metadataCollection  unless(exists($self->{_conceptCol}{$conceptKey}));
+		}
+	}
 	
 	return $self;
 }
@@ -219,26 +248,6 @@ sub _FillMapping($;$$) {
 
 	
 	return $retval;
-}
-
-{
-	
-my $metaModelConcept;
-my $metaCVConcept;
-my $metaCVTermConcept;
-
-sub __getMetaConcepts($) {
-	my $model = shift;
-	
-	unless(defined($metaModelConcept)) {
-		$metaModelConcept = BP::Model::ToConcept($model);
-		$metaCVConcept = BP::Model::CV::Meta::ToConcept($model);
-		$metaCVTermConcept = BP::Model::CV::Term::ToConcept($model);
-	}
-	
-	return ($metaModelConcept,$metaCVConcept,$metaCVTermConcept);
-}
-
 }
 
 # getNativeIndexNameFromCollection parameters:
