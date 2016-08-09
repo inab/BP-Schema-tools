@@ -270,6 +270,8 @@ sub getNativeIndexNameFromCollection($) {
 		foreach my $collection (@{$p_collection}) {
 			Carp::croak("ERROR: Input parameter must be a collection or an array of them")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
 		}
+	} else {
+		Carp::croak("ERROR: Input parameter must be a collection or an array of them");
 	}
 	
 	
@@ -279,33 +281,81 @@ sub getNativeIndexNameFromCollection($) {
 	return wantarray ? @indexNames : join(',',@indexNames);
 }
 
+# getUniqueCollectionsFromConcepts parameters:
+#	p_concept: A BP::Model::Concept instance (or an array of them)
+# Given a list of BP::Model::Concept instances, it returns the list of unique BP::Model::Collection instances
+sub getUniqueCollectionsFromConcepts($) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_concept = shift;
+	
+	if(Scalar::Util::blessed($p_concept)) {
+		if($p_concept->isa('BP::Model::Concept')) {
+			$p_concept = [ $p_concept ]  ;
+		} else {
+			Carp::croak("ERROR: Input parameter must be a concept or an array of them");
+		}
+	} elsif(ref($p_concept) eq 'ARRAY') {
+		foreach my $concept (@{$p_concept}) {
+			Carp::croak("ERROR: Input parameter must be a concept or an array of them")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+		}
+	} else {
+		Carp::croak("ERROR: Input parameter must be a concept or an array of them");
+	}
+	
+	my %collections = ();
+	foreach my $concept (@{$p_concept}) {
+		my $collection = $self->getCollectionFromConcept($concept);
+	}
+	my @uniqueCollections = values(%collections);
+	
+	return \@uniqueCollections;
+}
+
 # getNativeIndexNameFromConcept parameters:
-#	concept: A BP::Model::Concept instance
+#	p_concept: A BP::Model::Concept instance (or a list of them)
 # Given a BP::Model::Concept instance, it returns the native index name
 sub getNativeIndexNameFromConcept($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $concept = shift;
-	my $collection = $self->getCollectionFromConcept($concept);
+	my $p_concept = shift;
 	
-	return defined($collection) ? $self->getNativeIndexNameFromCollection($collection) : undef;
+	my $p_uniqueCollections = $self->getUniqueCollectionsFromConcepts($p_concept);
+	
+	return defined($p_uniqueCollections) ? $self->getNativeIndexNameFromCollection($p_uniqueCollections) : undef;
 }
 
 # getNativeIndexNameFromConcept parameters:
-#	concept: A BP::Model::Concept instance
+#	p_concept: A BP::Model::Concept instance (or a list of them)
 # Given a BP::Model::Concept instance, it returns the native mapping name
 sub getNativeMappingNameFromConcept($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $concept = shift;
+	my $p_concept = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a concept")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+	if(Scalar::Util::blessed($p_concept)) {
+		if($p_concept->isa('BP::Model::Concept')) {
+			$p_concept = [ $p_concept ]  ;
+		} else {
+			Carp::croak("ERROR: Input parameter must be a concept or an array of them");
+		}
+	} elsif(ref($p_concept) eq 'ARRAY') {
+		foreach my $concept (@{$p_concept}) {
+			Carp::croak("ERROR: Input parameter must be a concept or an array of them")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
+		}
+	} else {
+		Carp::croak("ERROR: Input parameter must be a concept or an array of them");
+	}
 	
-	return $concept->id();
+	my @ids = map { $_->id() } @{$p_concept};
+	
+	return wantarray ? @ids : join(',',@ids);
 }
 
 # existsMappingFromConcept parameters:
@@ -480,7 +530,7 @@ sub queryCollection($$;$) {
 }
 
 # queryConcept parameters:
-#	concept: A BP::Model::Concept instance
+#	concept: A BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
 # Given a BP::Model::Concept instance, it returns a Search::Elasticsearch::Scroll
 # instance, with the prepared query, ready to scroll along its results
