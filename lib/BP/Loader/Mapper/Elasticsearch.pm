@@ -251,19 +251,32 @@ sub _FillMapping($;$$) {
 }
 
 # getNativeIndexNameFromCollection parameters:
-#	collection: A BP::Model::Collection instance
+#	p_collection: A BP::Model::Collection instance (or an array of them)
 # Given a BP::Model::Collection instance, it returns the native index name
 sub getNativeIndexNameFromCollection($) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $collection = shift;
+	my $p_collection = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a collection")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	if(Scalar::Util::blessed($p_collection)) {
+		if($p_collection->isa('BP::Model::Collection')) {
+			$p_collection = [ $p_collection ]  ;
+		} else {
+			Carp::croak("ERROR: Input parameter must be a collection or an array of them");
+		}
+	} elsif(ref($p_collection) eq 'ARRAY') {
+		foreach my $collection (@{$p_collection}) {
+			Carp::croak("ERROR: Input parameter must be a collection or an array of them")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+		}
+	}
+	
 	
 	# The index name can have a prefix
-	return $self->{INDEX_PREFIX_KEY()} . $collection->path;
+	my $prefix = $self->{INDEX_PREFIX_KEY()};
+	my @indexNames = map { $prefix . $_->path } @{$p_collection};
+	return wantarray ? @indexNames : join(',',@indexNames);
 }
 
 # getNativeIndexNameFromConcept parameters:
@@ -421,7 +434,7 @@ sub existsCollection($;$) {
 }
 
 # queryCollection parameters:
-#	collection: Either a BP::Model::Collection or a BP::Model::Concept instance
+#	p_collection: Either a BP::Model::Collection or a BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
 # Given a BP::Model::Collection instance, it returns a Search::Elasticsearch::Scroll
 # instance, with the prepared query, ready to scroll along its results
@@ -430,16 +443,28 @@ sub queryCollection($$;$) {
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
 	
-	my $collection = shift;
+	my $p_collection = shift;
 	
 	# Is it a concept?
-	if(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Concept')) {
-		$collection = $self->getCollectionFromConcept($collection);
+	if(Scalar::Util::blessed($p_collection)) {
+		$p_collection = [ $p_collection ];
+	} elsif(ref($p_collection) ne 'ARRAY') {
+		Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
 	}
 	
-	Carp::croak("ERROR: Input parameter must be a collection (or a concept)")  unless(Scalar::Util::blessed($collection) && $collection->isa('BP::Model::Collection'));
+	foreach my $collection (@{$p_collection}) {
+		if(Scalar::Util::blessed($collection)) {
+			if($collection->isa('BP::Model::Concept')) {
+				$collection = $self->getCollectionFromConcept($collection);
+			} elsif(!$collection->isa('BP::Model::Collection')) {
+				Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
+			}
+		} else {
+			Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
+		}
+	}
 	
-	my $indexName = $self->getNativeIndexNameFromCollection($collection);
+	my $indexName = $self->getNativeIndexNameFromCollection($p_collection);
 	
 	my $query_body = shift;
 	
