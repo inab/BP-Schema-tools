@@ -541,8 +541,6 @@ sub queryConcept($$;$) {
 	
 	my $concept = shift;
 	
-	Carp::croak("ERROR: Input parameter must be a concept")  unless(Scalar::Util::blessed($concept) && $concept->isa('BP::Model::Concept'));
-	
 	my $indexName = $self->getNativeIndexNameFromConcept($concept);
 	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
 	
