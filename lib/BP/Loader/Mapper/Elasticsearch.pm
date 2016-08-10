@@ -522,7 +522,7 @@ sub queryCollection($$;$) {
 	my $scroll = $es->scroll_helper(
 		'index'	=> $indexName,
 		'size'	=> 5000,
-		'search_type'	=> 'scan', # With this, no sort is applied
+		#'search_type'	=> 'scan', # With this, no sort is applied
 		#'search_type'	=> 'query_and_fetch',
 		'body'	=> $query_body
 	);
@@ -551,7 +551,7 @@ sub queryConcept($$;$) {
 		'index'	=> $indexName,
 		'type'	=> $mappingName,
 		'size'	=> 5000,
-		'search_type'	=> 'scan', # With this, no sort is applied
+		#'search_type'	=> 'scan', # With this, no sort is applied
 		#'search_type'	=> 'query_and_fetch',
 		'body'	=> $query_body
 	);
