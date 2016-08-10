@@ -534,6 +534,28 @@ sub queryCollection($$;$) {
 	return $scroll;
 }
 
+sub getMajorESVersion() {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	my $es = $self->connect();
+	my $stats = $es->cluster->stats();
+	
+	my $major = undef;
+	
+	if(exists($stats->{'nodes'}->{'versions'})) {
+		foreach my $version (@{$stats->{'nodes'}->{'versions'}}) {
+			if($version =~ /^([0-9]+)\./) {
+				my $majVal = int($1);
+				$major = $majVal  if(!defined($major) || $majVal < $major);
+			}
+		}
+	}
+	
+	return $major;
+	
+}
+
 # immediateQueryCollection parameters:
 #	p_collection: Either a BP::Model::Collection or a BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
