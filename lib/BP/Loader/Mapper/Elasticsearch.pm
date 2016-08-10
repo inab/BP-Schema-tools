@@ -534,6 +534,56 @@ sub queryCollection($$;$) {
 	return $scroll;
 }
 
+# immediateQueryCollection parameters:
+#	p_collection: Either a BP::Model::Collection or a BP::Model::Concept instance (or an array of them)
+#	query_body: a Elasticsearch query body
+#	search_type: If defined, the search type
+# Given a BP::Model::Collection instance, it returns the results
+sub immediateQueryCollection($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $p_collection = shift;
+	
+	# Is it a concept?
+	if(Scalar::Util::blessed($p_collection)) {
+		$p_collection = [ $p_collection ];
+	} elsif(ref($p_collection) ne 'ARRAY') {
+		Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
+	}
+	
+	foreach my $collection (@{$p_collection}) {
+		if(Scalar::Util::blessed($collection)) {
+			if($collection->isa('BP::Model::Concept')) {
+				$collection = $self->getCollectionFromConcept($collection);
+			} elsif(!$collection->isa('BP::Model::Collection')) {
+				Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
+			}
+		} else {
+			Carp::croak("ERROR: Input parameter must be a collection, a concept or an array of them");
+		}
+	}
+	
+	my $indexName = $self->getNativeIndexNameFromCollection($p_collection);
+	
+	my $query_body = shift;
+	
+	my $search_type = shift;
+	
+	$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
+	
+	my $es = $self->connect();
+	my $results = $es->search(
+		'index'	=> $indexName,
+		'size'	=> 5000,
+		'search_type'	=> $search_type,
+		#'search_type'	=> 'query_and_fetch',
+		'body'	=> $query_body
+	);
+	return $results;
+}
+
 # queryConcept parameters:
 #	concept: A BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
