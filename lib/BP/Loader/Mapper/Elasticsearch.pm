@@ -538,8 +538,9 @@ sub queryCollection($$;$) {
 #	p_collection: Either a BP::Model::Collection or a BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
 #	search_type: If defined, the search type
+#	res_size: If defined, the maximum number of results
 # Given a BP::Model::Collection instance, it returns the results
-sub immediateQueryCollection($$;$) {
+sub immediateQueryCollection($$;$$) {
 	my $self = shift;
 	
 	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
@@ -573,10 +574,13 @@ sub immediateQueryCollection($$;$) {
 	
 	$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
 	
+	my $res_size = shift;
+	$res_size = 10000000  unless(defined($res_size));	# With this, no sort is applied
+	
 	my $es = $self->connect();
 	my $results = $es->search(
 		'index'	=> $indexName,
-		'size'	=> 5000,
+		'size'	=> $res_size,
 		'search_type'	=> $search_type,
 		#'search_type'	=> 'query_and_fetch',
 		'body'	=> $query_body
