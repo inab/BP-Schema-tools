@@ -486,6 +486,7 @@ sub existsCollection($;$) {
 # queryCollection parameters:
 #	p_collection: Either a BP::Model::Collection or a BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
+#	search_type: If defined, the search type
 # Given a BP::Model::Collection instance, it returns a Search::Elasticsearch::Scroll
 # instance, with the prepared query, ready to scroll along its results
 sub queryCollection($$;$) {
@@ -518,11 +519,15 @@ sub queryCollection($$;$) {
 	
 	my $query_body = shift;
 	
+	my $search_type = shift;
+	
+	$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
+	
 	my $es = $self->connect();
 	my $scroll = $es->scroll_helper(
 		'index'	=> $indexName,
 		'size'	=> 5000,
-		#'search_type'	=> 'scan', # With this, no sort is applied
+		'search_type'	=> $search_type,
 		#'search_type'	=> 'query_and_fetch',
 		'body'	=> $query_body
 	);
@@ -546,12 +551,16 @@ sub queryConcept($$;$) {
 	
 	my $query_body = shift;
 	
+	my $search_type = shift;
+	
+	$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
+	
 	my $es = $self->connect();
 	my $scroll = $es->scroll_helper(
 		'index'	=> $indexName,
 		'type'	=> $mappingName,
 		'size'	=> 5000,
-		#'search_type'	=> 'scan', # With this, no sort is applied
+		'search_type'	=> $search_type,
 		#'search_type'	=> 'query_and_fetch',
 		'body'	=> $query_body
 	);
