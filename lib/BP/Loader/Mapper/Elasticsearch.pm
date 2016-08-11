@@ -308,6 +308,8 @@ sub getUniqueCollectionsFromConcepts($) {
 	my %collections = ();
 	foreach my $concept (@{$p_concept}) {
 		my $collection = $self->getCollectionFromConcept($concept);
+		my $collectionHashKey = $collection + 0;
+		$collections{$collectionHashKey} = $collection  unless(exists($collections{$collectionHashKey}));
 	}
 	my @uniqueCollections = values(%collections);
 	
@@ -621,6 +623,7 @@ sub immediateQueryCollection($$;$$\%) {
 # queryConcept parameters:
 #	concept: A BP::Model::Concept instance (or an array of them)
 #	query_body: a Elasticsearch query body
+#	search_type: If defined, the search type
 # Given a BP::Model::Concept instance, it returns a Search::Elasticsearch::Scroll
 # instance, with the prepared query, ready to scroll along its results
 sub queryConcept($$;$) {
@@ -649,6 +652,51 @@ sub queryConcept($$;$) {
 		'body'	=> $query_body
 	);
 	return $scroll;
+}
+
+# immediateQueryConcept parameters:
+#	concept: A BP::Model::Concept instance (or an array of them)
+#	query_body: a Elasticsearch query body
+#	search_type: If defined, the search type
+#	res_size: If defined, the maximum number of results
+#	additional: Additional parameters
+# Given a BP::Model::Concept instance and the query body, it returns the results
+sub immediateQueryConcept($$;$) {
+	my $self = shift;
+	
+	Carp::croak((caller(0))[3].' is an instance method!')  if(BP::Model::DEBUG && !ref($self));
+	
+	my $concept = shift;
+	
+	my $indexName = $self->getNativeIndexNameFromConcept($concept);
+	my $mappingName = $self->getNativeMappingNameFromConcept($concept);
+	
+	my $query_body = shift;
+	
+	my $search_type = shift;
+	
+	#$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
+	
+	my $res_size = shift;
+	$res_size = 10000  unless(defined($res_size));	# With this, no sort is applied
+
+	my @searchQuery = (
+		'index'	=> $indexName,
+		'type'	=> $mappingName,
+		'size'	=> $res_size,
+		#'search_type'	=> 'query_and_fetch',
+		'body'	=> $query_body
+	);
+	push(@searchQuery,'search_type'	=> $search_type)  if(defined($search_type));
+	
+	my $additional = shift;
+	if(ref($additional) eq 'HASH') {
+		push(@searchQuery, map { $_ => $additional->{$_} } keys(%{$additional}) );
+	}
+	
+	my $es = $self->connect();
+	my $results = $es->search(@searchQuery);
+	return $results;
 }
 
 # Trimmed down version of storeNativeModel from MongoDB
