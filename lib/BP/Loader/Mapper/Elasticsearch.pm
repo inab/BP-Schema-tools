@@ -600,7 +600,7 @@ sub immediateQueryCollection($$;$$\%) {
 	$search_type = 'scan'  unless(defined($search_type));	# With this, no sort is applied
 	
 	my $res_size = shift;
-	$res_size = 10000000  unless(defined($res_size));	# With this, no sort is applied
+	$res_size = 10000  unless(defined($res_size));	# With this, no sort is applied
 
 	my @searchQuery = (
 		'index'	=> $indexName,
