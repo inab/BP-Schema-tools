@@ -7,6 +7,7 @@ use Carp;
 use File::Basename;
 use File::Copy;
 use File::Spec;
+
 use IO::File;
 use XML::LibXML;
 use Encode;
@@ -32,6 +33,8 @@ use BP::Model::FilenamePattern;
 package BP::Model;
 #use version 0.77;
 #our $VERSION = qv('0.2.0');
+
+use File::Temp qw/ :seekable /;
 
 use constant BPSchemaFilename => 'bp-schema.xsd';
 
@@ -650,6 +653,15 @@ sub openCVpath($) {
 		my $cvMember = $self->{_BPZIP}->memberNamed($cvPath);
 		if(defined($cvMember)) {
 			$CV = $cvMember->readFileHandle();
+			my $ft = File::Temp->new(TMPDIR => 1);
+			my $buffer;
+			while($CV->read($buffer,65536)) {
+				print $ft $buffer;
+			}
+			
+			$ft->seek(0, SEEK_SET);
+			$CV = $ft;
+			binmode($CV,':'.$encoding);
 		} else {
 			Carp::croak("Unable to open CV member $cvPath");
 		}
