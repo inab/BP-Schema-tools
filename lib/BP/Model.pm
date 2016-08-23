@@ -209,7 +209,7 @@ sub openModel() {
 	# Is it inside a Zip?
 	if(exists($self->{_BPZIP})) {
 		# Extracting to a temp file
-		my $temp = File::Temp->new();
+		my $temp = File::Temp->new(TMPDIR => 1);
 		my $member = $self->{_BPZIP}->memberNamed(BPMODEL_MODEL);
 		
 		Carp::croak("Model not found inside bpmodel ".$self->{_modelAbsPath})  unless(defined($member));
@@ -237,7 +237,7 @@ sub librarySchemaPath() {
 		if(exists($self->{_BPZIP})) {
 			my $memberSchema = $self->{_BPZIP}->memberNamed(BPMODEL_SCHEMA);
 			Carp::croak("Unable to find embedded bpmodel schema in bpmodel")  unless(defined($memberSchema));
-			my $tempSchema = File::Temp->new();
+			my $tempSchema = File::Temp->new(TMPDIR => 1);
 			Carp::croak("Unable to save embedded bpmodel schema")  if($memberSchema->extractToFileNamed($tempSchema->filename())!=Archive::Zip::AZ_OK);
 			
 			$self->{_schemaPath} = $tempSchema;
@@ -310,7 +310,7 @@ sub reformatModel() {
 	}
 	
 	# Create a temp file and save the model to it
-	my $tempModelFile = File::Temp->new();
+	my $tempModelFile = File::Temp->new(TMPDIR => 1);
 	$modelDoc->toFile($tempModelFile->filename(),2);
 	
 	# Calculate new SHA1, and store it
@@ -652,15 +652,10 @@ sub openCVpath($) {
 	if(exists($self->{_BPZIP})) {
 		my $cvMember = $self->{_BPZIP}->memberNamed($cvPath);
 		if(defined($cvMember)) {
-			$CV = $cvMember->readFileHandle();
-			my $ft = File::Temp->new(TMPDIR => 1);
-			my $buffer;
-			while($CV->read($buffer,65536)) {
-				print $ft $buffer;
-			}
+			$CV = File::Temp->new(TMPDIR => 1);
+			Carp::croak("Unable to temporary save CV member $cvPath")  if($cvMember->extractToFileHandle($CV)!=Archive::Zip::AZ_OK);
 			
-			$ft->seek(0, SEEK_SET);
-			$CV = $ft;
+			$CV->seek(0, SEEK_SET);
 			binmode($CV,':'.$encoding);
 		} else {
 			Carp::croak("Unable to open CV member $cvPath");
