@@ -1,21 +1,38 @@
-# NAME
+#!/usr/bin/perl
+
+use v5.12;
+use strict;
+use warnings 'all';
+
+package BP::Loader;
+
+use version;
+
+our $VERSION = version->declare('v1.00');
+
+1;
+__END__
+
+=encoding utf-8
+
+=head1 NAME
 
 BP::Loader - Bioinformatic Pantry data Model processing classes
 
-# SYNOPSIS
+=head1 SYNOPSIS
 
-    use BP::Model;
-    use BP::Loader::CorrelatableConcept;
-    use BP::Loader::Mapper;
-    
-    my $model = BP::Model->new($modelFile);
+  use BP::Model;
+  use BP::Loader::CorrelatableConcept;
+  use BP::Loader::Mapper;
+  
+  my $model = BP::Model->new($modelFile);
 
-# DESCRIPTION
+=head1 DESCRIPTION
 
 BP::Model is the keystone of a data modelling methodology created under
-the umbrella of [BLUEPRINT project](https://blueprint-epigenome.eu).
+the umbrella of L<BLUEPRINT project|https://blueprint-epigenome.eu>.
 
-# RATIONALE
+=head1 RATIONALE
 
 We have created this methodology and tools because we needed a foundation
 for the data models of several research projects, like BLUEPRINT and
@@ -101,25 +118,27 @@ schema definitions for the destination database paradigm (currently
 relational, MongoDB and ElasticSearch databases are supported), and it
 bulk loads the data in the database.
 
-# METHODS
+=head1 METHODS
 
-_(to be documented)_
+I<(to be documented)>
 
-# AUTHOR
+=head1 AUTHOR
 
-José M. Fernández [https://github.com/jmfernandez](https://github.com/jmfernandez)
+José M. Fernández L<https://github.com/jmfernandez>
 
-# COPYRIGHT
+=head1 COPYRIGHT
 
 The library was initially created several years ago for the data
 management tasks in the
-[BLUEPRINT project](http://www.blueprint-epigenome.eu/).
+L<BLUEPRINT project|http://www.blueprint-epigenome.eu/>.
 
 Copyright 2019- José M. Fernández & Barcelona Supercomputing Center (BSC)
 
-# LICENSE
+=head1 LICENSE
 
 These libraries are free software; you can redistribute them and/or modify
 them under the Apache 2 terms.
 
-# SEE ALSO
+=head1 SEE ALSO
+
+=cut

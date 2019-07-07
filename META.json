@@ -1,0 +1,135 @@
+{
+   "abstract" : "Bioinformatic Pantry data Model processing classes",
+   "author" : [
+      "Jos\u00e9 M. Fern\u00e1ndez L<https://github.com/jmfernandez>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Milla version v1.0.20, Dist::Zilla version 6.012, CPAN::Meta::Converter version 2.150010",
+   "license" : [
+      "apache_2_0"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : 2
+   },
+   "name" : "BP-Schema-tools",
+   "no_index" : {
+      "directory" : [
+         "eg",
+         "examples",
+         "inc",
+         "share",
+         "t",
+         "xt"
+      ]
+   },
+   "optional_features" : {
+      "docgen" : {
+         "description" : "Documentation Generator support",
+         "prereqs" : {
+            "runtime" : {
+               "requires" : {
+                  "Encode" : "0",
+                  "TeX::Encode" : "0"
+               }
+            }
+         }
+      },
+      "elasticsearch" : {
+         "description" : "Elasticsearch support",
+         "prereqs" : {
+            "runtime" : {
+               "requires" : {
+                  "Search::Elasticsearch" : "1.12",
+                  "Tie::IxHash" : "0"
+               }
+            }
+         }
+      },
+      "mongodb" : {
+         "description" : "MongoDB support",
+         "prereqs" : {
+            "runtime" : {
+               "requires" : {
+                  "MongoDB" : "v0.704.0.0",
+                  "Tie::IxHash" : "0"
+               }
+            }
+         }
+      },
+      "relational" : {
+         "description" : "Relational databases support",
+         "prereqs" : {
+            "runtime" : {
+               "requires" : {
+                  "DBI" : "0",
+                  "Data::Dumper" : "0",
+                  "Tie::IxHash" : "0"
+               }
+            }
+         }
+      }
+   },
+   "prereqs" : {
+      "configure" : {
+         "requires" : {
+            "Module::Build::Tiny" : "0.034"
+         }
+      },
+      "develop" : {
+         "requires" : {
+            "Dist::Milla" : "v1.0.20",
+            "Test::Pod" : "1.41"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "BP::Model" : "v1.1.0",
+            "Carp" : "0",
+            "Config::IniFiles" : "0",
+            "Cwd" : "0",
+            "DateTime::Format::ISO8601" : "0",
+            "File::Basename" : "0",
+            "File::Copy" : "0",
+            "File::Path" : "0",
+            "File::Spec" : "0",
+            "File::Temp" : "0",
+            "File::Which" : "0",
+            "JSON" : "0",
+            "Scalar::Util" : "0",
+            "Sys::CPU" : "0",
+            "TabParser" : "0.01",
+            "TeX::Encode" : "0",
+            "XML::LibXML" : "0",
+            "boolean" : "0.32",
+            "perl" : "5.012"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Test::More" : "0.96"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/inab/BP-Schema-tools/issues"
+      },
+      "homepage" : "https://github.com/inab/BP-Schema-tools",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/inab/BP-Schema-tools.git",
+         "web" : "https://github.com/inab/BP-Schema-tools"
+      }
+   },
+   "version" : "v1.00",
+   "x_contributors" : [
+      "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@cnio.es>",
+      "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@users.noreply.github.com>"
+   ],
+   "x_generated_by_perl" : "v5.28.2",
+   "x_serialization_backend" : "Cpanel::JSON::XS version 3.0239",
+   "x_static_install" : 1
+}
+

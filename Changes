@@ -1,0 +1,7 @@
+Revision history for BP-Model
+
+{{$NEXT}}
+
+v1.00
+	- Forked from https://github.com/inab/BP-Schema-tools.git
+	- Initial release based on Dist::Milla.
