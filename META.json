@@ -23,53 +23,6 @@
          "xt"
       ]
    },
-   "optional_features" : {
-      "docgen" : {
-         "description" : "Documentation Generator support",
-         "prereqs" : {
-            "runtime" : {
-               "requires" : {
-                  "Encode" : "0",
-                  "TeX::Encode" : "0"
-               }
-            }
-         }
-      },
-      "elasticsearch" : {
-         "description" : "Elasticsearch support",
-         "prereqs" : {
-            "runtime" : {
-               "requires" : {
-                  "Search::Elasticsearch" : "1.12",
-                  "Tie::IxHash" : "0"
-               }
-            }
-         }
-      },
-      "mongodb" : {
-         "description" : "MongoDB support",
-         "prereqs" : {
-            "runtime" : {
-               "requires" : {
-                  "MongoDB" : "v0.704.0.0",
-                  "Tie::IxHash" : "0"
-               }
-            }
-         }
-      },
-      "relational" : {
-         "description" : "Relational databases support",
-         "prereqs" : {
-            "runtime" : {
-               "requires" : {
-                  "DBI" : "0",
-                  "Data::Dumper" : "0",
-                  "Tie::IxHash" : "0"
-               }
-            }
-         }
-      }
-   },
    "prereqs" : {
       "configure" : {
          "requires" : {
@@ -79,6 +32,7 @@
       "develop" : {
          "requires" : {
             "Dist::Milla" : "v1.0.20",
+            "Dist::Zilla::Plugin::Prereqs::FromCPANfile" : "0",
             "Test::Pod" : "1.41"
          }
       },
@@ -88,7 +42,10 @@
             "Carp" : "0",
             "Config::IniFiles" : "0",
             "Cwd" : "0",
+            "DBI" : "0",
+            "Data::Dumper" : "0",
             "DateTime::Format::ISO8601" : "0",
+            "Encode" : "0",
             "File::Basename" : "0",
             "File::Copy" : "0",
             "File::Path" : "0",
@@ -96,10 +53,13 @@
             "File::Temp" : "0",
             "File::Which" : "0",
             "JSON" : "0",
+            "MongoDB" : "v0.704.0.0",
             "Scalar::Util" : "0",
+            "Search::Elasticsearch" : "1.12",
             "Sys::CPU" : "0",
             "TabParser" : "0.01",
             "TeX::Encode" : "0",
+            "Tie::IxHash" : "0",
             "XML::LibXML" : "0",
             "boolean" : "0.32",
             "perl" : "5.012"
@@ -123,7 +83,7 @@
          "web" : "https://github.com/inab/BP-Schema-tools"
       }
    },
-   "version" : "v1.00",
+   "version" : "v1.0.1",
    "x_contributors" : [
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@cnio.es>",
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@users.noreply.github.com>",

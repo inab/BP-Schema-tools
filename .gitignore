@@ -1,7 +1,8 @@
-/BP-Loader-*
+/BP-Schema-tools-*
 /.build
 /_build*
 /Build
 MYMETA.*
 !META.json
 /.prove
+/blib
