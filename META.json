@@ -26,19 +26,21 @@
    "prereqs" : {
       "configure" : {
          "requires" : {
-            "Module::Build::Tiny" : "0.034"
+            "ExtUtils::MakeMaker" : "0",
+            "File::ShareDir::Install" : "0.06"
          }
       },
       "develop" : {
          "requires" : {
             "Dist::Milla" : "v1.0.20",
+            "Dist::Zilla::Plugin::MakeMaker" : "0",
             "Dist::Zilla::Plugin::Prereqs::FromCPANfile" : "0",
             "Test::Pod" : "1.41"
          }
       },
       "runtime" : {
          "requires" : {
-            "BP::Model" : "v1.1.0",
+            "BP::Model" : "v1.1.1",
             "Carp" : "0",
             "Config::IniFiles" : "0",
             "Cwd" : "0",
@@ -83,7 +85,7 @@
          "web" : "https://github.com/inab/BP-Schema-tools"
       }
    },
-   "version" : "v1.0.1",
+   "version" : "v1.0.2",
    "x_contributors" : [
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@cnio.es>",
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@users.noreply.github.com>",
