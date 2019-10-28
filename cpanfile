@@ -39,6 +39,7 @@ requires 'XML::LibXML';
 #feature 'docgen', 'Documentation Generator support' => sub {
 	requires 'Encode';
 	requires 'TeX::Encode';
+	requires 'File::ShareDir';
 #};
 
 # This syntax is not working (Menlo / cpanm / carton do not acknowledge it)

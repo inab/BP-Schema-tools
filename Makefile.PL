@@ -39,6 +39,7 @@ my %WriteMakefileArgs = (
     "File::Basename" => 0,
     "File::Copy" => 0,
     "File::Path" => 0,
+    "File::ShareDir" => 0,
     "File::Spec" => 0,
     "File::Temp" => 0,
     "File::Which" => 0,
@@ -56,7 +57,7 @@ my %WriteMakefileArgs = (
   "TEST_REQUIRES" => {
     "Test::More" => "0.96"
   },
-  "VERSION" => "v1.0.2",
+  "VERSION" => "v1.0.3",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -75,6 +76,7 @@ my %FallbackPrereqs = (
   "File::Basename" => 0,
   "File::Copy" => 0,
   "File::Path" => 0,
+  "File::ShareDir" => 0,
   "File::Spec" => 0,
   "File::Temp" => 0,
   "File::Which" => 0,

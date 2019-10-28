@@ -1,4 +1,4 @@
-Revision history for BP-Model
+Revision history for BP-Schema-tools
 
 {{$NEXT}}
 
@@ -9,3 +9,10 @@ v1.00
 v1.0.1
 	- Feature dependencies have been temporary promoted to dependencies,
 	  so limitations in Menlo / cpanm / carton / cpm are avoided.
+
+v1.0.2
+	- Switched to MakeMaker Dist::Milla backend
+
+v1.0.3
+	- Added support to relocating the master template through File::ShareDir
+	  in the document generator.

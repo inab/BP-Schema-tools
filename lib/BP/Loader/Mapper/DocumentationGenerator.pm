@@ -14,6 +14,7 @@ use File::Basename;
 use File::Copy;
 use File::Spec;
 use File::Temp;
+use File::ShareDir;
 
 use Image::ExifTool;
 
@@ -757,6 +758,17 @@ DEOF
 	return ($dotline, $entry, \%partialFKS, $color => $p_colorDef);
 }
 
+sub _getBaseRedirTemplates($) {
+	# To be improved
+	# Locating the base directory for the redistributed templates
+	my $baseRedirTemplates = $FindBin::Bin;
+	eval {
+		$baseRedirTemplates = File::ShareDir::dist_dir('BP-Schema-tools');
+	};
+	
+	return $baseRedirTemplates;
+}
+
 # _genModelGraph parameters:
 #	figurePrefix: path prefix for the generated figures in .dot and in .latex
 #	templateAbsDocDir: Directory of the template being used
@@ -786,7 +798,10 @@ sub _genModelGraph($$\%) {
 	my $figpreamble = '';
 	
 	if(open(my $DOT,'>:utf8',$dotfile)) {
-		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
+		# Locating the base directory for the redistributed templates
+		my $baseRedirTemplates = $self->_getBaseRedirTemplates();
+		
+		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($baseRedirTemplates,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
 		$docpreamble =~ tr/\n/ /;
 		$fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
 		$fontpreamble =~ tr/\n/ /;
@@ -1023,7 +1038,10 @@ sub _genConceptDomainGraph($$$\%) {
 	my $figpreamble = '';
 	
 	if(open(my $DOT,'>:utf8',$dotfile)) {
-		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($FindBin::Bin,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
+		# Locating the base directory for the redistributed templates
+		my $baseRedirTemplates = $self->_getBaseRedirTemplates();
+		
+		$docpreamble = _LaTeX__readTemplate(File::Spec->catdir($baseRedirTemplates,REL_TEMPLATES_DIR),FIGURE_PREAMBLE_FILE);
 		$docpreamble =~ tr/\n/ /;
 		$fontpreamble = _LaTeX__readTemplate($templateAbsDocDir,FONTS_TEMPLATE_FILE);
 		$fontpreamble =~ tr/\n/ /;
@@ -1524,7 +1542,10 @@ sub _assemblePDF($$$$$$) {
 	
 	my $model = $self->{model};
 	
-	my $masterTemplate = File::Spec->catfile($FindBin::Bin,REL_TEMPLATES_DIR,MASTER_TEMPLATE_FILE);
+	# Locating the base directory for the redistributed templates
+	my $baseRedirTemplates = $self->_getBaseRedirTemplates();
+	
+	my $masterTemplate = File::Spec->catfile($baseRedirTemplates,REL_TEMPLATES_DIR,MASTER_TEMPLATE_FILE);
 	unless(-f $masterTemplate && -r $masterTemplate) {
 		Carp::croak("ERROR: Unable to find master template LaTeX file $masterTemplate\n");
 	}
