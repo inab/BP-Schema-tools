@@ -1,18 +1,21 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+	- Added development dependency on OrePAN2.
+	- Used Dist::Zilla::Plugin::Run for releases.
 
-v1.00
-	- Forked from https://github.com/inab/BP-Schema-tools.git
-	- Initial release based on Dist::Milla.
+v1.0.3
+	- Added support to relocating the master template through File::ShareDir
+	  in the document generator.
+
+v1.0.2
+	- Switched to MakeMaker Dist::Milla backend
 
 v1.0.1
 	- Feature dependencies have been temporary promoted to dependencies,
 	  so limitations in Menlo / cpanm / carton / cpm are avoided.
 
-v1.0.2
-	- Switched to MakeMaker Dist::Milla backend
+v1.00
+	- Forked from https://github.com/inab/BP-Schema-tools.git
+	- Initial release based on Dist::Milla.
 
-v1.0.3
-	- Added support to relocating the master template through File::ShareDir
-	  in the document generator.

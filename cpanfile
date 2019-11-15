@@ -44,8 +44,8 @@ requires 'XML::LibXML';
 
 # This syntax is not working (Menlo / cpanm / carton do not acknowledge it)
 #requires 'TabParser','0.01', git => 'git://github.com/inab/TabParser.git', ref => '0.01';
-requires 'TabParser', '0.01', url => 'https://github.com/inab/TabParser/archive/0.01.tar.gz';
-requires 'BP::Model', 'v1.1.1', url => 'https://github.com/inab/BP-Model/archive/v1.1.1.tar.gz';
+requires 'TabParser', '0.01';
+requires 'BP::Model', 'v1.1.1';
 
 on test => sub {
     requires 'Test::More', '0.96';
@@ -55,4 +55,6 @@ on develop => sub {
     requires 'Dist::Milla', '1.0.20';
     requires 'Dist::Zilla::Plugin::MakeMaker';
     requires 'Dist::Zilla::Plugin::Prereqs::FromCPANfile';
+    requires 'Dist::Zilla::Plugin::Run', '0.048';
+    requires 'OrePAN2';
 };
