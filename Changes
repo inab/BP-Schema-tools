@@ -1,6 +1,8 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+
+v1.0.4  2019-11-15 18:30:30 CET
 	- Added development dependency on OrePAN2.
 	- Used Dist::Zilla::Plugin::Run for releases.
 
