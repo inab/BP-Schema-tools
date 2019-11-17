@@ -4,11 +4,15 @@ BP::Loader - Bioinformatic Pantry data Model processing classes
 
 # SYNOPSIS
 
+```perl
+
     use BP::Model;
     use BP::Loader::CorrelatableConcept;
     use BP::Loader::Mapper;
     
     my $model = BP::Model->new($modelFile);
+
+```
 
 # DESCRIPTION
 
@@ -104,6 +108,17 @@ bulk loads the data in the database.
 # METHODS
 
 _(to be documented)_
+
+# INSTALLATION
+
+Latest release of this package is available in the [BSC INB DarkPAN](https://gitlab.bsc.es/inb/darkpan/). You
+can install it just using `cpanm`:
+
+```bash
+
+    cpanm --mirror-only --mirror https://gitlab.bsc.es/inb/darkpan/raw/master/ --mirror https://cpan.metacpan.org/ BP::Loader
+
+```
 
 # AUTHOR
 
