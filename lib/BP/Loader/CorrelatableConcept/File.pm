@@ -7,7 +7,6 @@ use Carp;
 use BP::Model;
 
 use File::Temp;
-use Sys::CPU;
 #use Sys::MemInfo;
 #use Time::HiRes;
 

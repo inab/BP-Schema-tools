@@ -5,8 +5,7 @@ use Carp;
 use BP::Model;
 
 use File::Temp;
-use Sys::CPU;
-#use Sys::MemInfo;
+use Sys::Info;
 #use Time::HiRes;
 
 # These two are to prepare the values to be inserted
@@ -24,7 +23,13 @@ use constant {
 	ANNOTATION_GROUPING_HINT	=>	'grouping-hint'
 };
 
-our $NUMCPUS = Sys::CPU::cpu_count();
+{
+# Code needed to get the number of CPUs
+my $info = Sys::Info->new();
+my $cpu = $info->device('CPU');
+
+our $NUMCPUS = $cpu->count();
+}
 
 our %SORTMAPS = (
 	BP::Model::ColumnType::INTEGER_TYPE	=>	'n',

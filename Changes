@@ -1,6 +1,8 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+	- Switched from Sys::CPU to Sys::Info, as the former is now
+	  only available at BackPAN (it is unmaintained).
 
 v1.0.5  2019-11-17 19:10:52 CET
 	- Improved documentation about installing this module from BSC INB DarkPAN.

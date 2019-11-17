@@ -14,7 +14,7 @@ requires 'File::Temp';
 requires 'File::Which';
 requires 'JSON';
 requires 'Scalar::Util';
-requires 'Sys::CPU';
+requires 'Sys::Info';
 requires 'TeX::Encode';
 requires 'XML::LibXML';
 
