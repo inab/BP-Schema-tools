@@ -1,6 +1,8 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+	- $NUMCPUS was hidden inside the anonymous block, even
+	  being declared as 'our'.
 
 v1.0.6  2019-11-17 20:25:19 CET
 	- Switched from Sys::CPU to Sys::Info, as the former is now

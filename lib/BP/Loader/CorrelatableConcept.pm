@@ -23,12 +23,13 @@ use constant {
 	ANNOTATION_GROUPING_HINT	=>	'grouping-hint'
 };
 
+our $NUMCPUS = 0;
 {
 # Code needed to get the number of CPUs
 my $info = Sys::Info->new();
 my $cpu = $info->device('CPU');
 
-our $NUMCPUS = $cpu->count();
+$NUMCPUS = $cpu->count();
 }
 
 our %SORTMAPS = (
