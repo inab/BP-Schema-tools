@@ -8,7 +8,7 @@ package BP::Loader;
 
 use version;
 
-our $VERSION = version->declare('v1.0.6');
+our $VERSION = version->declare('v1.0.7');
 
 1;
 __END__

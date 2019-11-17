@@ -1,6 +1,8 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+
+v1.0.7  2019-11-17 22:13:19 CET
 	- $NUMCPUS was hidden inside the anonymous block, even
 	  being declared as 'our'.
 
