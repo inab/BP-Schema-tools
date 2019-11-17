@@ -42,8 +42,7 @@ requires 'XML::LibXML';
 	requires 'File::ShareDir';
 #};
 
-# This syntax is not working (Menlo / cpanm / carton do not acknowledge it)
-#requires 'TabParser','0.01', git => 'git://github.com/inab/TabParser.git', ref => '0.01';
+# Next dependencies are in the DarkPAN
 requires 'TabParser', '0.01';
 requires 'BP::Model', 'v1.1.1';
 

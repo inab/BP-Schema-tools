@@ -1,6 +1,8 @@
 Revision history for BP-Schema-tools
 
 {{$NEXT}}
+	- Improved documentation about installing this module from BSC INB DarkPAN.
+	- Added explicit developing dependence on MakeMaker.
 
 v1.0.4  2019-11-15 18:30:30 CET
 	- Added development dependency on OrePAN2.
