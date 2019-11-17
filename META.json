@@ -61,7 +61,7 @@
             "MongoDB" : "v0.704.0.0",
             "Scalar::Util" : "0",
             "Search::Elasticsearch" : "1.12",
-            "Sys::CPU" : "0",
+            "Sys::Info" : "0",
             "TabParser" : "0.01",
             "TeX::Encode" : "0",
             "Tie::IxHash" : "0",
@@ -88,7 +88,7 @@
          "web" : "https://github.com/inab/BP-Schema-tools"
       }
    },
-   "version" : "v1.0.5",
+   "version" : "v1.0.6",
    "x_contributors" : [
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@cnio.es>",
       "Jos\u00e9 Mar\u00eda Fern\u00e1ndez <jmfernandez@users.noreply.github.com>",

@@ -47,7 +47,7 @@ my %WriteMakefileArgs = (
     "MongoDB" => "0.704.0.0",
     "Scalar::Util" => 0,
     "Search::Elasticsearch" => "1.12",
-    "Sys::CPU" => 0,
+    "Sys::Info" => 0,
     "TabParser" => "0.01",
     "TeX::Encode" => 0,
     "Tie::IxHash" => 0,
@@ -57,7 +57,7 @@ my %WriteMakefileArgs = (
   "TEST_REQUIRES" => {
     "Test::More" => "0.96"
   },
-  "VERSION" => "v1.0.5",
+  "VERSION" => "v1.0.6",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -84,7 +84,7 @@ my %FallbackPrereqs = (
   "MongoDB" => "0.704.0.0",
   "Scalar::Util" => 0,
   "Search::Elasticsearch" => "1.12",
-  "Sys::CPU" => 0,
+  "Sys::Info" => 0,
   "TabParser" => "0.01",
   "TeX::Encode" => 0,
   "Test::More" => "0.96",
